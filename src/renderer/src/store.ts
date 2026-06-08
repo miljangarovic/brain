@@ -1,4 +1,4 @@
-import { Workspace, Group, Feature, Terminal, TerminalKind, createWorkspace } from '@shared/types'
+import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, createWorkspace } from '@shared/types'
 import { createId } from '@shared/id'
 
 export interface AppState {
@@ -118,16 +118,17 @@ export function deleteFeature(state: AppState, featureId: string): AppState {
 export function addTerminal(
   state: AppState,
   featureId: string,
-  input: { name: string; startupCommand?: string; kind?: TerminalKind }
+  input: { name: string; startupCommand?: string; kind?: TerminalKind; review?: ReviewLink; id?: string }
 ): AppState {
   const group = groupOfFeature(state.workspace, featureId)
   const startupCommand = input.startupCommand?.trim()
   const term: Terminal = {
-    id: createId(),
+    id: input.id ?? createId(),
     name: input.name,
     cwd: group?.cwd ?? '',
     startupCommand: startupCommand || undefined,
-    kind: input.kind && input.kind !== 'shell' ? input.kind : undefined
+    kind: input.kind && input.kind !== 'shell' ? input.kind : undefined,
+    ...(input.review ? { review: input.review } : {})
   }
   return {
     ...state,
@@ -144,6 +145,20 @@ export function renameTerminal(state: AppState, terminalId: string, name: string
     workspace: mapGroups(state.workspace, (g) => ({
       ...g,
       features: g.features.map((f) => ({ ...f, terminals: f.terminals.map((t) => (t.id === terminalId ? { ...t, name } : t)) }))
+    }))
+  }
+}
+
+export function setReviewRound(state: AppState, terminalId: string, round: number): AppState {
+  return {
+    ...state,
+    workspace: mapGroups(state.workspace, (g) => ({
+      ...g,
+      features: g.features.map((f) => ({
+        ...f,
+        terminals: f.terminals.map((t) =>
+          t.id === terminalId && t.review ? { ...t, review: { ...t.review, round } } : t)
+      }))
     }))
   }
 }
@@ -240,3 +255,14 @@ export const getActiveTerminal = (s: AppState): Terminal | null => {
 
 export const allTerminals = (s: AppState): Terminal[] =>
   s.workspace.groups.flatMap((g) => g.features.flatMap((f) => f.terminals))
+
+export const getTerminalById = (s: AppState, id: string): Terminal | null =>
+  allTerminals(s).find((t) => t.id === id) ?? null
+
+export const findReviewerFor = (s: AppState, originId: string): Terminal | null =>
+  allTerminals(s).find((t) => t.review?.originTerminalId === originId) ?? null
+
+export const featureIdOfTerminal = (s: AppState, terminalId: string): string | null => {
+  for (const g of s.workspace.groups) for (const f of g.features) if (f.terminals.some((t) => t.id === terminalId)) return f.id
+  return null
+}

@@ -48,7 +48,8 @@ app.whenReady().then(() => {
   const saver = registerIpc({
     getWin: () => mainWindow,
     ptyManager,
-    workspacePath: join(app.getPath('userData'), 'workspace.json')
+    workspacePath: join(app.getPath('userData'), 'workspace.json'),
+    userDataDir: app.getPath('userData')
   })
 
   createWindow()

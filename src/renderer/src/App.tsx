@@ -1,21 +1,24 @@
 // src/renderer/src/App.tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
   setActiveTerminal,
-  getActiveGroup, getActiveFeature, allTerminals
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, findReviewerFor, allTerminals
 } from './store'
 import { migrateWorkspace } from './migrate'
 import { AGENTS, detectAgent, type AgentKind } from './agents'
+import type { ReviewStatus } from '@shared/types'
+import { useReview } from './review/useReview'
 import { gridDimensions } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { TerminalView } from './components/TerminalView'
 import { NewGroupDialog, NewGroupInput } from './components/NewGroupDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
+import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
 
 export default function App() {
   const { state, setState, apply } = useStore()
@@ -29,6 +32,15 @@ export default function App() {
       setLiveAgents((m) => ({ ...m, [id]: detectAgent(process) ?? undefined }))
     })
   }, [])
+
+  const [reviewStatus, setReviewStatus] = useState<Record<string, ReviewStatus | undefined>>({})
+  const [reviewReq, setReviewReq] = useState<{ id: string; reviewer?: AgentKind } | null>(null)
+  const setStatus = useCallback(
+    (id: string, status: ReviewStatus | undefined) => setReviewStatus((m) => ({ ...m, [id]: status })),
+    []
+  )
+  const review = useReview(state, apply, setStatus)
+  useEffect(() => window.terminaltor.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
 
   useEffect(() => {
     window.terminaltor.loadWorkspace().then((ws) => {
@@ -44,6 +56,21 @@ export default function App() {
 
   const activeGroup = getActiveGroup(state)
   const activeFeature = getActiveFeature(state)
+
+  const activeTerminal = getActiveTerminal(state)
+  const activeStatus = activeTerminal ? reviewStatus[activeTerminal.id] : undefined
+  const activeIsReviewer = !!activeTerminal?.review
+  const activeIsOrigin = activeTerminal ? findReviewerFor(state, activeTerminal.id) !== null : false
+  const relayFlags = {
+    canReturn: activeIsReviewer && activeStatus === 'review-ready',
+    canReReview: activeIsOrigin && activeStatus === 'iteration-done',
+    canMarkApplied: activeIsOrigin && activeStatus === 'applying'
+  }
+  const startReview = (args: ReviewStartArgs) => {
+    if (!reviewReq) return
+    void review.startReview({ originTerminalId: reviewReq.id, ...args })
+    setReviewReq(null)
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -121,6 +148,8 @@ export default function App() {
           const g = state.workspace.groups.find((x) => x.id === gid)
           window.terminaltor.openPath(g?.cwd ?? '')
         }}
+        reviewStatus={reviewStatus}
+        onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -134,6 +163,12 @@ export default function App() {
           onAdd={() => { if (activeFeature) apply((s) => addTerminal(s, activeFeature.id, { name: 'shell' })) }}
           onLaunch={(kind) => { if (activeFeature) launchAgent(activeFeature.id, kind) }}
           onToggleView={() => { if (activeFeature) apply((s) => toggleFeatureViewMode(s, activeFeature.id)) }}
+          reviewStatus={reviewStatus}
+          onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
+          relay={relayFlags}
+          onReturnToOrigin={() => { if (activeTerminal) void review.relayToOrigin(activeTerminal.id) }}
+          onReReview={() => { if (activeTerminal) void review.reReview(activeTerminal.id) }}
+          onMarkApplied={() => { if (activeTerminal) review.markApplied(activeTerminal.id) }}
         />
 
         <div
@@ -175,6 +210,22 @@ export default function App() {
           onCancel={() => setConfirm(null)}
         />
       )}
+      {reviewReq && (() => {
+        const origin = getTerminalById(state, reviewReq.id)
+        if (!origin) return null
+        const currentKind = liveAgents[origin.id] ?? origin.kind
+        const defaultReviewer: AgentKind = reviewReq.reviewer ?? (currentKind === 'claude' ? 'codex' : 'claude')
+        const group = state.workspace.groups.find((g) => g.features.some((f) => f.terminals.some((t) => t.id === origin.id)))
+        return (
+          <ReviewDialog
+            originName={origin.name}
+            defaultReviewer={defaultReviewer}
+            cwd={group?.cwd ?? ''}
+            onStart={startReview}
+            onCancel={() => setReviewReq(null)}
+          />
+        )
+      })()}
     </div>
   )
 }

@@ -77,3 +77,24 @@ export function TerminalKindIcon({ kind, className }: { kind: TerminalKind; clas
   if (kind === 'codex') return <CodexIcon className={className} />
   return <ShellIcon className={className} />
 }
+
+export function SpinnerIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" className={`animate-spin ${className ?? ''}`}
+      data-testid="icon-spinner" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+      <path d="M12 3 a9 9 0 0 1 9 9" />
+    </svg>
+  )
+}
+
+export function ReviewIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-review" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16 L21 21" />
+    </svg>
+  )
+}

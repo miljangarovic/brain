@@ -28,6 +28,17 @@ const api: TerminaltorApi = {
     ipcRenderer.on(IPC.ptyProc, listener)
     return () => ipcRenderer.removeListener(IPC.ptyProc, listener)
   },
+  pickFile: (opts) => ipcRenderer.invoke(IPC.dialogPickFile, opts ?? {}) as Promise<string | null>,
+  suggestSpec: (cwd) => ipcRenderer.invoke(IPC.reviewSuggestSpec, cwd) as Promise<string | null>,
+  resolveReviewDir: (originTerminalId, round) =>
+    ipcRenderer.invoke(IPC.reviewResolveDir, { originTerminalId, round }) as Promise<{ reviewDir: string; reviewFile: string }>,
+  watchFile: (watchId, path) => ipcRenderer.send(IPC.fsWatch, { watchId, path }),
+  unwatchFile: (watchId) => ipcRenderer.send(IPC.fsUnwatch, { watchId }),
+  onFsChanged: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: { watchId: string }) => cb(p.watchId)
+    ipcRenderer.on(IPC.fsChanged, listener)
+    return () => ipcRenderer.removeListener(IPC.fsChanged, listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('terminaltor', api)

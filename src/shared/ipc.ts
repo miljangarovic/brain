@@ -9,5 +9,11 @@ export const IPC = {
   ptyExit: 'pty:exit',
   dialogPickDirectory: 'dialog:pickDirectory',
   shellOpenPath: 'shell:openPath',
-  ptyProc: 'pty:proc'
+  ptyProc: 'pty:proc',
+  dialogPickFile: 'dialog:pickFile',
+  reviewSuggestSpec: 'review:suggestSpec',
+  reviewResolveDir: 'review:resolveDir',
+  fsWatch: 'fs:watch',
+  fsUnwatch: 'fs:unwatch',
+  fsChanged: 'fs:changed'
 } as const
