@@ -10,6 +10,7 @@ import {
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, findReviewerFor, allTerminals
 } from './store'
 import { migrateWorkspace } from './migrate'
+import { createId } from '@shared/id'
 import { AGENTS, detectAgent, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
@@ -28,6 +29,13 @@ export default function App() {
   const [loaded, setLoaded] = useState(false)
   const [confirm, setConfirm] = useState<{ message: string; action: () => void } | null>(null)
   const askDelete = (message: string, action: () => void) => setConfirm({ message, action })
+  // Id of a just-added shell terminal whose rename input the sidebar should auto-open.
+  const [renameTerminalId, setRenameTerminalId] = useState<string | null>(null)
+  const addShellTerminal = (featureId: string) => {
+    const id = createId()
+    apply((s) => addTerminal(s, featureId, { name: 'shell', id }))
+    setRenameTerminalId(id)
+  }
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
     return window.terminaltor.onPtyProc((id, process) => {
@@ -149,7 +157,7 @@ export default function App() {
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
         onAddGroup={() => setGroupDialogOpen(true)}
         onAddFeature={(gid, name) => apply((s) => addFeature(s, gid, name))}
-        onAddTerminal={(fid) => apply((s) => addTerminal(s, fid, { name: 'shell' }))}
+        onAddTerminal={(fid) => addShellTerminal(fid)}
         onLaunchAgent={launchAgent}
         onToggleFeatureView={(fid) => apply((s) => toggleFeatureViewMode(setActiveFeature(s, fid), fid))}
         onRenameGroup={(id, name) => apply((s) => renameGroup(s, id, name))}
@@ -173,6 +181,8 @@ export default function App() {
         }}
         reviewStatus={reviewStatus}
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
+        pendingRenameTerminalId={renameTerminalId}
+        onPendingRenameConsumed={() => setRenameTerminalId(null)}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -182,7 +192,7 @@ export default function App() {
             viewMode={activeFeature.viewMode ?? 'tabs'}
             onToggleView={() => apply((s) => toggleFeatureViewMode(s, activeFeature.id))}
             onAdd={(kind) => (kind === 'shell'
-              ? apply((s) => addTerminal(s, activeFeature.id, { name: 'shell' }))
+              ? addShellTerminal(activeFeature.id)
               : launchAgent(activeFeature.id, kind))}
             relay={relayFlags}
             onReturnToOrigin={() => { if (activeTerminal) void review.relayToOrigin(activeTerminal.id) }}

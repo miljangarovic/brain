@@ -7,6 +7,8 @@ describe('detectAgent', () => {
     expect(detectAgent('/usr/local/bin/codex')).toBe('codex')
     expect(detectAgent('Claude')).toBe('claude')
     expect(detectAgent('node claude')).toBe('claude')
+    // codex ships as a node wrapper; main reports the child's full cmdline.
+    expect(detectAgent('node /home/u/.nvm/versions/node/v22/bin/codex')).toBe('codex')
   })
   it('returns null for non-agents / empty', () => {
     expect(detectAgent('bash')).toBeNull()

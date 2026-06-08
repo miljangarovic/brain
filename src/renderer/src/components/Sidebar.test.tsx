@@ -129,6 +129,37 @@ describe('Sidebar (3-level)', () => {
     expect(onRenameTerminal).toHaveBeenCalledWith('t1', 'c2')
   })
 
+  it('auto-opens the rename input for a freshly-added terminal and consumes the signal', () => {
+    const onPendingRenameConsumed = vi.fn()
+    renderSidebar({ pendingRenameTerminalId: 't1', onPendingRenameConsumed })
+    expect(screen.getByLabelText('Preimenuj terminal claude')).toBeInTheDocument()
+    expect(onPendingRenameConsumed).toHaveBeenCalled()
+  })
+
+  it('shows a loading spinner on a feature row when any of its terminals is busy', () => {
+    renderSidebar({ busy: { t1: true } }) // t1 lives in the expanded 'auth' feature
+    const authRow = screen.getByText('auth').closest('div') as HTMLElement
+    expect(within(authRow).getByTestId('icon-spinner')).toBeInTheDocument()
+    const uiRow = screen.getByText('ui').closest('div') as HTMLElement
+    expect(within(uiRow).queryByTestId('icon-spinner')).not.toBeInTheDocument()
+  })
+
+  it('shows the feature spinner even when the feature is collapsed', () => {
+    renderSidebar({ busy: { t2: true } }) // t2 lives in the collapsed 'ui' feature
+    const uiRow = screen.getByText('ui').closest('div') as HTMLElement
+    expect(within(uiRow).getByTestId('icon-spinner')).toBeInTheDocument()
+  })
+
+  it('resizes the sidebar by dragging the separator handle', () => {
+    localStorage.clear()
+    const { container } = renderSidebar()
+    const root = container.firstChild as HTMLElement
+    fireEvent.mouseDown(screen.getByLabelText('Promeni širinu sidebar-a'))
+    fireEvent.mouseMove(window, { clientX: 320 })
+    fireEvent.mouseUp(window)
+    expect(root.style.width).toBe('320px')
+  })
+
   it('deletes a terminal via its hover trash button', async () => {
     const onDeleteTerminal = vi.fn()
     renderSidebar({ onDeleteTerminal })

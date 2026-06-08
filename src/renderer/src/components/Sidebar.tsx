@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
 import { TerminalKindIcon, GridIcon, TrashIcon, ReviewIcon, SpinnerIcon } from './icons'
@@ -7,6 +7,10 @@ import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
+
+const SIDEBAR_MIN = 180
+const SIDEBAR_MAX = 560
+const SIDEBAR_DEFAULT = 256
 
 export function Sidebar(props: {
   groups: Group[]
@@ -30,16 +34,37 @@ export function Sidebar(props: {
   onOpenInFiles: (groupId: string) => void
   reviewStatus: Record<string, ReviewStatus | undefined>
   onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
+  pendingRenameTerminalId?: string | null
+  onPendingRenameConsumed?: () => void
 }) {
   const {
     groups, activeTerminalId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
-    reviewStatus, onReviewTerminal
+    reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed
   } = props
 
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; terminalId: string } | null>(null)
+
+  // Resizable width, persisted across reloads. Dragging the right-edge handle
+  // sets the width to the cursor's x (the sidebar is flush against the left edge).
+  const [width, setWidth] = useState(() => {
+    const saved = Number((typeof localStorage !== 'undefined' && localStorage.getItem('sidebarWidth')) || '')
+    return saved >= SIDEBAR_MIN && saved <= SIDEBAR_MAX ? saved : SIDEBAR_DEFAULT
+  })
+  useEffect(() => { try { localStorage.setItem('sidebarWidth', String(width)) } catch { /* ignore */ } }, [width])
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const onMove = (ev: MouseEvent) => setWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, ev.clientX)))
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
   const [editing, setEditing] = useState<{ kind: RenameKind; id: string } | null>(null)
   const [draft, setDraft] = useState('')
   const startRename = (kind: RenameKind, id: string, current: string) => { setEditing({ kind, id }); setDraft(current) }
@@ -57,12 +82,25 @@ export function Sidebar(props: {
   const renameInput = (label: string) => (
     <input
       autoFocus aria-label={label} value={draft}
+      onFocus={(e) => e.currentTarget.select()}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commitRename}
       onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); else if (e.key === 'Escape') setEditing(null) }}
       className="flex-1 min-w-0 rounded bg-field px-1 text-sm text-fg-bright outline-none ring-1 ring-accent"
     />
   )
+
+  // A freshly-added terminal asks (via prop) to immediately open its rename input,
+  // so the user can name it right away instead of living with the default 'shell'.
+  useEffect(() => {
+    if (!pendingRenameTerminalId) return
+    const t = groups.flatMap((g) => g.features).flatMap((f) => f.terminals).find((t) => t.id === pendingRenameTerminalId)
+    if (t) {
+      startRename('terminal', t.id, t.name)
+      onPendingRenameConsumed?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRenameTerminalId])
 
   // Single click on a group/feature name collapses it; double click renames.
   // A short timer disambiguates the two so a dblclick doesn't also fire collapse.
@@ -85,12 +123,7 @@ export function Sidebar(props: {
   const hoverBtn = 'opacity-0 group-hover:opacity-100 px-1 text-fg-muted transition'
 
   return (
-    <div className="w-64 shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line">
-        <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_var(--od-accent)]" />
-        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-fg-muted">Terminaltor</span>
-      </div>
-
+    <div style={{ width }} className="relative shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
       <div className="flex-1 overflow-y-auto py-1">
         {groups.map((g) => (
           <div key={g.id} className="select-none">
@@ -103,7 +136,7 @@ export function Sidebar(props: {
                   onClick={() => onNameClick(() => onToggleGroup(g.id))}
                   onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>
                   <span className="truncate text-sm font-semibold text-fg-bright">{g.name}</span>
-                  {g.cwd && <span className="truncate text-xs text-fg-muted/70">{g.cwd}</span>}
+                  {g.cwd && <span className="truncate text-xs text-fg-muted/40">{g.cwd}</span>}
                 </span>
               )}
               <button aria-label={`Obriši grupu ${g.name}`} title="Obriši grupu" onClick={() => onDeleteGroup(g.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
@@ -122,6 +155,7 @@ export function Sidebar(props: {
                           onClick={() => onNameClick(() => onToggleFeature(f.id))}
                           onDoubleClick={() => onNameDblClick(() => startRename('feature', f.id, f.name))}>{f.name}</span>
                       )}
+                      {f.terminals.some((t) => busy[t.id]) && <SpinnerIcon className="shrink-0 text-accent" />}
                       <AddMenuButton
                         label={`Dodaj u ${f.name}`}
                         onAdd={(kind) => (kind === 'shell' ? onAddTerminal(f.id) : onLaunchAgent(f.id, kind))}
@@ -208,6 +242,12 @@ export function Sidebar(props: {
           { label: 'Review ▸ Codex', onSelect: () => onReviewTerminal(termMenu.terminalId, 'codex') }
         ]} />
       )}
+
+      <div
+        role="separator" aria-label="Promeni širinu sidebar-a"
+        onMouseDown={startResize}
+        className="absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize hover:bg-accent/60"
+      />
     </div>
   )
 }

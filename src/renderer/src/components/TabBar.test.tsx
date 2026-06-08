@@ -1,6 +1,6 @@
 // src/renderer/src/components/TabBar.test.tsx
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TabBar } from './TabBar'
 import type { Terminal } from '@shared/types'
@@ -55,6 +55,34 @@ describe('TabBar', () => {
       onSelect={noop} onClose={noop} {...reviewProps} busy={{ a: true }} />)
     const tab = screen.getAllByRole('tab')[0]
     expect(within(tab).getByTestId('icon-spinner')).toBeInTheDocument()
+  })
+
+  it('right-clicks a tab and closes all tabs to the right of it', async () => {
+    const terms3: Terminal[] = [
+      { id: 'a', name: 'one', cwd: '' },
+      { id: 'b', name: 'two', cwd: '' },
+      { id: 'c', name: 'three', cwd: '' }
+    ]
+    const onClose = vi.fn()
+    render(<TabBar terminals={terms3} activeId="b" liveAgents={{}} onSelect={noop} onClose={onClose} {...reviewProps} />)
+    fireEvent.contextMenu(screen.getByText('two'))
+    expect(screen.getByRole('menuitem', { name: 'Zatvori ostale tabove' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Zatvori sve levo' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Zatvori sve desno' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledWith('c')
+  })
+
+  it('omits the left/right close options that do not apply at an edge tab', () => {
+    const terms3: Terminal[] = [
+      { id: 'a', name: 'one', cwd: '' },
+      { id: 'b', name: 'two', cwd: '' },
+      { id: 'c', name: 'three', cwd: '' }
+    ]
+    render(<TabBar terminals={terms3} activeId="a" liveAgents={{}} onSelect={noop} onClose={noop} {...reviewProps} />)
+    fireEvent.contextMenu(screen.getByText('one'))
+    expect(screen.queryByRole('menuitem', { name: 'Zatvori sve levo' })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Zatvori sve desno' })).toBeInTheDocument()
   })
 
   it('a live agent overrides the tab icon', () => {
