@@ -73,7 +73,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen text-gray-200 bg-gray-900">
+    <div className="flex h-screen text-fg bg-panel">
       <Sidebar
         groups={state.workspace.groups}
         activeTerminalId={state.activeTerminalId}
@@ -94,10 +94,11 @@ export default function App() {
           onAdd={openDialog}
         />
 
-        <div className="relative flex-1 bg-[#0d1117]">
+        <div className="relative flex-1 bg-surface">
           {terminals.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center text-gray-600">
-              Napravi grupu pa terminal da počneš.
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
+              <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
+              <span className="text-sm">Napravi grupu pa terminal da počneš.</span>
             </div>
           )}
           {/* All terminals stay mounted so their shells keep running while hidden. */}

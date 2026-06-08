@@ -1,5 +1,65 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── One Dark Vivid ──────────────────────────────────────────────────────────
+   Single source of truth for the whole app's palette. Tailwind semantic tokens
+   (tailwind.config.mjs) map to these; theme.ts reads them for the xterm canvas. */
+:root {
+  /* surfaces */
+  --od-surface:  #282c34; /* terminal / editor area */
+  --od-panel:    #21252b; /* sidebar + tab bar */
+  --od-elevated: #2d333f; /* dialogs / popovers */
+  --od-field:    #1b1d23; /* text inputs */
+  --od-hover:    #2c313c;
+  --od-sel:      #3e4451;
+
+  /* lines */
+  --od-line:     #181a1f;
+  --od-divider:  #323842;
+
+  /* text */
+  --od-fg:        #abb2bf;
+  --od-fg-bright: #dfe3eb;
+  --od-fg-muted:  #6b7689;
+
+  /* accents — the "vivid" One Dark family */
+  --od-accent:        #61afef; /* blue */
+  --od-accent-strong: #528bff;
+  --od-cyan:    #2bbac5;
+  --od-green:   #89ca78;
+  --od-yellow:  #e5c07b;
+  --od-orange:  #d19a66;
+  --od-red:     #ef596f;
+  --od-magenta: #d55fde;
+
+  /* ansi extras */
+  --od-black:        #21252b;
+  --od-bright-black: #5c6678;
+  --od-white:        #abb2bf;
+  --od-bright-white: #eef1f6;
+}
+
 html, body, #root { height: 100%; margin: 0; }
-body { font-family: ui-sans-serif, system-ui, sans-serif; }
+body {
+  font-family: 'Inter var', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--od-panel);
+  color: var(--od-fg);
+}
+
+::selection { background: color-mix(in srgb, var(--od-accent) 35%, transparent); }
+
+/* Slim, theme-matched scrollbars in the chrome (sidebar, tab overflow). */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--od-sel);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--od-fg-muted); background-clip: content-box; }
+
+/* Breathing room around the xterm canvas. */
+.xterm { padding: 6px 8px; }
+.xterm-viewport::-webkit-scrollbar-thumb { background: var(--od-bright-black); background-clip: content-box; }

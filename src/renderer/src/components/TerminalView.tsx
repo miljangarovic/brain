@@ -4,8 +4,7 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { Terminal as TerminalModel } from '@shared/types'
-
-const THEME = { background: '#0d1117', foreground: '#c9d1d9', cursor: '#58a6ff' }
+import { getXtermTheme, MONO_FONT } from '../theme'
 
 export function TerminalView({ terminal, active }: { terminal: TerminalModel; active: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -17,10 +16,11 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     if (!host) return
 
     const term = new XTerm({
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      fontFamily: MONO_FONT,
       fontSize: 13,
+      lineHeight: 1.25,
       cursorBlink: true,
-      theme: THEME,
+      theme: getXtermTheme(),
       allowProposedApi: true
     })
     const fit = new FitAddon()
@@ -45,15 +45,25 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     })
     const inputDisposable = term.onData((data) => window.terminaltor.writePty(terminal.id, data))
 
-    // Ctrl+Shift+C / Ctrl+Shift+V copy-paste
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true
-      if (e.code === 'KeyC') {
+      if (e.type !== 'keydown') return true
+
+      // Shift+Enter → insert a newline (LF) instead of submitting (CR).
+      // Plain Enter still sends CR ("submit"); claude/codex and most readline/Ink
+      // TUIs treat a bare LF (same as Ctrl+J) as "insert newline".
+      if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey &&
+          (e.code === 'Enter' || e.code === 'NumpadEnter')) {
+        window.terminaltor.writePty(terminal.id, '\n')
+        return false
+      }
+
+      // Ctrl+Shift+C / Ctrl+Shift+V copy-paste
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
         const sel = term.getSelection()
         if (sel) void navigator.clipboard.writeText(sel)
         return false
       }
-      if (e.code === 'KeyV') {
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyV') {
         void navigator.clipboard.readText().then((text) => window.terminaltor.writePty(terminal.id, text))
         return false
       }

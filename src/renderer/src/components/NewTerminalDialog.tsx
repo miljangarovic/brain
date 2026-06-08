@@ -26,12 +26,21 @@ export function NewTerminalDialog({
     })
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
-      <div className="w-96 rounded-lg bg-gray-800 p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-4 text-lg font-semibold text-gray-100">Novi terminal</h2>
+  const field =
+    'mt-1 w-full rounded-md bg-field px-2.5 py-1.5 text-fg-bright placeholder-fg-muted outline-none ring-1 ring-line focus:ring-accent transition'
 
-        <label className="block mb-3 text-sm text-gray-300">
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="w-[26rem] rounded-xl bg-elevated border border-line p-5 shadow-2xl shadow-black/50"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-4 text-lg font-semibold tracking-tight text-fg-bright">Novi terminal</h2>
+
+        <label className="block mb-3 text-sm text-fg">
           Ime
           <input
             autoFocus
@@ -39,22 +48,22 @@ export function NewTerminalDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
-            className="mt-1 w-full rounded bg-gray-900 px-2 py-1 text-gray-100 outline-none focus:ring-1 focus:ring-blue-500"
+            className={field}
           />
         </label>
 
-        <label className="block mb-3 text-sm text-gray-300">
+        <label className="block mb-3 text-sm text-fg">
           Radni direktorijum (cwd)
           <input
             aria-label="Radni direktorijum (cwd)"
             value={cwd}
             placeholder="~ (home ako prazno)"
             onChange={(e) => setCwd(e.target.value)}
-            className="mt-1 w-full rounded bg-gray-900 px-2 py-1 text-gray-100 placeholder-gray-500 outline-none focus:ring-1 focus:ring-blue-500"
+            className={field}
           />
         </label>
 
-        <label className="block mb-4 text-sm text-gray-300">
+        <label className="block mb-4 text-sm text-fg">
           Startup komanda
           <input
             aria-label="Startup komanda"
@@ -62,13 +71,23 @@ export function NewTerminalDialog({
             placeholder="npr. claude (opciono)"
             onChange={(e) => setStartupCommand(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
-            className="mt-1 w-full rounded bg-gray-900 px-2 py-1 text-gray-100 placeholder-gray-500 outline-none focus:ring-1 focus:ring-blue-500"
+            className={field}
           />
         </label>
 
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="rounded px-3 py-1 text-gray-300 hover:bg-gray-700">Otkaži</button>
-          <button onClick={submit} className="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-500">Kreiraj</button>
+          <button
+            onClick={onCancel}
+            className="rounded-md px-3 py-1.5 text-sm text-fg hover:bg-hover transition-colors"
+          >
+            Otkaži
+          </button>
+          <button
+            onClick={submit}
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:bg-accent-strong transition-colors"
+          >
+            Kreiraj
+          </button>
         </div>
       </div>
     </div>

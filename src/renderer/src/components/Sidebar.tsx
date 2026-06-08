@@ -36,17 +36,20 @@ export function Sidebar({
   }
 
   return (
-    <div className="w-60 shrink-0 h-full flex flex-col bg-gray-900 border-r border-gray-700 text-gray-300">
-      <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Terminaltor</div>
+    <div className="w-60 shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line">
+        <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_var(--od-accent)]" />
+        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-fg-muted">Terminaltor</span>
+      </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto py-1">
         {groups.map((g) => (
           <div key={g.id} className="select-none">
-            <div className="group flex items-center gap-1 px-2 py-1 hover:bg-gray-800">
+            <div className="group flex items-center gap-1 px-2 py-1 hover:bg-hover">
               <button
                 aria-label={`Skupi/raširi ${g.name}`}
                 onClick={() => onToggleGroup(g.id)}
-                className="w-4 text-gray-500"
+                className="w-4 text-fg-muted hover:text-fg transition-colors"
               >
                 {g.collapsed ? '▸' : '▾'}
               </button>
@@ -61,11 +64,11 @@ export function Sidebar({
                     if (e.key === 'Enter') commitRename()
                     else if (e.key === 'Escape') setEditingId(null)
                   }}
-                  className="flex-1 min-w-0 rounded bg-gray-900 px-1 text-sm text-gray-100 outline-none focus:ring-1 focus:ring-blue-500"
+                  className="flex-1 min-w-0 rounded bg-field px-1 text-sm text-fg-bright outline-none ring-1 ring-accent"
                 />
               ) : (
                 <span
-                  className="flex-1 truncate text-sm font-medium text-gray-200 cursor-text"
+                  className="flex-1 truncate text-sm font-medium text-fg-bright cursor-text"
                   title="Dvoklik za preimenovanje"
                   onDoubleClick={() => startRename(g.id, g.name)}
                 >
@@ -75,40 +78,45 @@ export function Sidebar({
               <button
                 aria-label={`Novi terminal u ${g.name}`}
                 onClick={() => onAddTerminal(g.id)}
-                className="opacity-0 group-hover:opacity-100 px-1 text-gray-400 hover:text-white"
+                className="opacity-0 group-hover:opacity-100 px-1 text-fg-muted hover:text-accent transition"
               >
                 +
               </button>
               <button
                 aria-label={`Obriši grupu ${g.name}`}
                 onClick={() => onDeleteGroup(g.id)}
-                className="opacity-0 group-hover:opacity-100 px-1 text-gray-400 hover:text-red-400"
+                className="opacity-0 group-hover:opacity-100 px-1 text-fg-muted hover:text-danger transition"
               >
                 ×
               </button>
             </div>
-            {!g.collapsed && g.terminals.map((t) => (
-              <div
-                key={t.id}
-                onClick={() => onSelectTerminal(t.id)}
-                className={`pl-8 pr-2 py-1 text-sm cursor-pointer truncate ${
-                  t.id === activeTerminalId ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'
-                }`}
-              >
-                {t.name}
-              </div>
-            ))}
+            {!g.collapsed && g.terminals.map((t) => {
+              const isActive = t.id === activeTerminalId
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => onSelectTerminal(t.id)}
+                  className={`pl-7 pr-2 py-1 text-sm cursor-pointer truncate border-l-2 transition-colors ${
+                    isActive
+                      ? 'border-accent bg-sel text-fg-bright'
+                      : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'
+                  }`}
+                >
+                  {t.name}
+                </div>
+              )
+            })}
           </div>
         ))}
       </div>
 
-      <div className="p-2 border-t border-gray-700">
+      <div className="p-2 border-t border-line">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submitGroup() }}
           placeholder="Nova grupa…"
-          className="w-full px-2 py-1 text-sm rounded bg-gray-800 text-gray-200 placeholder-gray-500 outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full px-2 py-1.5 text-sm rounded-md bg-field text-fg placeholder-fg-muted outline-none ring-1 ring-line focus:ring-accent transition"
         />
       </div>
     </div>

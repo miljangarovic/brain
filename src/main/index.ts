@@ -13,7 +13,7 @@ function createWindow(): void {
     width: 1280,
     height: 820,
     show: false,
-    backgroundColor: '#0d1117',
+    backgroundColor: '#21252b',
     title: 'Terminaltor',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
