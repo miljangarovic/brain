@@ -92,7 +92,7 @@ export default function App() {
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
         onAddGroup={() => setGroupDialogOpen(true)}
         onAddFeature={(gid, name) => apply((s) => addFeature(s, gid, name))}
-        onAddTerminal={(fid, name) => apply((s) => addTerminal(s, fid, { name }))}
+        onAddTerminal={(fid) => apply((s) => addTerminal(s, fid, { name: 'shell' }))}
         onLaunchAgent={launchAgent}
         onToggleFeatureView={(fid) => apply((s) => toggleFeatureViewMode(s, fid))}
         onRenameGroup={(id, name) => apply((s) => renameGroup(s, id, name))}

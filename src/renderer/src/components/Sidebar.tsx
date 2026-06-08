@@ -15,7 +15,7 @@ export function Sidebar(props: {
   onToggleFeature: (id: string) => void
   onAddGroup: () => void
   onAddFeature: (groupId: string, name: string) => void
-  onAddTerminal: (featureId: string, name: string) => void
+  onAddTerminal: (featureId: string) => void
   onLaunchAgent: (featureId: string, kind: AgentKind) => void
   onToggleFeatureView: (featureId: string) => void
   onRenameGroup: (id: string, name: string) => void
@@ -57,14 +57,9 @@ export function Sidebar(props: {
   )
 
   const [featureDraft, setFeatureDraft] = useState<Record<string, string>>({})
-  const [terminalDraft, setTerminalDraft] = useState<Record<string, string>>({})
   const submitFeature = (gid: string) => {
     const name = (featureDraft[gid] ?? '').trim()
     if (name) { onAddFeature(gid, name); setFeatureDraft((d) => ({ ...d, [gid]: '' })) }
-  }
-  const submitTerminal = (fid: string) => {
-    const name = (terminalDraft[fid] ?? '').trim()
-    if (name) { onAddTerminal(fid, name); setTerminalDraft((d) => ({ ...d, [fid]: '' })) }
   }
 
   const hoverBtn = 'opacity-0 group-hover:opacity-100 px-1 text-fg-muted transition'
@@ -103,6 +98,7 @@ export function Sidebar(props: {
                       {isEditing('feature', f.id) ? renameInput(`Preimenuj feature ${f.name}`) : (
                         <span className="flex-1 truncate text-sm font-medium text-fg cursor-text" onDoubleClick={() => startRename('feature', f.id, f.name)}>{f.name}</span>
                       )}
+                      <button aria-label={`Novi terminal u ${f.name}`} title="Novi terminal" onClick={() => onAddTerminal(f.id)} className={`${hoverBtn} text-base leading-none hover:text-accent`}>+</button>
                       <button aria-label={`Novi Claude terminal u ${f.name}`} title="Claude" onClick={() => onLaunchAgent(f.id, 'claude')} className={`${hoverBtn} text-base leading-none`}><ClaudeIcon /></button>
                       <button aria-label={`Novi Codex terminal u ${f.name}`} title="Codex" onClick={() => onLaunchAgent(f.id, 'codex')} className={`${hoverBtn} text-base leading-none`}><CodexIcon /></button>
                       <button aria-label={`Grid prikaz ${f.name}`} title="Grid" onClick={() => onToggleFeatureView(f.id)} className={`${hoverBtn} ${(f.viewMode ?? 'tabs') === 'grid' ? 'text-accent opacity-100' : ''}`}><GridIcon /></button>
@@ -124,13 +120,6 @@ export function Sidebar(props: {
                             </div>
                           )
                         })}
-                        <input
-                          aria-label={`Novi terminal u ${f.name}`} placeholder="+ terminal…"
-                          value={terminalDraft[f.id] ?? ''}
-                          onChange={(e) => setTerminalDraft((d) => ({ ...d, [f.id]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === 'Enter') submitTerminal(f.id) }}
-                          className="ml-6 my-0.5 w-[calc(100%-1.75rem)] bg-transparent px-1 py-0.5 text-xs text-fg placeholder-fg-muted/60 outline-none focus:bg-field rounded"
-                        />
                       </div>
                     )}
                   </div>
