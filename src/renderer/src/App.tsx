@@ -72,11 +72,9 @@ export default function App() {
     if (dialogGroupId) apply((s) => addTerminal(s, dialogGroupId, input))
     setDialogGroupId(null)
   }
-  const launchAgent = (kind: AgentKind) => {
-    const gid = state.activeGroupId
-    if (!gid) return
+  const launchAgent = (groupId: string, kind: AgentKind) => {
     const agent = AGENTS[kind]
-    apply((s) => addTerminal(s, gid, { name: agent.defaultName, cwd: '', startupCommand: agent.command, kind }))
+    apply((s) => addTerminal(s, groupId, { name: agent.defaultName, cwd: '', startupCommand: agent.command, kind }))
   }
 
   return (
@@ -90,6 +88,7 @@ export default function App() {
         onRenameGroup={(id, name) => apply((s) => renameGroup(s, id, name))}
         onAddTerminal={(gid) => setDialogGroupId(gid)}
         onDeleteGroup={(id) => apply((s) => deleteGroup(s, id))}
+        onLaunchAgent={launchAgent}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -99,7 +98,7 @@ export default function App() {
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
           onClose={(id) => apply((s) => removeTerminal(s, id))}
           onAdd={openDialog}
-          onLaunch={launchAgent}
+          onLaunch={(kind) => { if (state.activeGroupId) launchAgent(state.activeGroupId, kind) }}
         />
 
         <div className="relative flex-1 bg-surface">

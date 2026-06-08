@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import type { Group } from '@shared/types'
+import type { AgentKind } from '../agents'
+import { TerminalKindIcon, ClaudeIcon, CodexIcon } from './icons'
 
 export function Sidebar({
-  groups, activeTerminalId, onSelectTerminal, onToggleGroup, onAddGroup, onRenameGroup, onAddTerminal, onDeleteGroup
+  groups, activeTerminalId, onSelectTerminal, onToggleGroup, onAddGroup, onRenameGroup, onAddTerminal, onDeleteGroup, onLaunchAgent
 }: {
   groups: Group[]
   activeTerminalId: string | null
@@ -12,6 +14,7 @@ export function Sidebar({
   onRenameGroup: (id: string, name: string) => void
   onAddTerminal: (groupId: string) => void
   onDeleteGroup: (id: string) => void
+  onLaunchAgent: (groupId: string, kind: AgentKind) => void
 }) {
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -34,6 +37,8 @@ export function Sidebar({
     if (name) onRenameGroup(editingId, name)
     setEditingId(null)
   }
+
+  const hoverBtn = 'opacity-0 group-hover:opacity-100 px-1 text-fg-muted transition'
 
   return (
     <div className="w-60 shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
@@ -76,16 +81,32 @@ export function Sidebar({
                 </span>
               )}
               <button
+                aria-label={`Novi Claude terminal u ${g.name}`}
+                title="Claude"
+                onClick={() => onLaunchAgent(g.id, 'claude')}
+                className={`${hoverBtn} text-base leading-none`}
+              >
+                <ClaudeIcon />
+              </button>
+              <button
+                aria-label={`Novi Codex terminal u ${g.name}`}
+                title="Codex"
+                onClick={() => onLaunchAgent(g.id, 'codex')}
+                className={`${hoverBtn} text-base leading-none`}
+              >
+                <CodexIcon />
+              </button>
+              <button
                 aria-label={`Novi terminal u ${g.name}`}
                 onClick={() => onAddTerminal(g.id)}
-                className="opacity-0 group-hover:opacity-100 px-1 text-fg-muted hover:text-accent transition"
+                className={`${hoverBtn} hover:text-accent`}
               >
                 +
               </button>
               <button
                 aria-label={`Obriši grupu ${g.name}`}
                 onClick={() => onDeleteGroup(g.id)}
-                className="opacity-0 group-hover:opacity-100 px-1 text-fg-muted hover:text-danger transition"
+                className={`${hoverBtn} hover:text-danger`}
               >
                 ×
               </button>
@@ -95,14 +116,16 @@ export function Sidebar({
               return (
                 <div
                   key={t.id}
+                  data-term-id={t.id}
                   onClick={() => onSelectTerminal(t.id)}
-                  className={`pl-7 pr-2 py-1 text-sm cursor-pointer truncate border-l-2 transition-colors ${
+                  className={`flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${
                     isActive
                       ? 'border-accent bg-sel text-fg-bright'
                       : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'
                   }`}
                 >
-                  {t.name}
+                  <TerminalKindIcon kind={t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
+                  <span className="truncate">{t.name}</span>
                 </div>
               )
             })}
