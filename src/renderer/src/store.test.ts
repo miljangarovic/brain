@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
-  addTerminal, renameTerminal, removeTerminal, stopTerminal, restartTerminal, isStopped,
+  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals
 } from './store'
@@ -144,7 +144,7 @@ describe('store reducers', () => {
     expect(s.activeTerminalId).toBe('t')
   })
 
-  it('stopTerminal marks it stopped and moves active to a running sibling', () => {
+  it('hideTerminal hides it (slot kept) and moves active to a visible sibling', () => {
     let s = addGroup(createInitialState(), 'a', '')
     const fid = firstFeature(s).id
     s = addTerminal(s, fid, { name: 'a' })
@@ -152,37 +152,37 @@ describe('store reducers', () => {
     const aId = firstFeature(s).terminals[0].id
     const bId = firstFeature(s).terminals[1].id
     s = setActiveTerminal(s, bId)
-    s = stopTerminal(s, bId)
-    expect(isStopped(s, bId)).toBe(true)
+    s = hideTerminal(s, bId)
+    expect(isHidden(s, bId)).toBe(true)
     expect(s.workspace.groups[0].features[0].terminals).toHaveLength(2) // slot kept
-    expect(s.activeTerminalId).toBe(aId)                                // moved to running sibling
+    expect(s.activeTerminalId).toBe(aId)                                // moved to visible sibling
   })
 
-  it('restartTerminal un-stops it and activates it', () => {
+  it('showTerminal un-hides it and activates it', () => {
     let s = addGroup(createInitialState(), 'a', '')
     const fid = firstFeature(s).id
     s = addTerminal(s, fid, { name: 'x' })
     const tid = firstFeature(s).terminals[0].id
-    s = stopTerminal(s, tid)
-    expect(isStopped(s, tid)).toBe(true)
-    s = restartTerminal(s, tid)
-    expect(isStopped(s, tid)).toBe(false)
+    s = hideTerminal(s, tid)
+    expect(isHidden(s, tid)).toBe(true)
+    s = showTerminal(s, tid)
+    expect(isHidden(s, tid)).toBe(false)
     expect(s.activeTerminalId).toBe(tid)
   })
 
-  it('removeTerminal prunes the stopped set and skips stopped siblings when re-selecting', () => {
+  it('removeTerminal prunes the hidden set and skips hidden siblings when re-selecting', () => {
     let s = addGroup(createInitialState(), 'a', '')
     const fid = firstFeature(s).id
     s = addTerminal(s, fid, { name: 'a' })
     s = addTerminal(s, fid, { name: 'b' })
     s = addTerminal(s, fid, { name: 'c' })
     const [aId, bId, cId] = firstFeature(s).terminals.map((t) => t.id)
-    s = stopTerminal(s, bId)        // b is stopped
+    s = hideTerminal(s, bId)        // b is hidden
     s = setActiveTerminal(s, cId)
-    s = removeTerminal(s, cId)      // delete active c -> must skip stopped b, pick a
+    s = removeTerminal(s, cId)      // delete active c -> must skip hidden b, pick a
     expect(s.activeTerminalId).toBe(aId)
-    expect(isStopped(s, bId)).toBe(true)
-    s = removeTerminal(s, bId)      // deleting b prunes it from stopped
-    expect(isStopped(s, bId)).toBe(false)
+    expect(isHidden(s, bId)).toBe(true)
+    s = removeTerminal(s, bId)      // deleting b prunes it from hidden
+    expect(isHidden(s, bId)).toBe(false)
   })
 })

@@ -35,7 +35,7 @@ export function TabBar({
             <span>{t.name}</span>
             <button
               aria-label={`Zatvori ${t.name}`}
-              title={`Isključi (terminal ostaje u sidebar-u)`}
+              title={`Sakrij (terminal nastavlja da radi; otvori ga iz sidebar-a)`}
               onClick={(e) => { e.stopPropagation(); onClose(t.id) }}
               className="text-fg-muted hover:text-fg transition-colors"
             >

@@ -4,7 +4,7 @@ import { useStore } from './useStore'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
-  addTerminal, renameTerminal, removeTerminal, stopTerminal, restartTerminal, isStopped,
+  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
   setActiveTerminal,
   getActiveGroup, getActiveFeature, allTerminals
 } from './store'
@@ -47,9 +47,9 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {           // turn off active terminal (keeps slot)
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {           // hide active terminal (shell keeps running)
         e.preventDefault()
-        if (state.activeTerminalId) apply((s) => stopTerminal(s, state.activeTerminalId!))
+        if (state.activeTerminalId) apply((s) => hideTerminal(s, state.activeTerminalId!))
       } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyG') {
         e.preventDefault()
         if (state.activeFeatureId) apply((s) => toggleFeatureViewMode(s, state.activeFeatureId!))
@@ -61,10 +61,10 @@ export default function App() {
     }
     const cycleTab = (dir: number) => {
       const f = getActiveFeature(state)
-      const running = f?.terminals.filter((t) => !state.stopped.includes(t.id)) ?? []
-      if (running.length === 0) return
-      const idx = running.findIndex((t) => t.id === state.activeTerminalId)
-      const next = running[(idx + dir + running.length) % running.length]
+      const visible = f?.terminals.filter((t) => !state.hidden.includes(t.id)) ?? []
+      if (visible.length === 0) return
+      const idx = visible.findIndex((t) => t.id === state.activeTerminalId)
+      const next = visible[(idx + dir + visible.length) % visible.length]
       apply((s) => setActiveTerminal(s, next.id))
     }
     window.addEventListener('keydown', onKey)
@@ -80,13 +80,13 @@ export default function App() {
     setGroupDialogOpen(false)
   }
 
-  // Only RUNNING terminals get a live TerminalView/PTY; stopped ones keep their slot.
-  const isRunning = (id: string) => !state.stopped.includes(id)
-  const terminals = allTerminals(state).filter((t) => isRunning(t.id))
-  const featureRunning = (activeFeature?.terminals ?? []).filter((t) => isRunning(t.id))
+  // ALL terminals stay mounted so their shells keep running; hidden ones are just
+  // omitted from the tab bar / grid (mounted but display:none).
+  const terminals = allTerminals(state)
+  const featureVisible = (activeFeature?.terminals ?? []).filter((t) => !state.hidden.includes(t.id))
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
-  const featureTerminalIds = new Set(featureRunning.map((t) => t.id))
-  const { cols, rows } = gridDimensions(featureRunning.length)
+  const featureTerminalIds = new Set(featureVisible.map((t) => t.id))
+  const { cols, rows } = gridDimensions(featureVisible.length)
 
   return (
     <div className="flex h-screen text-fg bg-panel">
@@ -94,8 +94,7 @@ export default function App() {
         groups={state.workspace.groups}
         activeTerminalId={state.activeTerminalId}
         liveAgents={liveAgents}
-        stopped={state.stopped}
-        onSelectTerminal={(id) => apply((s) => (isStopped(s, id) ? restartTerminal(s, id) : setActiveTerminal(s, id)))}
+        onSelectTerminal={(id) => apply((s) => (isHidden(s, id) ? showTerminal(s, id) : setActiveTerminal(s, id)))}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
         onAddGroup={() => setGroupDialogOpen(true)}
@@ -126,12 +125,12 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <TabBar
-          terminals={featureRunning}
+          terminals={featureVisible}
           activeId={state.activeTerminalId}
           liveAgents={liveAgents}
           viewMode={activeFeature?.viewMode ?? 'tabs'}
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
-          onClose={(id) => apply((s) => stopTerminal(s, id))}
+          onClose={(id) => apply((s) => hideTerminal(s, id))}
           onAdd={() => { if (activeFeature) apply((s) => addTerminal(s, activeFeature.id, { name: 'shell' })) }}
           onLaunch={(kind) => { if (activeFeature) launchAgent(activeFeature.id, kind) }}
           onToggleView={() => { if (activeFeature) apply((s) => toggleFeatureViewMode(s, activeFeature.id)) }}
@@ -141,10 +140,10 @@ export default function App() {
           className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-px bg-line' : ''}`}
           style={gridMode ? { gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
         >
-          {terminals.length === 0 && (
+          {featureVisible.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
               <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
-              <span className="text-sm">{activeGroup ? 'Dodaj ili pokreni terminal.' : 'Napravi grupu da počneš.'}</span>
+              <span className="text-sm">{activeGroup ? 'Dodaj terminal ili ga otvori iz sidebar-a.' : 'Napravi grupu da počneš.'}</span>
             </div>
           )}
           {terminals.map((t) => {
