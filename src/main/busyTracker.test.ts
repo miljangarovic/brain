@@ -68,4 +68,53 @@ describe('createBusyTracker', () => {
     t.touch('b')
     expect(emit.mock.calls).toEqual([['a', true], ['b', true]])
   })
+
+  it('suppresses busy while the user is typing (output is echo)', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400)
+    t.input('a')
+    t.touch('a')
+    t.touch('a')
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('input while busy hides the spinner immediately and cancels the idle timer', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400)
+    t.touch('a')
+    emit.mockClear()
+    t.input('a')
+    expect(emit.mock.calls).toEqual([['a', false]])
+    vi.advanceTimersByTime(600) // stale idle timer must not fire a second false
+    expect(emit).toHaveBeenCalledTimes(1)
+  })
+
+  it('resumes busy after the typing window elapses', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400)
+    t.input('a')
+    vi.advanceTimersByTime(400)
+    emit.mockClear()
+    t.touch('a')
+    expect(emit.mock.calls).toEqual([['a', true]])
+  })
+
+  it('each keystroke re-arms the typing window', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400)
+    t.input('a')
+    vi.advanceTimersByTime(300)
+    t.input('a')                 // resets the 400ms typing window
+    vi.advanceTimersByTime(300)  // 300 < 400 → still typing
+    t.touch('a')
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('typing on one terminal does not suppress another', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400)
+    t.input('a')
+    t.touch('b')
+    expect(emit.mock.calls).toEqual([['b', true]])
+  })
 })
