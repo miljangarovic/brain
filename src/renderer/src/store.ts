@@ -1,4 +1,4 @@
-import { Workspace, Group, Terminal, createWorkspace } from '@shared/types'
+import { Workspace, Group, Terminal, TerminalKind, createWorkspace } from '@shared/types'
 import { createId } from '@shared/id'
 
 export interface AppState {
@@ -55,7 +55,7 @@ export function deleteGroup(state: AppState, groupId: string): AppState {
 export function addTerminal(
   state: AppState,
   groupId: string,
-  input: { name: string; cwd: string; startupCommand?: string; shell?: string }
+  input: { name: string; cwd: string; startupCommand?: string; shell?: string; kind?: TerminalKind }
 ): AppState {
   const startupCommand = input.startupCommand?.trim()
   const shell = input.shell?.trim()
@@ -64,10 +64,12 @@ export function addTerminal(
     name: input.name,
     cwd: input.cwd,
     startupCommand: startupCommand || undefined,
-    shell: shell || undefined
+    shell: shell || undefined,
+    kind: input.kind && input.kind !== 'shell' ? input.kind : undefined
   }
+  // Expand the target group so a freshly added terminal is always visible.
   const groups = state.workspace.groups.map(g =>
-    g.id === groupId ? { ...g, terminals: [...g.terminals, term] } : g)
+    g.id === groupId ? { ...g, collapsed: false, terminals: [...g.terminals, term] } : g)
   return { ...state, workspace: { groups }, activeGroupId: groupId, activeTerminalId: term.id }
 }
 
