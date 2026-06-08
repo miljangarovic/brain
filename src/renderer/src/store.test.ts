@@ -116,4 +116,18 @@ describe('store reducers', () => {
     expect(s.activeGroupId).toBe(g1)
     expect(s.activeTerminalId).toBe(aId)
   })
+
+  it('addTerminal stores an agent kind', () => {
+    let s = addGroup(createInitialState(), 'g')
+    const gid = s.workspace.groups[0].id
+    s = addTerminal(s, gid, { name: 'claude', cwd: '', startupCommand: 'claude', kind: 'claude' })
+    expect(s.workspace.groups[0].terminals[0].kind).toBe('claude')
+  })
+
+  it('addTerminal omits kind for plain shells', () => {
+    let s = addGroup(createInitialState(), 'g')
+    const gid = s.workspace.groups[0].id
+    s = addTerminal(s, gid, { name: 'sh', cwd: '' })
+    expect(s.workspace.groups[0].terminals[0].kind).toBeUndefined()
+  })
 })
