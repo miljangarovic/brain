@@ -8,6 +8,7 @@ type RenameKind = 'group' | 'feature' | 'terminal'
 export function Sidebar(props: {
   groups: Group[]
   activeTerminalId: string | null
+  liveAgents: Record<string, 'claude' | 'codex' | undefined>
   onSelectTerminal: (id: string) => void
   onToggleGroup: (id: string) => void
   onToggleFeature: (id: string) => void
@@ -23,7 +24,7 @@ export function Sidebar(props: {
   onDeleteFeature: (id: string) => void
 }) {
   const {
-    groups, activeTerminalId, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
+    groups, activeTerminalId, liveAgents, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature
   } = props
@@ -113,7 +114,7 @@ export function Sidebar(props: {
                             <div key={t.id} data-term-id={t.id} onClick={() => onSelectTerminal(t.id)}
                               className={`group flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${
                                 active ? 'border-accent bg-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
-                              <TerminalKindIcon kind={t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
+                              <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
                               {isEditing('terminal', t.id)
                                 ? renameInput(`Preimenuj terminal ${t.name}`)
                                 : <span className="truncate" onDoubleClick={(e) => { e.stopPropagation(); startRename('terminal', t.id, t.name) }}>{t.name}</span>}

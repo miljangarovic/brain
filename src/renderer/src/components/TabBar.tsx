@@ -4,11 +4,12 @@ import type { AgentKind } from '../agents'
 import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon } from './icons'
 
 export function TabBar({
-  terminals, activeId, viewMode, onSelect, onClose, onAdd, onLaunch, onToggleView
+  terminals, activeId, viewMode, liveAgents, onSelect, onClose, onAdd, onLaunch, onToggleView
 }: {
   terminals: Terminal[]
   activeId: string | null
   viewMode: 'tabs' | 'grid'
+  liveAgents: Record<string, 'claude' | 'codex' | undefined>
   onSelect: (id: string) => void
   onClose: (id: string) => void
   onAdd: () => void
@@ -30,7 +31,7 @@ export function TabBar({
             }`}
           >
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" />}
-            <TerminalKindIcon kind={t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
+            <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
             <span>{t.name}</span>
             <button
               aria-label={`Zatvori ${t.name}`}

@@ -33,6 +33,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onRenameTerminal: noop,
     onDeleteGroup: noop,
     onDeleteFeature: noop,
+    liveAgents: {},
     ...overrides
   }
   return render(<Sidebar {...props} />)
@@ -84,6 +85,13 @@ describe('Sidebar (3-level)', () => {
     expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'claude')
     await userEvent.click(screen.getByLabelText('Novi Codex terminal u auth'))
     expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
+  })
+
+  it('a live agent wins over the static kind on a visible terminal', () => {
+    // t1 has static kind 'claude'; a live 'codex' detection must override the icon.
+    renderSidebar({ liveAgents: { t1: 'codex' } })
+    const item = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
+    expect(within(item).getByTestId('icon-codex')).toBeInTheDocument()
   })
 
   it('renames a group, a feature and a terminal via double-click', async () => {
