@@ -12,11 +12,11 @@ npm run dev       # pokreni aplikaciju
 npm test          # unit testovi
 ```
 
-## Pakovanje (Linux)
+## Pakovanje
 
 ```bash
-npm run icon      # (jednom) generiše build/icon.png iz build/icon.svg
-npm run package   # pravi AppImage + .deb u release/
+npm run dist      # pravi instalere (Linux AppImage/.deb; mac dmg/zip; win nsis) u release/
+npm run dist:dir  # samo raspakovan build (bez instalera), za brzu provjeru
 ```
 
 ## Prečice
