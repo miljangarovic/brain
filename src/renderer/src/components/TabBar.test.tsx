@@ -16,6 +16,7 @@ function noop() {}
 const reviewProps = {
   reviewStatus: {},
   onReviewTerminal: noop,
+  busy: {},
 }
 
 describe('TabBar', () => {
@@ -47,6 +48,13 @@ describe('TabBar', () => {
     render(<TabBar terminals={agentTerms} activeId="a" liveAgents={{}} onSelect={noop} onClose={noop} {...reviewProps} />)
     const tab = screen.getByRole('tab')
     expect(within(tab).getByTestId('icon-claude')).toBeInTheDocument()
+  })
+
+  it('shows a spinner instead of the kind icon while the terminal is busy', () => {
+    render(<TabBar terminals={terms} activeId="a" liveAgents={{}}
+      onSelect={noop} onClose={noop} {...reviewProps} busy={{ a: true }} />)
+    const tab = screen.getAllByRole('tab')[0]
+    expect(within(tab).getByTestId('icon-spinner')).toBeInTheDocument()
   })
 
   it('a live agent overrides the tab icon', () => {
