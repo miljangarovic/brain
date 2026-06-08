@@ -1,5 +1,5 @@
 // src/renderer/src/App.tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
@@ -35,7 +35,10 @@ export default function App() {
 
   const [reviewStatus, setReviewStatus] = useState<Record<string, ReviewStatus | undefined>>({})
   const [reviewReq, setReviewReq] = useState<{ id: string; reviewer?: AgentKind } | null>(null)
-  const setStatus = (id: string, status: ReviewStatus | undefined) => setReviewStatus((m) => ({ ...m, [id]: status }))
+  const setStatus = useCallback(
+    (id: string, status: ReviewStatus | undefined) => setReviewStatus((m) => ({ ...m, [id]: status })),
+    []
+  )
   const review = useReview(state, apply, setStatus)
   useEffect(() => window.terminaltor.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
 
