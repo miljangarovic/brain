@@ -76,7 +76,8 @@ Princip: svaka jedinica ima jasnu svrhu, definisan interfejs, testabilna nezavis
 **U obimu:**
 
 - Kreiranje / rename / brisanje grupe.
-- Kreiranje terminala sa imenom + opcioni `cwd` + opciona `startupCommand`.
+- Kreiranje terminala sa imenom + opcioni `cwd` (default: home `~`) + opciona
+  `startupCommand`. Default shell je `$SHELL` (fallback `/bin/bash`).
 - Pun PTY: bilo koja komanda, interaktivni programi (vim, htop, claude), boje, resize.
 - Sidebar stablo + tab bar po grupi + prebacivanje aktivnog terminala.
 - Zatvaranje terminala (ubije PTY).
