@@ -6,6 +6,8 @@ import { PtyManager } from './ptyManager'
 import { loadWorkspace, createDebouncedSaver } from './persistence'
 import type { Workspace } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
+import { suggestSpec, resolveReviewPaths } from './reviewFs'
+import { createReviewWatcher } from './reviewWatcher'
 
 // Registers all IPC channels exactly once. PTY data/exit are forwarded to the
 // CURRENT window via getWin() (so window re-creation doesn't leave a stale ref).
@@ -14,8 +16,9 @@ export function registerIpc(opts: {
   getWin: () => BrowserWindow | null
   ptyManager: PtyManager
   workspacePath: string
+  userDataDir: string
 }) {
-  const { getWin, ptyManager, workspacePath } = opts
+  const { getWin, ptyManager, workspacePath, userDataDir } = opts
   const saver = createDebouncedSaver(workspacePath)
 
   const send = (channel: string, payload: unknown) => {
@@ -58,6 +61,26 @@ export function registerIpc(opts: {
       }
     }
   }, 1000)
+
+  ipcMain.handle(IPC.dialogPickFile, async (_e, o: { defaultPath?: string }) => {
+    const win = getWin()
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile'],
+      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }, { name: 'Sve', extensions: ['*'] }],
+      ...(o?.defaultPath ? { defaultPath: o.defaultPath } : {})
+    }
+    const res = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+  })
+
+  ipcMain.handle(IPC.reviewSuggestSpec, (_e, cwd: string) => suggestSpec(cwd || os.homedir()))
+
+  ipcMain.handle(IPC.reviewResolveDir, (_e, p: { originTerminalId: string; round: number }) =>
+    resolveReviewPaths(userDataDir, p.originTerminalId, p.round))
+
+  const reviewWatcher = createReviewWatcher((watchId) => send(IPC.fsChanged, { watchId }))
+  ipcMain.on(IPC.fsWatch, (_e, p: { watchId: string; path: string }) => reviewWatcher.watch(p.watchId, p.path))
+  ipcMain.on(IPC.fsUnwatch, (_e, p: { watchId: string }) => reviewWatcher.unwatch(p.watchId))
 
   return saver
 }
