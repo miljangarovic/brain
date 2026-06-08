@@ -1,10 +1,12 @@
 // src/renderer/src/components/TabBar.tsx
-import type { Terminal } from '@shared/types'
+import type { Terminal, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon } from './icons'
+import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon, ReviewIcon } from './icons'
+import { ReviewStatusDot } from './ReviewStatusDot'
 
 export function TabBar({
-  terminals, activeId, viewMode, liveAgents, onSelect, onClose, onAdd, onLaunch, onToggleView
+  terminals, activeId, viewMode, liveAgents, onSelect, onClose, onAdd, onLaunch, onToggleView,
+  reviewStatus, onReviewTerminal, relay, onReturnToOrigin, onReReview, onMarkApplied
 }: {
   terminals: Terminal[]
   activeId: string | null
@@ -15,6 +17,12 @@ export function TabBar({
   onAdd: () => void
   onLaunch: (kind: AgentKind) => void
   onToggleView: () => void
+  reviewStatus: Record<string, ReviewStatus | undefined>
+  onReviewTerminal: (id: string, reviewer?: AgentKind) => void
+  relay: { canReturn: boolean; canReReview: boolean; canMarkApplied: boolean }
+  onReturnToOrigin: () => void
+  onReReview: () => void
+  onMarkApplied: () => void
 }) {
   return (
     <div role="tablist" className="flex items-stretch gap-px h-9 px-2 bg-panel border-b border-line overflow-x-auto">
@@ -32,7 +40,16 @@ export function TabBar({
           >
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" />}
             <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
+            <ReviewStatusDot status={reviewStatus[t.id]} />
             <span>{t.name}</span>
+            <button
+              aria-label={`Review ${t.name}`}
+              title="Review"
+              onClick={(e) => { e.stopPropagation(); onReviewTerminal(t.id) }}
+              className="opacity-0 group-hover:opacity-100 text-fg-muted hover:text-accent transition"
+            >
+              <ReviewIcon />
+            </button>
             <button
               aria-label={`Zatvori ${t.name}`}
               title={`Sakrij (terminal nastavlja da radi; otvori ga iz sidebar-a)`}
@@ -45,6 +62,18 @@ export function TabBar({
         )
       })}
       <div className="ml-1 self-center flex items-center gap-0.5 text-base leading-none">
+        {relay.canReturn && (
+          <button onClick={onReturnToOrigin} title="Vrati kritiku implementatoru"
+            className="px-2 text-xs rounded bg-field text-accent hover:bg-hover transition">→ Vrati u A</button>
+        )}
+        {relay.canReReview && (
+          <button onClick={onReReview} title="Pošalji ažuriran artefakt nazad revieweru"
+            className="px-2 text-xs rounded bg-field text-accent hover:bg-hover transition">↻ Ponovi review</button>
+        )}
+        {relay.canMarkApplied && (
+          <button onClick={onMarkApplied} title="Označi iteraciju gotovom"
+            className="px-2 text-xs rounded bg-field text-fg-muted hover:text-fg transition">✓ Gotovo</button>
+        )}
         <button
           aria-label={viewMode === 'grid' ? 'Tabs prikaz' : 'Grid prikaz'}
           aria-pressed={viewMode === 'grid'}

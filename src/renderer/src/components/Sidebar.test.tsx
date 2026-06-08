@@ -36,6 +36,8 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onDeleteTerminal: noop,
     onOpenInFiles: noop,
     liveAgents: {},
+    reviewStatus: {},
+    onReviewTerminal: noop,
     ...overrides
   }
   return render(<Sidebar {...props} />)

@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import type { Group } from '@shared/types'
+import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon, TrashIcon } from './icons'
+import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon, TrashIcon, ReviewIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
+import { ReviewStatusDot } from './ReviewStatusDot'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
 
@@ -25,14 +26,18 @@ export function Sidebar(props: {
   onDeleteFeature: (id: string) => void
   onDeleteTerminal: (id: string) => void
   onOpenInFiles: (groupId: string) => void
+  reviewStatus: Record<string, ReviewStatus | undefined>
+  onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
 }) {
   const {
     groups, activeTerminalId, liveAgents, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView,
-    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles
+    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
+    reviewStatus, onReviewTerminal
   } = props
 
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
+  const [termMenu, setTermMenu] = useState<{ x: number; y: number; terminalId: string } | null>(null)
   const [editing, setEditing] = useState<{ kind: RenameKind; id: string } | null>(null)
   const [draft, setDraft] = useState('')
   const startRename = (kind: RenameKind, id: string, current: string) => { setEditing({ kind, id }); setDraft(current) }
@@ -128,9 +133,11 @@ export function Sidebar(props: {
                           const active = t.id === activeTerminalId
                           return (
                             <div key={t.id} data-term-id={t.id} onClick={() => onSelectTerminal(t.id)}
+                              onContextMenu={(e) => { e.preventDefault(); setTermMenu({ x: e.clientX, y: e.clientY, terminalId: t.id }) }}
                               className={`group flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${
                                 active ? 'border-accent bg-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
                               <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
+                              <ReviewStatusDot status={reviewStatus[t.id]} />
                               {isEditing('terminal', t.id)
                                 ? renameInput(`Preimenuj terminal ${t.name}`)
                                 : (
@@ -140,9 +147,14 @@ export function Sidebar(props: {
                                   </span>
                                 )}
                               {!isEditing('terminal', t.id) && (
-                                <button aria-label={`Obriši terminal ${t.name}`} title="Obriši terminal"
-                                  onClick={(e) => { e.stopPropagation(); onDeleteTerminal(t.id) }}
-                                  className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
+                                <>
+                                  <button aria-label={`Review terminal ${t.name}`} title="Review"
+                                    onClick={(e) => { e.stopPropagation(); onReviewTerminal(t.id) }}
+                                    className={`${hoverBtn} text-base leading-none hover:text-accent`}><ReviewIcon /></button>
+                                  <button aria-label={`Obriši terminal ${t.name}`} title="Obriši terminal"
+                                    onClick={(e) => { e.stopPropagation(); onDeleteTerminal(t.id) }}
+                                    className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
+                                </>
                               )}
                             </div>
                           )
@@ -183,6 +195,13 @@ export function Sidebar(props: {
           ]} />
         )
       })()}
+
+      {termMenu && (
+        <ContextMenu x={termMenu.x} y={termMenu.y} onClose={() => setTermMenu(null)} items={[
+          { label: 'Review ▸ Claude', onSelect: () => onReviewTerminal(termMenu.terminalId, 'claude') },
+          { label: 'Review ▸ Codex', onSelect: () => onReviewTerminal(termMenu.terminalId, 'codex') }
+        ]} />
+      )}
     </div>
   )
 }
