@@ -17,11 +17,11 @@ Out of scope (YAGNI for now):
 
 ## Interaction
 
-- A grip handle (⠿) appears on hover at the left of each feature row, next to
-  the existing collapse caret. Only the handle initiates the drag (the row
-  becomes `draggable` on handle `mousedown`); this keeps the existing
-  single-click-collapse and double-click-rename behavior intact. Dragging is
-  disabled while the feature is being renamed.
+- The **whole feature row is draggable** (no separate grip handle — it would eat
+  horizontal space). A plain single-click still collapses and a double-click
+  still renames, because HTML5 drag only starts once the pointer actually moves.
+  Dragging is disabled while the feature is being renamed. The row shows a
+  grab cursor and dims (opacity) while it is the one being dragged.
 - While dragging over a feature row in the **same** project, a thin accent line
   is drawn above or below the row (chosen by whether the cursor is in the top or
   bottom half of the row) to indicate the drop position.
@@ -64,17 +64,19 @@ toIndex        = insertionPoint > from ? insertionPoint - 1 : insertionPoint
 
 - Add `onMoveFeature: (featureId: string, toIndex: number) => void` to the
   Sidebar props.
-- Drag state is held in a React ref/state (the dragged `featureId` and its
-  `groupId`) rather than relying on `dataTransfer` payload — this keeps it
-  testable under jsdom.
-- Handlers on each feature row:
+- Drag state is held in React state (the dragged `featureId` + its `groupId`,
+  and a `dropAt` for the indicator) rather than relying on `dataTransfer`
+  payload — this keeps it testable.
+- The whole feature row (`<div draggable>` with `data-feature-id`) wires:
   - `onDragStart`: record `{ featureId, groupId }`.
   - `onDragOver`: if same group, `preventDefault()` and set the drop indicator
-    (target index + above/below) based on cursor Y vs the row midpoint.
-  - `onDrop`: compute the final target index and call `onMoveFeature`; clear
-    drag state.
-  - `onDragEnd`/`onDragLeave`: clear the indicator.
-- A small grip handle button is rendered with the row's hover controls.
+    (target feature + above/below) based on cursor Y vs the row midpoint.
+  - `onDrop`: compute the final target index via the pure `featureDropIndex`
+    helper and call `onMoveFeature`; clear drag state.
+  - `onDragEnd`: clear drag state.
+- `featureDropIndex(features, overId, below, fromId)` is an exported pure helper
+  (the above/below + removal-shift math), unit-tested directly — the cursor
+  geometry itself is not exercised in jsdom.
 
 ## App wiring (`App.tsx`)
 
@@ -98,7 +100,8 @@ new order is persisted automatically and restored on launch.
 - leaves active selection unchanged.
 
 `Sidebar.test.tsx`:
-- a drag handle exists on a feature row.
-- simulating `dragStart` on feature A then `dragOver` + `drop` on feature B
-  calls `onMoveFeature` with the expected `(featureId, toIndex)`.
-- dragging over a feature in another project does not call `onMoveFeature`.
+- `featureDropIndex` pure-math cases (drop below last, above first, below next
+  sibling, above a later sibling with the removal shift).
+- feature rows are `draggable`; `dragStart` on row A then `drop` on row B calls
+  `onMoveFeature('A', <number>)` (wiring).
+- dragging onto a feature in another project does not call `onMoveFeature`.

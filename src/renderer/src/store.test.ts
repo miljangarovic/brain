@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
-  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
+  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
@@ -102,6 +102,77 @@ describe('store reducers', () => {
     s = deleteFeature(s, f2)
     expect(firstGroup(s).features).toHaveLength(1)
     expect(s.activeFeatureId).toBe(f1)
+  })
+
+  describe('moveFeature', () => {
+    // Build a group with three features: [general, f2, f3].
+    const threeFeatures = () => {
+      let s = addGroup(createInitialState(), 'a', '')
+      const gid = firstGroup(s).id
+      s = addFeature(s, gid, 'f2')
+      s = addFeature(s, gid, 'f3')
+      return { s, gid }
+    }
+    const names = (s: ReturnType<typeof addGroup>, gi = 0) => s.workspace.groups[gi].features.map((f) => f.name)
+
+    it('moves a feature down to a later index', () => {
+      const { s } = threeFeatures()
+      const general = firstGroup(s).features[0].id
+      const out = moveFeature(s, general, 2)
+      expect(names(out)).toEqual(['f2', 'f3', 'general'])
+    })
+
+    it('moves a feature up to an earlier index', () => {
+      const { s } = threeFeatures()
+      const f3 = firstGroup(s).features[2].id
+      const out = moveFeature(s, f3, 0)
+      expect(names(out)).toEqual(['f3', 'general', 'f2'])
+    })
+
+    it('is a no-op when moved to its current index', () => {
+      const { s } = threeFeatures()
+      const f2 = firstGroup(s).features[1].id
+      const out = moveFeature(s, f2, 1)
+      expect(names(out)).toEqual(['general', 'f2', 'f3'])
+    })
+
+    it('clamps an out-of-range index to the last position', () => {
+      const { s } = threeFeatures()
+      const general = firstGroup(s).features[0].id
+      const out = moveFeature(s, general, 99)
+      expect(names(out)).toEqual(['f2', 'f3', 'general'])
+    })
+
+    it('leaves features of other groups untouched', () => {
+      let { s } = threeFeatures()
+      s = addGroup(s, 'b', '')           // second group with its own 'general'
+      const other = firstGroup(s).features[0].id // a feature in group 'a'
+      const out = moveFeature(s, other, 2)
+      expect(names(out, 1)).toEqual(['general']) // group 'b' unchanged
+    })
+
+    it('preserves the moved feature\'s terminals', () => {
+      let { s } = threeFeatures()
+      const f3id = firstGroup(s).features[2].id
+      s = addTerminal(s, f3id, { name: 'keep' })
+      const out = moveFeature(s, f3id, 0)
+      expect(out.workspace.groups[0].features[0].name).toBe('f3')
+      expect(out.workspace.groups[0].features[0].terminals.map((t) => t.name)).toEqual(['keep'])
+    })
+
+    it('does not change the active selection', () => {
+      const { s } = threeFeatures()
+      const general = firstGroup(s).features[0].id
+      const out = moveFeature(s, general, 2)
+      expect(out.activeGroupId).toBe(s.activeGroupId)
+      expect(out.activeFeatureId).toBe(s.activeFeatureId)
+      expect(out.activeTerminalId).toBe(s.activeTerminalId)
+    })
+
+    it('returns state unchanged for an unknown feature id', () => {
+      const { s } = threeFeatures()
+      expect(moveFeature(s, 'nope', 0)).toBe(s)
+    })
   })
 
   it('deleteGroup re-selects another group', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Sidebar } from './Sidebar'
+import { Sidebar, featureDropIndex } from './Sidebar'
 import type { Group } from '@shared/types'
 
 const groups: Group[] = [
@@ -28,6 +28,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onAddTerminal: noop,
     onLaunchAgent: noop,
     onToggleFeatureView: noop,
+    onMoveFeature: noop,
     onRenameGroup: noop,
     onRenameFeature: noop,
     onRenameTerminal: noop,
@@ -200,5 +201,50 @@ describe('Sidebar (3-level)', () => {
     fireEvent.contextMenu(screen.getByText('proj'))
     await userEvent.click(screen.getByText('Open in Files'))
     expect(onOpenInFiles).toHaveBeenCalledWith('g1')
+  })
+
+  describe('feature reorder (drag-and-drop)', () => {
+    // featureDropIndex: pure final-index math (above/below + removal shift).
+    // jsdom can't drive the clientY/midpoint geometry, so the precise above/below
+    // behavior is covered here; the DOM tests below only verify the wiring.
+    const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    it('drops the first item below the last → last index', () => {
+      expect(featureDropIndex(items, 'c', true, 'a')).toBe(2)
+    })
+    it('drops the last item above the first → index 0', () => {
+      expect(featureDropIndex(items, 'a', false, 'c')).toBe(0)
+    })
+    it('drops the first item below its next sibling → index 1', () => {
+      expect(featureDropIndex(items, 'b', true, 'a')).toBe(1)
+    })
+    it('drops above a later sibling accounts for the removed item', () => {
+      expect(featureDropIndex(items, 'c', false, 'a')).toBe(1) // a removed, insert before c
+    })
+
+    const rowFor = (container: HTMLElement, id: string) =>
+      container.querySelector(`[data-feature-id="${id}"]`) as HTMLElement
+
+    it('feature rows are draggable and a drop calls onMoveFeature with the dragged id', () => {
+      const onMoveFeature = vi.fn()
+      const { container } = renderSidebar({ onMoveFeature })
+      expect(rowFor(container, 'f1')).toHaveAttribute('draggable', 'true')
+      fireEvent.dragStart(rowFor(container, 'f1'))
+      fireEvent.dragOver(rowFor(container, 'f2'))
+      fireEvent.drop(rowFor(container, 'f2'))
+      expect(onMoveFeature).toHaveBeenCalledWith('f1', expect.any(Number))
+    })
+
+    it('ignores a drop onto a feature in a different project', () => {
+      const twoGroups: Group[] = [
+        { id: 'gA', name: 'A', cwd: '', collapsed: false, features: [{ id: 'fa', name: 'aa', collapsed: true, terminals: [] }] },
+        { id: 'gB', name: 'B', cwd: '', collapsed: false, features: [{ id: 'fb', name: 'bb', collapsed: true, terminals: [] }] }
+      ]
+      const onMoveFeature = vi.fn()
+      const { container } = renderSidebar({ groups: twoGroups, onMoveFeature })
+      fireEvent.dragStart(rowFor(container, 'fa'))
+      fireEvent.dragOver(rowFor(container, 'fb'))
+      fireEvent.drop(rowFor(container, 'fb'))
+      expect(onMoveFeature).not.toHaveBeenCalled()
+    })
   })
 })
