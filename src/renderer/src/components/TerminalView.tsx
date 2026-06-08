@@ -107,14 +107,21 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     ro.observe(host)
 
     return () => {
+      // Dispose only the renderer-side resources. Deliberately DO NOT killPty
+      // here: this cleanup also runs on HMR/Fast Refresh (and StrictMode)
+      // remounts, and killing the shell then would terminate the user's running
+      // process (e.g. claude mid-task) and respawn it. The PTY is owned by the
+      // workspace — App kills it when the terminal is actually removed. On a
+      // remount the new mount's createPty is a no-op (the PTY still exists) and
+      // simply re-attaches to the live shell.
       offData()
       offExit()
       inputDisposable.dispose()
       ro.disconnect()
       term.dispose()
-      window.terminaltor.killPty(terminal.id)
     }
-    // Mount-once: PTY lifecycle is tied to this component's lifetime, not to prop changes.
+    // Mount-once: the PTY lives as long as the terminal exists in the workspace,
+    // not as long as this component instance does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

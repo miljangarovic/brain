@@ -2,6 +2,7 @@
   "name": "terminaltor",
   "version": "0.1.0",
   "description": "Grupisani imenovani terminali za Linux",
+  "desktopName": "terminaltor.desktop",
   "main": "./out/main/index.js",
   "author": "Miljan Garovic <markogarovic1998@gmail.com>",
   "license": "MIT",
@@ -68,7 +69,8 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Utility",
-      "target": ["AppImage", "deb"]
+      "target": ["AppImage", "deb"],
+      "syncDesktopName": true
     }
   }
 }

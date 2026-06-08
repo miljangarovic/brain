@@ -1,6 +1,7 @@
 // src/renderer/src/App.tsx
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
+import { removedIds } from './ptyReaper'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
@@ -54,6 +55,19 @@ export default function App() {
     if (!loaded) return
     window.terminaltor.saveWorkspace(state.workspace)
   }, [state.workspace, loaded])
+
+  // Kill a terminal's PTY only when it actually leaves the workspace (delete
+  // terminal/feature/group) — NOT when its TerminalView unmounts, which also
+  // happens on HMR/Fast Refresh remounts and must not disturb the running shell.
+  const prevTermIds = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    const ids = new Set(allTerminals(state).map((t) => t.id))
+    if (prevTermIds.current) {
+      for (const id of removedIds(prevTermIds.current, ids)) window.terminaltor.killPty(id)
+    }
+    prevTermIds.current = ids
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.workspace])
 
   const activeGroup = getActiveGroup(state)
   const activeFeature = getActiveFeature(state)
