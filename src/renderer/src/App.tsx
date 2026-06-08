@@ -18,7 +18,7 @@ import { gridDimensions } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { FeatureHeader } from './components/FeatureHeader'
-import { TerminalView } from './components/TerminalView'
+import { TerminalPane } from './components/TerminalPane'
 import { NewGroupDialog, NewGroupInput } from './components/NewGroupDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
@@ -38,7 +38,7 @@ export default function App() {
   }
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
-    return window.terminaltor.onPtyProc((id, process) => {
+    return window.orchestrix.onPtyProc((id, process) => {
       setLiveAgents((m) => ({ ...m, [id]: detectAgent(process) ?? undefined }))
     })
   }, [])
@@ -47,7 +47,7 @@ export default function App() {
   // the tab bar and sidebar. Main emits only on idle↔busy transitions.
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   useEffect(() => {
-    return window.terminaltor.onPtyBusy((id, b) => setBusy((m) => ({ ...m, [id]: b })))
+    return window.orchestrix.onPtyBusy((id, b) => setBusy((m) => ({ ...m, [id]: b })))
   }, [])
 
   const [reviewStatus, setReviewStatus] = useState<Record<string, ReviewStatus | undefined>>({})
@@ -57,10 +57,10 @@ export default function App() {
     []
   )
   const review = useReview(state, apply, setStatus)
-  useEffect(() => window.terminaltor.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
+  useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
 
   useEffect(() => {
-    window.terminaltor.loadWorkspace().then((ws) => {
+    window.orchestrix.loadWorkspace().then((ws) => {
       setState(createInitialState(migrateWorkspace(ws)))
       setLoaded(true)
     })
@@ -68,7 +68,7 @@ export default function App() {
 
   useEffect(() => {
     if (!loaded) return
-    window.terminaltor.saveWorkspace(state.workspace)
+    window.orchestrix.saveWorkspace(state.workspace)
   }, [state.workspace, loaded])
 
   // Kill a terminal's PTY only when it actually leaves the workspace (delete
@@ -78,7 +78,7 @@ export default function App() {
   useEffect(() => {
     const ids = new Set(allTerminals(state).map((t) => t.id))
     if (prevTermIds.current) {
-      for (const id of removedIds(prevTermIds.current, ids)) window.terminaltor.killPty(id)
+      for (const id of removedIds(prevTermIds.current, ids)) window.orchestrix.killPty(id)
     }
     prevTermIds.current = ids
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,19 +165,19 @@ export default function App() {
         onRenameTerminal={(id, name) => apply((s) => renameTerminal(s, id, name))}
         onDeleteGroup={(id) => {
           const g = state.workspace.groups.find((x) => x.id === id)
-          askDelete(`Obrisati grupu "${g?.name ?? ''}"? Svi feature-i i terminali u njoj se zatvaraju.`, () => apply((s) => deleteGroup(s, id)))
+          askDelete(`Delete project "${g?.name ?? ''}"? All its features and terminals will close.`, () => apply((s) => deleteGroup(s, id)))
         }}
         onDeleteFeature={(id) => {
           const f = state.workspace.groups.flatMap((g) => g.features).find((x) => x.id === id)
-          askDelete(`Obrisati feature "${f?.name ?? ''}"? Terminali u njemu se zatvaraju.`, () => apply((s) => deleteFeature(s, id)))
+          askDelete(`Delete feature "${f?.name ?? ''}"? Its terminals will close.`, () => apply((s) => deleteFeature(s, id)))
         }}
         onDeleteTerminal={(id) => {
           const t = allTerminals(state).find((x) => x.id === id)
-          askDelete(`Obrisati terminal "${t?.name ?? ''}"?`, () => apply((s) => removeTerminal(s, id)))
+          askDelete(`Delete terminal "${t?.name ?? ''}"?`, () => apply((s) => removeTerminal(s, id)))
         }}
         onOpenInFiles={(gid) => {
           const g = state.workspace.groups.find((x) => x.id === gid)
-          window.terminaltor.openPath(g?.cwd ?? '')
+          window.orchestrix.openPath(g?.cwd ?? '')
         }}
         reviewStatus={reviewStatus}
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
@@ -212,31 +212,30 @@ export default function App() {
         />
 
         <div
-          className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-px bg-line' : ''}`}
+          className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-2 p-2 bg-panel' : ''}`}
           style={gridMode ? { gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
         >
           {featureVisible.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
-              <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
-              <span className="text-sm">{activeGroup ? 'Dodaj terminal ili ga otvori iz sidebar-a.' : 'Napravi grupu da počneš.'}</span>
+              <span className="text-2xl font-semibold tracking-tight text-fg">OrchestriX</span>
+              <span className="text-sm">{activeGroup ? 'Add a terminal or open one from the sidebar.' : 'Create a project to get started.'}</span>
             </div>
           )}
           {terminals.map((t) => {
             const inFeature = featureTerminalIds.has(t.id)
             const isActive = t.id === state.activeTerminalId
-            if (gridMode && inFeature) {
-              return (
-                <div key={t.id} onMouseDown={() => apply((s) => setActiveTerminal(s, t.id))}
-                  className={`relative min-h-0 min-w-0 bg-surface border ${isActive ? 'border-accent' : 'border-transparent'}`}>
-                  <TerminalView terminal={t} active={isActive} />
-                </div>
-              )
-            }
-            const visible = inFeature && !gridMode && isActive
             return (
-              <div key={t.id} className="absolute inset-0" style={{ display: visible ? 'block' : 'none' }}>
-                <TerminalView terminal={t} active={isActive} />
-              </div>
+              <TerminalPane
+                key={t.id}
+                terminal={t}
+                active={isActive}
+                gridded={gridMode && inFeature}
+                visibleInTabs={inFeature && !gridMode && isActive}
+                busy={!!busy[t.id]}
+                liveAgent={liveAgents[t.id]}
+                reviewStatus={reviewStatus[t.id]}
+                onActivate={() => apply((s) => setActiveTerminal(s, t.id))}
+              />
             )
           })}
         </div>
