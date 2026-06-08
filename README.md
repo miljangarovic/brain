@@ -12,6 +12,13 @@ npm run dev       # pokreni aplikaciju
 npm test          # unit testovi
 ```
 
+## Pakovanje (Linux)
+
+```bash
+npm run icon      # (jednom) generiše build/icon.png iz build/icon.svg
+npm run package   # pravi AppImage + .deb u release/
+```
+
 ## Prečice
 
 - `Ctrl+Shift+T` — novi terminal u aktivnoj grupi
