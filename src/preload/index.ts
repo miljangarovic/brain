@@ -28,6 +28,11 @@ const api: TerminaltorApi = {
     ipcRenderer.on(IPC.ptyProc, listener)
     return () => ipcRenderer.removeListener(IPC.ptyProc, listener)
   },
+  onPtyBusy: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: { id: string; busy: boolean }) => cb(p.id, p.busy)
+    ipcRenderer.on(IPC.ptyBusy, listener)
+    return () => ipcRenderer.removeListener(IPC.ptyBusy, listener)
+  },
   pickFile: (opts) => ipcRenderer.invoke(IPC.dialogPickFile, opts ?? {}) as Promise<string | null>,
   suggestSpec: (cwd) => ipcRenderer.invoke(IPC.reviewSuggestSpec, cwd) as Promise<string | null>,
   resolveReviewDir: (originTerminalId, round) =>

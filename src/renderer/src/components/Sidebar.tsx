@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, GridIcon, TrashIcon, ReviewIcon } from './icons'
+import { TerminalKindIcon, GridIcon, TrashIcon, ReviewIcon, SpinnerIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
@@ -12,6 +12,7 @@ export function Sidebar(props: {
   groups: Group[]
   activeTerminalId: string | null
   liveAgents: Record<string, 'claude' | 'codex' | undefined>
+  busy: Record<string, boolean>
   onSelectTerminal: (id: string) => void
   onToggleGroup: (id: string) => void
   onToggleFeature: (id: string) => void
@@ -31,7 +32,7 @@ export function Sidebar(props: {
   onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
 }) {
   const {
-    groups, activeTerminalId, liveAgents, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
+    groups, activeTerminalId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
     reviewStatus, onReviewTerminal
@@ -139,7 +140,9 @@ export function Sidebar(props: {
                               onContextMenu={(e) => { e.preventDefault(); setTermMenu({ x: e.clientX, y: e.clientY, terminalId: t.id }) }}
                               className={`group flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${
                                 active ? 'border-accent bg-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
-                              <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
+                              {busy[t.id]
+                                ? <SpinnerIcon className="shrink-0 text-accent" />
+                                : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
                               <ReviewStatusDot status={reviewStatus[t.id]} />
                               {isEditing('terminal', t.id)
                                 ? renameInput(`Preimenuj terminal ${t.name}`)

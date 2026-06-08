@@ -3,6 +3,7 @@ import { ipcMain, BrowserWindow, dialog, shell } from 'electron'
 import * as os from 'os'
 import { IPC } from '@shared/ipc'
 import { PtyManager } from './ptyManager'
+import { createBusyTracker } from './busyTracker'
 import { loadWorkspace, createDebouncedSaver } from './persistence'
 import type { Workspace } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
@@ -26,8 +27,9 @@ export function registerIpc(opts: {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
 
-  ptyManager.onData((id, data) => send(IPC.ptyData, { id, data }))
-  ptyManager.onExit((id, code) => send(IPC.ptyExit, { id, code }))
+  const busy = createBusyTracker((id, isBusy) => send(IPC.ptyBusy, { id, busy: isBusy }))
+  ptyManager.onData((id, data) => { send(IPC.ptyData, { id, data }); busy.touch(id) })
+  ptyManager.onExit((id, code) => { send(IPC.ptyExit, { id, code }); busy.end(id) })
 
   ipcMain.handle(IPC.workspaceLoad, () => loadWorkspace(workspacePath))
   ipcMain.on(IPC.workspaceSave, (_e, ws: Workspace) => saver.save(ws))
