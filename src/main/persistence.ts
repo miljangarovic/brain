@@ -19,6 +19,7 @@ export async function writeWorkspace(path: string, ws: Workspace): Promise<void>
 export function createDebouncedSaver(path: string, delayMs = 300) {
   let timer: ReturnType<typeof setTimeout> | null = null
   let pending: Workspace | null = null
+  let inflight: Promise<void> | null = null
 
   const flush = async () => {
     if (!pending) return
@@ -35,10 +36,17 @@ export function createDebouncedSaver(path: string, delayMs = 300) {
     save(ws: Workspace) {
       pending = ws
       if (timer) clearTimeout(timer)
-      timer = setTimeout(() => { timer = null; void flush() }, delayMs)
+      timer = setTimeout(() => {
+        timer = null
+        inflight = flush().finally(() => { inflight = null })
+      }, delayMs)
     },
+    // Awaits any write already started by a fired timer, then flushes anything
+    // still pending — so callers (e.g. on app quit) are guaranteed the latest
+    // workspace has hit disk.
     async flushNow() {
       if (timer) { clearTimeout(timer); timer = null }
+      if (inflight) await inflight
       await flush()
     }
   }
