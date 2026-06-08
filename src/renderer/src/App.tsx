@@ -7,6 +7,7 @@ import {
   getActiveGroup, allTerminals
 } from './store'
 import { AGENTS, type AgentKind } from './agents'
+import { gridDimensions } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { TerminalView } from './components/TerminalView'
@@ -42,6 +43,9 @@ export default function App() {
       } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') { // close active terminal
         e.preventDefault()
         if (state.activeTerminalId) apply((s) => removeTerminal(s, state.activeTerminalId!))
+      } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyG') { // toggle grid/tabs for active group
+        e.preventDefault()
+        if (state.activeGroupId) apply((s) => toggleGroupViewMode(s, state.activeGroupId!))
       } else if (e.ctrlKey && e.code === 'PageDown') {          // next tab in active group
         e.preventDefault()
         cycleTab(1)
@@ -103,24 +107,53 @@ export default function App() {
           onToggleView={() => { if (activeGroup) apply((s) => toggleGroupViewMode(s, activeGroup.id)) }}
         />
 
-        <div className="relative flex-1 bg-surface">
-          {terminals.length === 0 && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
-              <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
-              <span className="text-sm">Napravi grupu pa terminal da počneš.</span>
-            </div>
-          )}
-          {/* All terminals stay mounted so their shells keep running while hidden. */}
-          {terminals.map((t) => (
+        {(() => {
+          const gridMode = (activeGroup?.viewMode ?? 'tabs') === 'grid'
+          const groupTerminalIds = new Set((activeGroup?.terminals ?? []).map((t) => t.id))
+          const { cols, rows } = gridDimensions(groupTerminalIds.size)
+          return (
             <div
-              key={t.id}
-              className="absolute inset-0"
-              style={{ display: t.id === state.activeTerminalId ? 'block' : 'none' }}
+              className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-px bg-line' : ''}`}
+              style={gridMode ? {
+                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`
+              } : undefined}
             >
-              <TerminalView terminal={t} active={t.id === state.activeTerminalId} />
+              {terminals.length === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
+                  <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
+                  <span className="text-sm">Napravi grupu pa terminal da počneš.</span>
+                </div>
+              )}
+              {/* All terminals stay mounted (stable siblings) so shells survive view switches. */}
+              {terminals.map((t) => {
+                const inActive = groupTerminalIds.has(t.id)
+                const isActive = t.id === state.activeTerminalId
+                if (gridMode && inActive) {
+                  return (
+                    <div
+                      key={t.id}
+                      onMouseDown={() => apply((s) => setActiveTerminal(s, t.id))}
+                      className={`relative min-h-0 min-w-0 bg-surface border ${isActive ? 'border-accent' : 'border-transparent'}`}
+                    >
+                      <TerminalView terminal={t} active={isActive} />
+                    </div>
+                  )
+                }
+                const visible = inActive && !gridMode && isActive
+                return (
+                  <div
+                    key={t.id}
+                    className="absolute inset-0"
+                    style={{ display: visible ? 'block' : 'none' }}
+                  >
+                    <TerminalView terminal={t} active={isActive} />
+                  </div>
+                )
+              })}
             </div>
-          ))}
-        </div>
+          )
+        })()}
       </div>
 
       {dialogGroupId && (
