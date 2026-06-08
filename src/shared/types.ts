@@ -14,6 +14,7 @@ export interface Group {
   name: string
   collapsed: boolean
   terminals: Terminal[]
+  viewMode?: 'tabs' | 'grid'   // undefined === 'tabs'
 }
 
 export interface Workspace {

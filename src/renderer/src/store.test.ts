@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  createInitialState, addGroup, renameGroup, toggleGroupCollapsed, deleteGroup,
+  createInitialState, addGroup, renameGroup, toggleGroupCollapsed, toggleGroupViewMode, deleteGroup,
   addTerminal, removeTerminal, setActiveGroup, setActiveTerminal,
   getActiveGroup, getActiveTerminal, allTerminals
 } from './store'
@@ -138,5 +138,15 @@ describe('store reducers', () => {
     expect(s.workspace.groups[0].collapsed).toBe(true)
     s = addTerminal(s, gid, { name: 'x', cwd: '' })
     expect(s.workspace.groups[0].collapsed).toBe(false)
+  })
+
+  it('toggleGroupViewMode flips between tabs and grid (default tabs)', () => {
+    let s = addGroup(createInitialState(), 'g')
+    const gid = s.workspace.groups[0].id
+    expect(s.workspace.groups[0].viewMode).toBeUndefined() // === tabs
+    s = toggleGroupViewMode(s, gid)
+    expect(s.workspace.groups[0].viewMode).toBe('grid')
+    s = toggleGroupViewMode(s, gid)
+    expect(s.workspace.groups[0].viewMode).toBe('tabs')
   })
 })
