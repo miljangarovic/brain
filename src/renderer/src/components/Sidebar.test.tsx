@@ -36,6 +36,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onDeleteTerminal: noop,
     onOpenInFiles: noop,
     liveAgents: {},
+    busy: {},
     reviewStatus: {},
     onReviewTerminal: noop,
     ...overrides
@@ -92,6 +93,13 @@ describe('Sidebar (3-level)', () => {
     await userEvent.click(screen.getByLabelText('Dodaj u auth'))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
     expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
+  })
+
+  it('shows a spinner instead of the kind icon on a busy terminal row', () => {
+    renderSidebar({ busy: { t1: true } })
+    const item = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
+    expect(within(item).getByTestId('icon-spinner')).toBeInTheDocument()
+    expect(within(item).queryByTestId('icon-claude')).not.toBeInTheDocument()
   })
 
   it('a live agent wins over the static kind on a visible terminal', () => {
