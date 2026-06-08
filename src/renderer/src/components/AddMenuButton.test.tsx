@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { AddMenuButton } from './AddMenuButton'
 
 describe('AddMenuButton', () => {
@@ -32,5 +32,12 @@ describe('AddMenuButton', () => {
   it('uses a custom aria-label when provided', () => {
     render(<AddMenuButton onAdd={vi.fn()} label="Dodaj u auth" />)
     expect(screen.getByLabelText('Dodaj u auth')).toBeInTheDocument()
+  })
+
+  it('Claude and Codex items show their brand icons', () => {
+    render(<AddMenuButton onAdd={vi.fn()} />)
+    fireEvent.click(screen.getByLabelText('Dodaj terminal'))
+    expect(within(screen.getByRole('menuitem', { name: 'Claude' })).getByTestId('icon-claude')).toBeInTheDocument()
+    expect(within(screen.getByRole('menuitem', { name: 'Codex' })).getByTestId('icon-codex')).toBeInTheDocument()
   })
 })
