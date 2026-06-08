@@ -30,6 +30,13 @@ describe('NewGroupDialog', () => {
     expect(onCancel).toHaveBeenCalled()
   })
 
+  it('closes on Escape', async () => {
+    const onCancel = vi.fn()
+    render(<NewGroupDialog onCreate={() => {}} onCancel={onCancel} />)
+    await userEvent.keyboard('{Escape}')
+    expect(onCancel).toHaveBeenCalled()
+  })
+
   it('fills cwd from the native folder picker', async () => {
     ;(window as unknown as { orchestrix: { pickDirectory: () => Promise<string | null> } }).orchestrix = {
       pickDirectory: vi.fn().mockResolvedValue('/picked/dir')

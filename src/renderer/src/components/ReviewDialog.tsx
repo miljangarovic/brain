@@ -24,6 +24,12 @@ export function ReviewDialog({
   const [intent, setIntent] = useState('')
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  useEffect(() => {
     let cancelled = false
     window.orchestrix.suggestSpec(cwd).then((p) => { if (!cancelled && p) setSpecPath(p) })
     return () => { cancelled = true }

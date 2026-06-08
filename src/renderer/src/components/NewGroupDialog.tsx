@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export interface NewGroupInput {
   name: string
@@ -13,6 +13,12 @@ export function NewGroupDialog({
 }) {
   const [name, setName] = useState('')
   const [cwd, setCwd] = useState('')
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
 
   const submit = () => {
     const n = name.trim()

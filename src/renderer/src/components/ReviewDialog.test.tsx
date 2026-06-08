@@ -34,4 +34,11 @@ describe('ReviewDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start review' }))
     expect(onStart).toHaveBeenCalledWith({ reviewer: 'codex', kind: 'impl', specPath: undefined, intent: '' })
   })
+
+  it('closes on Escape', () => {
+    const onCancel = vi.fn()
+    render(<ReviewDialog {...baseProps} onStart={vi.fn()} onCancel={onCancel} />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalled()
+  })
 })
