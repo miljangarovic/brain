@@ -34,6 +34,12 @@ U tab baru (i na hover grupe u sidebar-u) pored `+` stoje dugmad **Claude** i
 `codex` se očekuju na PATH-u). Terminali koji koriste agenta nose njegovu ikonicu
 u sidebar-u i u tabovima, i pamte se kroz restart.
 
+## Hijerarhija
+
+Grupa (sa radnim direktorijumom) → Feature → Terminal. Terminal nasljeđuje cwd
+grupe. Dvoklik na ime grupe/feature-a/terminala ga preimenuje. Tabovi i grid
+prikaz važe po aktivnom feature-u.
+
 ## Perzistencija
 
 Struktura (grupe + terminali + cwd + startup komanda) čuva se u
