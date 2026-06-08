@@ -25,6 +25,34 @@ export default function App() {
     window.terminaltor.saveWorkspace(state.workspace)
   }, [state.workspace])
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyT') {       // new terminal in active group
+        e.preventDefault()
+        if (state.activeGroupId) setDialogGroupId(state.activeGroupId)
+      } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') { // close active terminal
+        e.preventDefault()
+        if (state.activeTerminalId) apply((s) => removeTerminal(s, state.activeTerminalId!))
+      } else if (e.ctrlKey && e.code === 'PageDown') {          // next tab in active group
+        e.preventDefault()
+        cycleTab(1)
+      } else if (e.ctrlKey && e.code === 'PageUp') {            // previous tab
+        e.preventDefault()
+        cycleTab(-1)
+      }
+    }
+    const cycleTab = (dir: number) => {
+      const group = getActiveGroup(state)
+      if (!group || group.terminals.length === 0) return
+      const idx = group.terminals.findIndex((t) => t.id === state.activeTerminalId)
+      const next = group.terminals[(idx + dir + group.terminals.length) % group.terminals.length]
+      apply((s) => setActiveTerminal(s, next.id))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [state, apply])
+
   const activeGroup = getActiveGroup(state)
   const terminals = allTerminals(state)
 
