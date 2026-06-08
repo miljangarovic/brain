@@ -166,12 +166,9 @@ export function Sidebar(props: {
                 {g.collapsed ? '▸' : '▾'}
               </button>
               {isEditing('group', g.id) ? renameInput(`Rename project ${g.name}`) : (
-                <span className="flex-1 min-w-0 flex items-baseline gap-1.5 cursor-pointer"
+                <span className="flex-1 min-w-0 truncate text-sm font-semibold text-fg-bright cursor-pointer"
                   onClick={() => onNameClick(() => onToggleGroup(g.id))}
-                  onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>
-                  <span className="truncate text-sm font-semibold text-fg-bright">{g.name}</span>
-                  {g.cwd && <span className="truncate text-xs text-fg-muted opacity-30">{g.cwd}</span>}
-                </span>
+                  onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>{g.name}</span>
               )}
               <button aria-label={`Delete project ${g.name}`} title="Delete project" onClick={() => onDeleteGroup(g.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
             </div>

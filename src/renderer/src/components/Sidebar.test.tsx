@@ -46,10 +46,10 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
 }
 
 describe('Sidebar (3-level)', () => {
-  it('renders groups, the group cwd, features, and terminals of expanded features', () => {
+  it('renders groups, features, and terminals of expanded features (no cwd next to the name)', () => {
     renderSidebar({ activeTerminalId: 't1' })
     expect(screen.getByText('proj')).toBeInTheDocument()
-    expect(screen.getByText('/home/me/proj')).toBeInTheDocument()
+    expect(screen.queryByText('/home/me/proj')).not.toBeInTheDocument()
     expect(screen.getByText('auth')).toBeInTheDocument()
     expect(screen.getByText('ui')).toBeInTheDocument()
     expect(screen.getByText('claude')).toBeInTheDocument()
