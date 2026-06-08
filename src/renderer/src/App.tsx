@@ -6,6 +6,7 @@ import {
   addTerminal, removeTerminal, setActiveTerminal,
   getActiveGroup, allTerminals
 } from './store'
+import { AGENTS, type AgentKind } from './agents'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { TerminalView } from './components/TerminalView'
@@ -71,6 +72,12 @@ export default function App() {
     if (dialogGroupId) apply((s) => addTerminal(s, dialogGroupId, input))
     setDialogGroupId(null)
   }
+  const launchAgent = (kind: AgentKind) => {
+    const gid = state.activeGroupId
+    if (!gid) return
+    const agent = AGENTS[kind]
+    apply((s) => addTerminal(s, gid, { name: agent.defaultName, cwd: '', startupCommand: agent.command, kind }))
+  }
 
   return (
     <div className="flex h-screen text-fg bg-panel">
@@ -92,6 +99,7 @@ export default function App() {
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
           onClose={(id) => apply((s) => removeTerminal(s, id))}
           onAdd={openDialog}
+          onLaunch={launchAgent}
         />
 
         <div className="relative flex-1 bg-surface">
