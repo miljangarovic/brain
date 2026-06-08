@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from './useStore'
 import {
-  createInitialState, addGroup, deleteGroup, toggleGroupCollapsed,
+  createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
   addTerminal, removeTerminal, setActiveTerminal,
   getActiveGroup, allTerminals
 } from './store'
@@ -14,16 +14,23 @@ import { NewTerminalDialog, NewTerminalInput } from './components/NewTerminalDia
 export default function App() {
   const { state, setState, apply } = useStore()
   const [dialogGroupId, setDialogGroupId] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   // Load persisted workspace once on mount.
   useEffect(() => {
-    window.terminaltor.loadWorkspace().then((ws) => setState(createInitialState(ws)))
+    window.terminaltor.loadWorkspace().then((ws) => {
+      setState(createInitialState(ws))
+      setLoaded(true)
+    })
   }, [setState])
 
   // Persist whenever the workspace changes (main debounces writes).
+  // Gated on `loaded` so the initial empty state can never overwrite the saved
+  // workspace before loadWorkspace() resolves.
   useEffect(() => {
+    if (!loaded) return
     window.terminaltor.saveWorkspace(state.workspace)
-  }, [state.workspace])
+  }, [state.workspace, loaded])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -73,6 +80,7 @@ export default function App() {
         onSelectTerminal={(id) => apply((s) => setActiveTerminal(s, id))}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onAddGroup={(name) => apply((s) => addGroup(s, name))}
+        onRenameGroup={(id, name) => apply((s) => renameGroup(s, id, name))}
         onAddTerminal={(gid) => setDialogGroupId(gid)}
         onDeleteGroup={(id) => apply((s) => deleteGroup(s, id))}
       />

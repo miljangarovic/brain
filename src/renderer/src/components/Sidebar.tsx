@@ -2,23 +2,37 @@ import { useState } from 'react'
 import type { Group } from '@shared/types'
 
 export function Sidebar({
-  groups, activeTerminalId, onSelectTerminal, onToggleGroup, onAddGroup, onAddTerminal, onDeleteGroup
+  groups, activeTerminalId, onSelectTerminal, onToggleGroup, onAddGroup, onRenameGroup, onAddTerminal, onDeleteGroup
 }: {
   groups: Group[]
   activeTerminalId: string | null
   onSelectTerminal: (id: string) => void
   onToggleGroup: (id: string) => void
   onAddGroup: (name: string) => void
+  onRenameGroup: (id: string, name: string) => void
   onAddTerminal: (groupId: string) => void
   onDeleteGroup: (id: string) => void
 }) {
   const [draft, setDraft] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
 
   const submitGroup = () => {
     const name = draft.trim()
     if (!name) return
     onAddGroup(name)
     setDraft('')
+  }
+
+  const startRename = (id: string, current: string) => {
+    setEditingId(id)
+    setEditDraft(current)
+  }
+  const commitRename = () => {
+    if (!editingId) return
+    const name = editDraft.trim()
+    if (name) onRenameGroup(editingId, name)
+    setEditingId(null)
   }
 
   return (
@@ -36,7 +50,28 @@ export function Sidebar({
               >
                 {g.collapsed ? '▸' : '▾'}
               </button>
-              <span className="flex-1 truncate text-sm font-medium text-gray-200">{g.name}</span>
+              {editingId === g.id ? (
+                <input
+                  autoFocus
+                  aria-label={`Preimenuj grupu ${g.name}`}
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename()
+                    else if (e.key === 'Escape') setEditingId(null)
+                  }}
+                  className="flex-1 min-w-0 rounded bg-gray-900 px-1 text-sm text-gray-100 outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              ) : (
+                <span
+                  className="flex-1 truncate text-sm font-medium text-gray-200 cursor-text"
+                  title="Dvoklik za preimenovanje"
+                  onDoubleClick={() => startRename(g.id, g.name)}
+                >
+                  {g.name}
+                </span>
+              )}
               <button
                 aria-label={`Novi terminal u ${g.name}`}
                 onClick={() => onAddTerminal(g.id)}
