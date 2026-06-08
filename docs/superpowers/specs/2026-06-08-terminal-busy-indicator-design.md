@@ -123,3 +123,34 @@ occasional overlap (both spinning) is acceptable.
 - Configurable threshold in the UI.
 - Progress percentage / elapsed time.
 - Review spinner taking priority over the busy spinner.
+
+## Addendum (2026-06-08): suppress the spinner while typing
+
+Typing into a terminal produces output — the shell echoes keystrokes, and TUI
+agents (claude/codex) redraw their input line — which would otherwise flip the
+terminal to busy and show the spinner while the user is just typing.
+
+**Behavior:** while the user is typing, no spinner. Decision: *hide while
+typing* — if an agent is already working and the user starts typing, the spinner
+hides immediately and returns ~`typingMs` after the last keystroke if output
+continues.
+
+**Mechanism:** `busyTracker` gains `input(id)`, fed from the `pty:input` handler
+in `ipc.ts` (`busy.input(p.id)` alongside `ptyManager.write`). Per terminal:
+- `input(id)`: clear the idle timer; if busy → `emit(id, false)` (hide now); enter
+  a *typing* state with a `typingMs` timer (default **400 ms**), re-armed on each
+  keystroke.
+- `touch(id)` while *typing* → ignored (echo is not work).
+- typing timer elapses → leave *typing*; the next `touch` resumes normal busy.
+- `end(id)` also clears the typing state/timer.
+
+`typingMs` (400 ms) is a tunable constant: shorter = spinner returns faster after
+sending a prompt; longer = more reliably swallows fast typing.
+
+Programmatic writes that flow through `pty:input` (e.g. the review relay) also
+count as "input" and briefly suppress — acceptable, the agent's subsequent output
+re-arms busy after the window.
+
+**Tests:** `busyTracker.test.ts` extended — typing suppresses busy; input while
+busy emits `false` and cancels the stale idle timer; busy resumes after the
+typing window; each keystroke re-arms the window; typing is per-id.
