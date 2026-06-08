@@ -124,13 +124,15 @@ export function Sidebar(props: {
                     )}
                   </div>
                 ))}
-                <input
-                  aria-label={`Novi feature u ${g.name}`} placeholder="+ feature…"
-                  value={featureDraft[g.id] ?? ''}
-                  onChange={(e) => setFeatureDraft((d) => ({ ...d, [g.id]: e.target.value }))}
-                  onKeyDown={(e) => { if (e.key === 'Enter') submitFeature(g.id) }}
-                  className="ml-3 my-0.5 w-[calc(100%-1rem)] bg-transparent px-1 py-0.5 text-xs text-fg placeholder-fg-muted/60 outline-none focus:bg-field rounded"
-                />
+                <div className="px-2 pt-1 pb-0.5">
+                  <input
+                    aria-label={`Novi feature u ${g.name}`} placeholder="+ Feature"
+                    value={featureDraft[g.id] ?? ''}
+                    onChange={(e) => setFeatureDraft((d) => ({ ...d, [g.id]: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submitFeature(g.id) }}
+                    className="w-full px-2 py-1.5 text-sm rounded-md bg-field text-fg placeholder-fg-muted outline-none focus:ring-1 focus:ring-accent transition"
+                  />
+                </div>
               </div>
             )}
           </div>
