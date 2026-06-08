@@ -92,11 +92,17 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
       return true
     })
 
-    const ro = new ResizeObserver(() => {
+    const ro = new ResizeObserver((entries) => {
+      // Skip while hidden (display:none → 0×0). Fitting a hidden container makes
+      // xterm/FitAddon mis-measure and resize the PTY to a bogus (tiny) width,
+      // which reflows TUIs like claude/codex — coming back then shows broken
+      // wrapping. Only fit when the host actually has a layout size.
+      const rect = entries[entries.length - 1]?.contentRect
+      if (!rect || rect.width === 0 || rect.height === 0) return
       try {
         fit.fit()
         window.terminaltor.resizePty(terminal.id, term.cols, term.rows)
-      } catch { /* hidden */ }
+      } catch { /* ignore */ }
     })
     ro.observe(host)
 
