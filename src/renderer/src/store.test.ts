@@ -232,4 +232,11 @@ describe('review store', () => {
     expect(getTerminalById(s, aId)?.name).toBe('A')
     expect(featureIdOfTerminal(s, 'x')).toBeNull()
   })
+
+  it('addTerminal uses a provided id when given', () => {
+    let s = addGroup(createInitialState(), 'g', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 'B', id: 'fixed-id' })
+    expect(getTerminalById(s, 'fixed-id')?.name).toBe('B')
+  })
 })

@@ -118,12 +118,12 @@ export function deleteFeature(state: AppState, featureId: string): AppState {
 export function addTerminal(
   state: AppState,
   featureId: string,
-  input: { name: string; startupCommand?: string; kind?: TerminalKind; review?: ReviewLink }
+  input: { name: string; startupCommand?: string; kind?: TerminalKind; review?: ReviewLink; id?: string }
 ): AppState {
   const group = groupOfFeature(state.workspace, featureId)
   const startupCommand = input.startupCommand?.trim()
   const term: Terminal = {
-    id: createId(),
+    id: input.id ?? createId(),
     name: input.name,
     cwd: group?.cwd ?? '',
     startupCommand: startupCommand || undefined,
