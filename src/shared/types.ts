@@ -9,12 +9,20 @@ export interface Terminal {
   kind?: TerminalKind    // undefined === 'shell'
 }
 
-export interface Group {
+export interface Feature {
   id: string
   name: string
   collapsed: boolean
-  terminals: Terminal[]
   viewMode?: 'tabs' | 'grid'   // undefined === 'tabs'
+  terminals: Terminal[]
+}
+
+export interface Group {
+  id: string
+  name: string
+  cwd: string                  // '' === home (~)
+  collapsed: boolean
+  features: Feature[]
 }
 
 export interface Workspace {
