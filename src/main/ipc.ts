@@ -48,7 +48,10 @@ export function registerIpc(opts: {
   setInterval(() => {
     const win = getWin()
     if (!win || win.isDestroyed()) return
-    for (const { id, process } of ptyManager.snapshotProcesses()) {
+    const snap = ptyManager.snapshotProcesses()
+    const live = new Set(snap.map((s) => s.id))
+    for (const id of lastProc.keys()) if (!live.has(id)) lastProc.delete(id) // drop dead terminals
+    for (const { id, process } of snap) {
       if (lastProc.get(id) !== process) {
         lastProc.set(id, process)
         win.webContents.send(IPC.ptyProc, { id, process })
