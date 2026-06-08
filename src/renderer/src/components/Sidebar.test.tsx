@@ -1,4 +1,3 @@
-// src/renderer/src/components/Sidebar.test.tsx
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -6,11 +5,13 @@ import { Sidebar } from './Sidebar'
 import type { Group } from '@shared/types'
 
 const groups: Group[] = [
-  { id: 'g1', name: 'feature-auth', collapsed: false, terminals: [
-    { id: 't1', name: 'claude-api', cwd: '', kind: 'claude' }
-  ] },
-  { id: 'g2', name: 'devops', collapsed: true, terminals: [
-    { id: 't2', name: 'deploy', cwd: '' }
+  { id: 'g1', name: 'proj', cwd: '/home/me/proj', collapsed: false, features: [
+    { id: 'f1', name: 'auth', collapsed: false, terminals: [
+      { id: 't1', name: 'claude', cwd: '/home/me/proj', kind: 'claude' }
+    ] },
+    { id: 'f2', name: 'ui', collapsed: true, terminals: [
+      { id: 't2', name: 'dev', cwd: '/home/me/proj' }
+    ] }
   ] }
 ]
 function noop() {}
@@ -21,74 +22,87 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     activeTerminalId: null as string | null,
     onSelectTerminal: noop,
     onToggleGroup: noop,
+    onToggleFeature: noop,
     onAddGroup: noop,
-    onRenameGroup: noop,
+    onAddFeature: noop,
     onAddTerminal: noop,
-    onDeleteGroup: noop,
     onLaunchAgent: noop,
+    onToggleFeatureView: noop,
+    onRenameGroup: noop,
+    onRenameFeature: noop,
+    onRenameTerminal: noop,
+    onDeleteGroup: noop,
+    onDeleteFeature: noop,
     ...overrides
   }
   return render(<Sidebar {...props} />)
 }
 
-describe('Sidebar', () => {
-  it('renders groups and the terminals of expanded groups only', () => {
+describe('Sidebar (3-level)', () => {
+  it('renders groups, the group cwd, features, and terminals of expanded features', () => {
     renderSidebar({ activeTerminalId: 't1' })
-    expect(screen.getByText('feature-auth')).toBeInTheDocument()
-    expect(screen.getByText('claude-api')).toBeInTheDocument()
-    expect(screen.queryByText('deploy')).not.toBeInTheDocument()
+    expect(screen.getByText('proj')).toBeInTheDocument()
+    expect(screen.getByText('/home/me/proj')).toBeInTheDocument()
+    expect(screen.getByText('auth')).toBeInTheDocument()
+    expect(screen.getByText('ui')).toBeInTheDocument()
+    expect(screen.getByText('claude')).toBeInTheDocument()
+    expect(screen.queryByText('dev')).not.toBeInTheDocument()
   })
 
-  it('selects a terminal on click', async () => {
+  it('selects a terminal on click and shows its kind icon', () => {
     const onSelectTerminal = vi.fn()
     renderSidebar({ onSelectTerminal })
-    await userEvent.click(screen.getByText('claude-api'))
-    expect(onSelectTerminal).toHaveBeenCalledWith('t1')
+    const item = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
+    expect(within(item).getByTestId('icon-claude')).toBeInTheDocument()
   })
 
-  it('toggles a group when its caret is clicked', async () => {
-    const onToggleGroup = vi.fn()
-    renderSidebar({ onToggleGroup })
-    await userEvent.click(screen.getByLabelText('Skupi/raširi feature-auth'))
-    expect(onToggleGroup).toHaveBeenCalledWith('g1')
-  })
-
-  it('adds a group from the input on Enter', async () => {
+  it('adds a group via the bottom input', async () => {
     const onAddGroup = vi.fn()
     renderSidebar({ onAddGroup })
-    await userEvent.type(screen.getByPlaceholderText('Nova grupa…'), 'feature-ui{Enter}')
-    expect(onAddGroup).toHaveBeenCalledWith('feature-ui')
+    await userEvent.click(screen.getByLabelText('Nova grupa'))
+    expect(onAddGroup).toHaveBeenCalled()
   })
 
-  it('requests a new shell terminal for a group', async () => {
+  it('adds a feature to a group', async () => {
+    const onAddFeature = vi.fn()
+    renderSidebar({ onAddFeature })
+    await userEvent.type(screen.getByLabelText('Novi feature u proj'), 'payments{Enter}')
+    expect(onAddFeature).toHaveBeenCalledWith('g1', 'payments')
+  })
+
+  it('adds a terminal to a feature inline (name only)', async () => {
     const onAddTerminal = vi.fn()
     renderSidebar({ onAddTerminal })
-    await userEvent.click(screen.getByLabelText('Novi terminal u feature-auth'))
-    expect(onAddTerminal).toHaveBeenCalledWith('g1')
+    await userEvent.type(screen.getByLabelText('Novi terminal u auth'), 'shell{Enter}')
+    expect(onAddTerminal).toHaveBeenCalledWith('f1', 'shell')
   })
 
-  it('renames a group via double-click then Enter', async () => {
-    const onRenameGroup = vi.fn()
-    renderSidebar({ onRenameGroup })
-    await userEvent.dblClick(screen.getByText('feature-auth'))
-    const input = screen.getByLabelText('Preimenuj grupu feature-auth')
-    await userEvent.clear(input)
-    await userEvent.type(input, 'auth-v2{Enter}')
-    expect(onRenameGroup).toHaveBeenCalledWith('g1', 'auth-v2')
-  })
-
-  it('launches claude/codex into a specific group', async () => {
+  it('launches claude/codex into a feature', async () => {
     const onLaunchAgent = vi.fn()
     renderSidebar({ onLaunchAgent })
-    await userEvent.click(screen.getByLabelText('Novi Claude terminal u feature-auth'))
-    expect(onLaunchAgent).toHaveBeenCalledWith('g1', 'claude')
-    await userEvent.click(screen.getByLabelText('Novi Codex terminal u feature-auth'))
-    expect(onLaunchAgent).toHaveBeenCalledWith('g1', 'codex')
+    await userEvent.click(screen.getByLabelText('Novi Claude terminal u auth'))
+    expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'claude')
+    await userEvent.click(screen.getByLabelText('Novi Codex terminal u auth'))
+    expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
   })
 
-  it('shows the kind icon in front of a terminal', () => {
-    renderSidebar()
-    const item = screen.getByText('claude-api').closest('[data-term-id]') as HTMLElement
-    expect(within(item).getByTestId('icon-claude')).toBeInTheDocument()
+  it('renames a group, a feature and a terminal via double-click', async () => {
+    const onRenameGroup = vi.fn(), onRenameFeature = vi.fn(), onRenameTerminal = vi.fn()
+    renderSidebar({ onRenameGroup, onRenameFeature, onRenameTerminal })
+
+    await userEvent.dblClick(screen.getByText('proj'))
+    await userEvent.clear(screen.getByLabelText('Preimenuj grupu proj'))
+    await userEvent.type(screen.getByLabelText('Preimenuj grupu proj'), 'proj2{Enter}')
+    expect(onRenameGroup).toHaveBeenCalledWith('g1', 'proj2')
+
+    await userEvent.dblClick(screen.getByText('auth'))
+    await userEvent.clear(screen.getByLabelText('Preimenuj feature auth'))
+    await userEvent.type(screen.getByLabelText('Preimenuj feature auth'), 'auth2{Enter}')
+    expect(onRenameFeature).toHaveBeenCalledWith('f1', 'auth2')
+
+    await userEvent.dblClick(screen.getByText('claude'))
+    await userEvent.clear(screen.getByLabelText('Preimenuj terminal claude'))
+    await userEvent.type(screen.getByLabelText('Preimenuj terminal claude'), 'c2{Enter}')
+    expect(onRenameTerminal).toHaveBeenCalledWith('t1', 'c2')
   })
 })

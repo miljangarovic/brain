@@ -10,7 +10,7 @@ const tmpFile = () => join(tmpdir(), `terminaltor-test-${Math.random().toString(
 describe('persistence', () => {
   it('write then load round-trips a workspace', async () => {
     const path = tmpFile()
-    const ws = { groups: [{ id: 'g', name: 'G', collapsed: false, terminals: [] }] }
+    const ws = { groups: [{ id: 'g', name: 'G', cwd: '', collapsed: false, features: [] }] }
     await writeWorkspace(path, ws)
     expect(await loadWorkspace(path)).toEqual(ws)
     await fs.rm(path, { force: true })
@@ -34,8 +34,8 @@ describe('persistence', () => {
     it('coalesces rapid saves into one write', async () => {
       const path = tmpFile()
       const saver = createDebouncedSaver(path, 300)
-      saver.save({ groups: [{ id: '1', name: 'a', collapsed: false, terminals: [] }] })
-      saver.save({ groups: [{ id: '2', name: 'b', collapsed: false, terminals: [] }] })
+      saver.save({ groups: [{ id: '1', name: 'a', cwd: '', collapsed: false, features: [] }] })
+      saver.save({ groups: [{ id: '2', name: 'b', cwd: '', collapsed: false, features: [] }] })
       vi.advanceTimersByTime(300)
       await saver.flushNow()
       const loaded = await loadWorkspace(path)
