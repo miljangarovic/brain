@@ -1,15 +1,38 @@
 // src/renderer/src/components/TerminalView.tsx
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { Terminal as TerminalModel } from '@shared/types'
 import { getXtermTheme, MONO_FONT } from '../theme'
+import { ContextMenu, type MenuItem } from './ContextMenu'
 
 export function TerminalView({ terminal, active }: { terminal: TerminalModel; active: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
+
+  // Clipboard actions, shared by the keyboard shortcuts and the right-click menu.
+  const copySelection = useCallback(() => {
+    const sel = xtermRef.current?.getSelection()
+    if (sel) void navigator.clipboard.writeText(sel)
+  }, [])
+  const paste = useCallback(() => {
+    const term = xtermRef.current
+    if (!term) return
+    // term.paste() (not raw writePty) so bracketed-paste mode is honoured — agents
+    // like claude/codex rely on it to receive multi-line pastes as a single block.
+    void navigator.clipboard.readText().then((text) => {
+      if (text) { term.paste(text); term.focus() }
+    })
+  }, [])
+  const selectAll = useCallback(() => {
+    const term = xtermRef.current
+    if (!term) return
+    term.selectAll()
+    term.focus()
+  }, [])
 
   useEffect(() => {
     const host = hostRef.current
@@ -59,12 +82,11 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
 
       // Ctrl+Shift+C / Ctrl+Shift+V copy-paste
       if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-        const sel = term.getSelection()
-        if (sel) void navigator.clipboard.writeText(sel)
+        copySelection()
         return false
       }
       if (e.ctrlKey && e.shiftKey && e.code === 'KeyV') {
-        void navigator.clipboard.readText().then((text) => window.terminaltor.writePty(terminal.id, text))
+        paste()
         return false
       }
       return true
@@ -103,5 +125,25 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     } catch { /* ignore */ }
   }, [active, terminal.id])
 
-  return <div ref={hostRef} className="h-full w-full" />
+  const items: MenuItem[] = []
+  if (menu?.hasSelection) items.push({ label: 'Kopiraj', onSelect: copySelection })
+  items.push({ label: 'Nalijepi', onSelect: paste })
+  items.push({ label: 'Označi sve', onSelect: selectAll })
+
+  // Right-click opens a copy/paste menu. Capture phase so we win even when the
+  // running app (claude/codex) has mouse-tracking on and would grab the event.
+  // (For free-form drag selection under mouse-tracking, hold Shift while dragging.)
+  return (
+    <div
+      className="relative h-full w-full"
+      onContextMenuCapture={(e) => {
+        e.preventDefault()
+        const hasSelection = (xtermRef.current?.getSelection()?.length ?? 0) > 0
+        setMenu({ x: e.clientX, y: e.clientY, hasSelection })
+      }}
+    >
+      <div ref={hostRef} className="h-full w-full" />
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />}
+    </div>
+  )
 }
