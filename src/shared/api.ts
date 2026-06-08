@@ -13,4 +13,10 @@ export interface TerminaltorApi {
   pickDirectory(): Promise<string | null>
   openPath(path: string): void
   onPtyProc(cb: (id: string, process: string) => void): () => void
+  pickFile(opts?: { defaultPath?: string }): Promise<string | null>
+  suggestSpec(cwd: string): Promise<string | null>
+  resolveReviewDir(originTerminalId: string, round: number): Promise<{ reviewDir: string; reviewFile: string }>
+  watchFile(watchId: string, path: string): void
+  unwatchFile(watchId: string): void
+  onFsChanged(cb: (watchId: string) => void): () => void
 }
