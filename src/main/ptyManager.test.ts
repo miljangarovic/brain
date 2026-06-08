@@ -80,4 +80,14 @@ describe('PtyManager', () => {
     expect(onExit).toHaveBeenCalledWith('t1', 0)
     expect(m.has('t1')).toBe(false)
   })
+
+  it('write/resize/kill on an unknown id are safe no-ops', () => {
+    const { spawner } = makeFake()
+    const m = new PtyManager(spawner)
+    expect(() => {
+      m.write('ghost', 'x')
+      m.resize('ghost', 10, 10)
+      m.kill('ghost')
+    }).not.toThrow()
+  })
 })
