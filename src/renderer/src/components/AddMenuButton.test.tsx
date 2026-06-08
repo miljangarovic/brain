@@ -7,7 +7,7 @@ describe('AddMenuButton', () => {
     const onAdd = vi.fn()
     render(<AddMenuButton onAdd={onAdd} />)
     expect(screen.queryByRole('menu')).toBeNull()
-    fireEvent.click(screen.getByLabelText('Dodaj terminal'))
+    fireEvent.click(screen.getByLabelText('Add terminal'))
     expect(screen.getByRole('menu')).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Claude' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Codex' })).toBeInTheDocument()
@@ -19,24 +19,24 @@ describe('AddMenuButton', () => {
   it('Codex → onAdd("codex"), Terminal → onAdd("shell")', () => {
     const onAdd = vi.fn()
     const { rerender } = render(<AddMenuButton onAdd={onAdd} />)
-    fireEvent.click(screen.getByLabelText('Dodaj terminal'))
+    fireEvent.click(screen.getByLabelText('Add terminal'))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
     expect(onAdd).toHaveBeenCalledWith('codex')
     onAdd.mockClear()
     rerender(<AddMenuButton onAdd={onAdd} />)
-    fireEvent.click(screen.getByLabelText('Dodaj terminal'))
+    fireEvent.click(screen.getByLabelText('Add terminal'))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Terminal' }))
     expect(onAdd).toHaveBeenCalledWith('shell')
   })
 
   it('uses a custom aria-label when provided', () => {
-    render(<AddMenuButton onAdd={vi.fn()} label="Dodaj u auth" />)
-    expect(screen.getByLabelText('Dodaj u auth')).toBeInTheDocument()
+    render(<AddMenuButton onAdd={vi.fn()} label="Add to auth" />)
+    expect(screen.getByLabelText('Add to auth')).toBeInTheDocument()
   })
 
   it('Claude and Codex items show their brand icons', () => {
     render(<AddMenuButton onAdd={vi.fn()} />)
-    fireEvent.click(screen.getByLabelText('Dodaj terminal'))
+    fireEvent.click(screen.getByLabelText('Add terminal'))
     expect(within(screen.getByRole('menuitem', { name: 'Claude' })).getByTestId('icon-claude')).toBeInTheDocument()
     expect(within(screen.getByRole('menuitem', { name: 'Codex' })).getByTestId('icon-codex')).toBeInTheDocument()
   })

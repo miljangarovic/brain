@@ -7,38 +7,38 @@ describe('NewGroupDialog', () => {
   it('submits name and cwd', async () => {
     const onCreate = vi.fn()
     render(<NewGroupDialog onCreate={onCreate} onCancel={() => {}} />)
-    await userEvent.type(screen.getByLabelText('Ime grupe'), 'proj')
-    await userEvent.type(screen.getByLabelText('Radni direktorijum'), '/home/me/proj')
-    await userEvent.click(screen.getByRole('button', { name: 'Kreiraj' }))
+    await userEvent.type(screen.getByLabelText('Project name'), 'proj')
+    await userEvent.type(screen.getByLabelText('Working directory'), '/home/me/proj')
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(onCreate).toHaveBeenCalledWith({ name: 'proj', cwd: '/home/me/proj' })
   })
 
   it('uses empty cwd (home) when left blank, but requires a name', async () => {
     const onCreate = vi.fn()
     render(<NewGroupDialog onCreate={onCreate} onCancel={() => {}} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Kreiraj' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(onCreate).not.toHaveBeenCalled()
-    await userEvent.type(screen.getByLabelText('Ime grupe'), 'g')
-    await userEvent.click(screen.getByRole('button', { name: 'Kreiraj' }))
+    await userEvent.type(screen.getByLabelText('Project name'), 'g')
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(onCreate).toHaveBeenCalledWith({ name: 'g', cwd: '' })
   })
 
   it('cancels', async () => {
     const onCancel = vi.fn()
     render(<NewGroupDialog onCreate={() => {}} onCancel={onCancel} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Otkaži' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onCancel).toHaveBeenCalled()
   })
 
   it('fills cwd from the native folder picker', async () => {
-    ;(window as unknown as { terminaltor: { pickDirectory: () => Promise<string | null> } }).terminaltor = {
+    ;(window as unknown as { orchestrix: { pickDirectory: () => Promise<string | null> } }).orchestrix = {
       pickDirectory: vi.fn().mockResolvedValue('/picked/dir')
     }
     const onCreate = vi.fn()
     render(<NewGroupDialog onCreate={onCreate} onCancel={() => {}} />)
     await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
-    await userEvent.type(screen.getByLabelText('Ime grupe'), 'g')
-    await userEvent.click(screen.getByRole('button', { name: 'Kreiraj' }))
+    await userEvent.type(screen.getByLabelText('Project name'), 'g')
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(onCreate).toHaveBeenCalledWith({ name: 'g', cwd: '/picked/dir' })
   })
 })

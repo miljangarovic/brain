@@ -18,21 +18,21 @@ export function FeatureHeader({
       <span className="truncate text-sm font-medium text-fg-bright">{featureName}</span>
       <div className="ml-auto flex items-center gap-0.5 text-base leading-none">
         {relay.canReturn && (
-          <button onClick={onReturnToOrigin} title="Vrati kritiku implementatoru"
-            className="px-2 text-xs rounded bg-field text-accent hover:bg-hover transition">→ Vrati u A</button>
+          <button onClick={onReturnToOrigin} title="Return the critique to the implementer"
+            className="px-2 text-xs rounded bg-field text-accent hover:bg-hover transition">→ Return to A</button>
         )}
         {relay.canReReview && (
-          <button onClick={onReReview} title="Pošalji ažuriran artefakt nazad revieweru"
-            className="px-2 text-xs rounded bg-field text-accent hover:bg-hover transition">↻ Ponovi review</button>
+          <button onClick={onReReview} title="Send the updated artifact back to the reviewer"
+            className="px-2 text-xs rounded bg-field text-accent hover:bg-hover transition">↻ Re-review</button>
         )}
         {relay.canMarkApplied && (
-          <button onClick={onMarkApplied} title="Označi iteraciju gotovom"
-            className="px-2 text-xs rounded bg-field text-fg-muted hover:text-fg transition">✓ Gotovo</button>
+          <button onClick={onMarkApplied} title="Mark iteration done"
+            className="px-2 text-xs rounded bg-field text-fg-muted hover:text-fg transition">✓ Done</button>
         )}
         <button
-          aria-label={viewMode === 'grid' ? 'Tabs prikaz' : 'Grid prikaz'}
+          aria-label={viewMode === 'grid' ? 'Tabs view' : 'Grid view'}
           aria-pressed={viewMode === 'grid'}
-          title={viewMode === 'grid' ? 'Prebaci na tabove' : 'Prebaci na grid'}
+          title={viewMode === 'grid' ? 'Switch to tabs' : 'Switch to grid'}
           onClick={onToggleView}
           className={`px-1.5 transition-colors ${viewMode === 'grid' ? 'text-accent' : 'text-fg-muted hover:text-accent'}`}
         >
