@@ -1,0 +1,59 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Terminaltor friendly">
+  <defs>
+    <linearGradient id="bgf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d333f"/>
+      <stop offset="1" stop-color="#1b1d23"/>
+    </linearGradient>
+    <linearGradient id="chromef" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f6fa"/>
+      <stop offset="0.55" stop-color="#cfd6e2"/>
+      <stop offset="1" stop-color="#9aa3b3"/>
+    </linearGradient>
+    <linearGradient id="ear" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfd6e2"/>
+      <stop offset="1" stop-color="#7c8696"/>
+    </linearGradient>
+    <radialGradient id="pupil" cx="0.5" cy="0.42" r="0.7">
+      <stop offset="0" stop-color="#7fe3ec"/>
+      <stop offset="1" stop-color="#2bbac5"/>
+    </radialGradient>
+    <filter id="cyanGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- App tile -->
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#bgf)"/>
+  <rect x="8.5" y="8.5" width="239" height="239" rx="53.5" fill="none" stroke="#3a414d" stroke-width="1"/>
+
+  <!-- antenna -->
+  <line x1="128" y1="70" x2="128" y2="50" stroke="#7c8696" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="128" cy="44" r="8" fill="#2bbac5" filter="url(#cyanGlow)"/>
+
+  <!-- side ears -->
+  <rect x="50" y="120" width="18" height="40" rx="9" fill="url(#ear)"/>
+  <rect x="188" y="120" width="18" height="40" rx="9" fill="url(#ear)"/>
+
+  <!-- friendly rounded head -->
+  <rect x="64" y="70" width="128" height="120" rx="40" fill="url(#chromef)" stroke="#7c8696" stroke-width="2"/>
+
+  <!-- eye screens -->
+  <rect x="84" y="104" width="34" height="34" rx="11" fill="#1b1d23"/>
+  <rect x="138" y="104" width="34" height="34" rx="11" fill="#1b1d23"/>
+  <!-- glowing cyan pupils + sparkle -->
+  <g filter="url(#cyanGlow)">
+    <circle cx="101" cy="121" r="10" fill="url(#pupil)"/>
+    <circle cx="155" cy="121" r="10" fill="url(#pupil)"/>
+  </g>
+  <circle cx="97" cy="117" r="3.2" fill="#ffffff"/>
+  <circle cx="151" cy="117" r="3.2" fill="#ffffff"/>
+
+  <!-- blush -->
+  <ellipse cx="92" cy="152" rx="9" ry="5" fill="#ef596f" opacity="0.55"/>
+  <ellipse cx="164" cy="152" rx="9" ry="5" fill="#ef596f" opacity="0.55"/>
+
+  <!-- smiling ">_" prompt mouth -->
+  <path d="M108 158 Q128 176 148 158" stroke="#89ca78" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <rect x="150" y="156" width="11" height="13" rx="3" fill="#89ca78" filter="url(#cyanGlow)"/>
+</svg>

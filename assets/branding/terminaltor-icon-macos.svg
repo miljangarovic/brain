@@ -1,0 +1,54 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Terminaltor">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d333f"/>
+      <stop offset="1" stop-color="#181a1f"/>
+    </linearGradient>
+    <linearGradient id="chrome" x1="0" y1="0.05" x2="0" y2="0.98">
+      <stop offset="0" stop-color="#eef1f6"/>
+      <stop offset="0.45" stop-color="#abb2bf"/>
+      <stop offset="1" stop-color="#5c6678"/>
+    </linearGradient>
+    <linearGradient id="chromeEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dfe3eb"/>
+      <stop offset="1" stop-color="#3a414d"/>
+    </linearGradient>
+    <filter id="redGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="greenGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Apple icon grid: 824x824 tile, r=185, centered in 1024 with 100px transparent margin -->
+  <g transform="translate(72.5,72.5) scale(3.433)">
+    <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#bg)"/>
+    <rect x="8.5" y="8.5" width="239" height="239" rx="53.5" fill="none" stroke="#3a414d" stroke-width="1"/>
+
+    <path d="M88 58 L168 58 Q190 58 192 82 L194 120 L186 152 L168 184 Q152 200 128 202 Q104 200 88 184 L70 152 L62 120 L64 82 Q66 58 88 58 Z"
+          fill="url(#chrome)" stroke="url(#chromeEdge)" stroke-width="2"/>
+    <line x1="128" y1="64" x2="128" y2="92" stroke="#5c6678" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="74" cy="112" r="4" fill="#3a414d"/>
+    <circle cx="182" cy="112" r="4" fill="#3a414d"/>
+
+    <rect x="78" y="98" width="100" height="42" rx="10" fill="#0d0f12"/>
+
+    <g stroke-linecap="round">
+      <line x1="90" y1="106" x2="117" y2="112" stroke="#c4ccd8" stroke-width="5"/>
+      <line x1="166" y1="106" x2="139" y2="112" stroke="#c4ccd8" stroke-width="5"/>
+    </g>
+
+    <g filter="url(#redGlow)" fill="#ef596f">
+      <rect x="92" y="115" width="22" height="18" rx="3"/>
+      <rect x="142" y="115" width="22" height="18" rx="3"/>
+    </g>
+
+    <g filter="url(#greenGlow)" stroke="#89ca78" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M104 156 L120 169 L104 182"/>
+    </g>
+    <rect x="128" y="177" width="28" height="9" rx="4" fill="#89ca78" filter="url(#greenGlow)"/>
+  </g>
+</svg>
