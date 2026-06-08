@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
 import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon, TrashIcon, ReviewIcon } from './icons'
+import { TerminalKindIcon, GridIcon, TrashIcon, ReviewIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
+import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
@@ -120,9 +121,11 @@ export function Sidebar(props: {
                           onClick={() => onNameClick(() => onToggleFeature(f.id))}
                           onDoubleClick={() => onNameDblClick(() => startRename('feature', f.id, f.name))}>{f.name}</span>
                       )}
-                      <button aria-label={`Novi terminal u ${f.name}`} title="Novi terminal" onClick={() => onAddTerminal(f.id)} className={`${hoverBtn} text-base leading-none hover:text-accent`}>+</button>
-                      <button aria-label={`Novi Claude terminal u ${f.name}`} title="Claude" onClick={() => onLaunchAgent(f.id, 'claude')} className={`${hoverBtn} text-base leading-none`}><ClaudeIcon /></button>
-                      <button aria-label={`Novi Codex terminal u ${f.name}`} title="Codex" onClick={() => onLaunchAgent(f.id, 'codex')} className={`${hoverBtn} text-base leading-none`}><CodexIcon /></button>
+                      <AddMenuButton
+                        label={`Dodaj u ${f.name}`}
+                        onAdd={(kind) => (kind === 'shell' ? onAddTerminal(f.id) : onLaunchAgent(f.id, kind))}
+                        className={`${hoverBtn} text-base leading-none hover:text-accent`}
+                      />
                       <button aria-label={`Grid prikaz ${f.name}`} title="Grid" onClick={() => onToggleFeatureView(f.id)} className={`${hoverBtn} ${(f.viewMode ?? 'tabs') === 'grid' ? 'text-accent opacity-100' : ''}`}><GridIcon /></button>
                       <button aria-label={`Obriši feature ${f.name}`} title="Obriši feature" onClick={() => onDeleteFeature(f.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
                     </div>
