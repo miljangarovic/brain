@@ -1,28 +1,19 @@
 // src/renderer/src/components/TabBar.tsx
 import type { Terminal, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon, ReviewIcon } from './icons'
+import { TerminalKindIcon, ReviewIcon } from './icons'
 import { ReviewStatusDot } from './ReviewStatusDot'
 
 export function TabBar({
-  terminals, activeId, viewMode, liveAgents, onSelect, onClose, onAdd, onLaunch, onToggleView,
-  reviewStatus, onReviewTerminal, relay, onReturnToOrigin, onReReview, onMarkApplied
+  terminals, activeId, liveAgents, onSelect, onClose, reviewStatus, onReviewTerminal
 }: {
   terminals: Terminal[]
   activeId: string | null
-  viewMode: 'tabs' | 'grid'
   liveAgents: Record<string, 'claude' | 'codex' | undefined>
   onSelect: (id: string) => void
   onClose: (id: string) => void
-  onAdd: () => void
-  onLaunch: (kind: AgentKind) => void
-  onToggleView: () => void
   reviewStatus: Record<string, ReviewStatus | undefined>
   onReviewTerminal: (id: string, reviewer?: AgentKind) => void
-  relay: { canReturn: boolean; canReReview: boolean; canMarkApplied: boolean }
-  onReturnToOrigin: () => void
-  onReReview: () => void
-  onMarkApplied: () => void
 }) {
   return (
     <div role="tablist" className="flex items-stretch gap-px h-9 px-2 bg-panel border-b border-line overflow-x-auto">
@@ -61,52 +52,6 @@ export function TabBar({
           </div>
         )
       })}
-      <div className="ml-1 self-center flex items-center gap-0.5 text-base leading-none">
-        {relay.canReturn && (
-          <button onClick={onReturnToOrigin} title="Vrati kritiku implementatoru"
-            className="px-2 text-xs rounded bg-field text-accent hover:bg-hover transition">→ Vrati u A</button>
-        )}
-        {relay.canReReview && (
-          <button onClick={onReReview} title="Pošalji ažuriran artefakt nazad revieweru"
-            className="px-2 text-xs rounded bg-field text-accent hover:bg-hover transition">↻ Ponovi review</button>
-        )}
-        {relay.canMarkApplied && (
-          <button onClick={onMarkApplied} title="Označi iteraciju gotovom"
-            className="px-2 text-xs rounded bg-field text-fg-muted hover:text-fg transition">✓ Gotovo</button>
-        )}
-        <button
-          aria-label={viewMode === 'grid' ? 'Tabs prikaz' : 'Grid prikaz'}
-          aria-pressed={viewMode === 'grid'}
-          title={viewMode === 'grid' ? 'Prebaci na tabove' : 'Prebaci na grid'}
-          onClick={onToggleView}
-          className={`px-1.5 transition-colors ${viewMode === 'grid' ? 'text-accent' : 'text-fg-muted hover:text-accent'}`}
-        >
-          <GridIcon />
-        </button>
-        <button
-          aria-label="Novi terminal"
-          onClick={onAdd}
-          className="px-1.5 text-sm text-fg-muted hover:text-accent transition-colors"
-        >
-          +
-        </button>
-        <button
-          aria-label="Novi Claude terminal"
-          title="Novi Claude terminal"
-          onClick={() => onLaunch('claude')}
-          className="px-1 opacity-80 hover:opacity-100 transition-opacity"
-        >
-          <ClaudeIcon />
-        </button>
-        <button
-          aria-label="Novi Codex terminal"
-          title="Novi Codex terminal"
-          onClick={() => onLaunch('codex')}
-          className="px-1 opacity-80 hover:opacity-100 transition-opacity"
-        >
-          <CodexIcon />
-        </button>
-      </div>
     </div>
   )
 }
