@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Group } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon } from './icons'
+import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon, TrashIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
@@ -23,12 +23,14 @@ export function Sidebar(props: {
   onRenameTerminal: (id: string, name: string) => void
   onDeleteGroup: (id: string) => void
   onDeleteFeature: (id: string) => void
+  onDeleteTerminal: (id: string) => void
   onOpenInFiles: (groupId: string) => void
+  stopped: string[]
 }) {
   const {
-    groups, activeTerminalId, liveAgents, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
+    groups, activeTerminalId, liveAgents, stopped, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView,
-    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onOpenInFiles
+    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles
   } = props
 
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
@@ -84,7 +86,7 @@ export function Sidebar(props: {
                   {g.cwd && <span className="truncate text-xs text-fg-muted/70">{g.cwd}</span>}
                 </span>
               )}
-              <button aria-label={`Obriši grupu ${g.name}`} onClick={() => onDeleteGroup(g.id)} className={`${hoverBtn} hover:text-danger`}>×</button>
+              <button aria-label={`Obriši grupu ${g.name}`} title="Obriši grupu" onClick={() => onDeleteGroup(g.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
             </div>
 
             {!g.collapsed && (
@@ -102,21 +104,36 @@ export function Sidebar(props: {
                       <button aria-label={`Novi Claude terminal u ${f.name}`} title="Claude" onClick={() => onLaunchAgent(f.id, 'claude')} className={`${hoverBtn} text-base leading-none`}><ClaudeIcon /></button>
                       <button aria-label={`Novi Codex terminal u ${f.name}`} title="Codex" onClick={() => onLaunchAgent(f.id, 'codex')} className={`${hoverBtn} text-base leading-none`}><CodexIcon /></button>
                       <button aria-label={`Grid prikaz ${f.name}`} title="Grid" onClick={() => onToggleFeatureView(f.id)} className={`${hoverBtn} ${(f.viewMode ?? 'tabs') === 'grid' ? 'text-accent opacity-100' : ''}`}><GridIcon /></button>
-                      <button aria-label={`Obriši feature ${f.name}`} onClick={() => onDeleteFeature(f.id)} className={`${hoverBtn} hover:text-danger`}>×</button>
+                      <button aria-label={`Obriši feature ${f.name}`} title="Obriši feature" onClick={() => onDeleteFeature(f.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
                     </div>
 
                     {!f.collapsed && (
                       <div className="pl-2">
                         {f.terminals.map((t) => {
                           const active = t.id === activeTerminalId
+                          const isStop = stopped.includes(t.id)
                           return (
                             <div key={t.id} data-term-id={t.id} onClick={() => onSelectTerminal(t.id)}
                               className={`group flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${
-                                active ? 'border-accent bg-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
-                              <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
+                                active ? 'border-accent bg-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'} ${
+                                isStop ? 'opacity-50' : ''}`}>
+                              <TerminalKindIcon kind={isStop ? 'shell' : (liveAgents[t.id] ?? t.kind ?? 'shell')} className="shrink-0 text-fg-muted" />
                               {isEditing('terminal', t.id)
                                 ? renameInput(`Preimenuj terminal ${t.name}`)
-                                : <span className="truncate" onDoubleClick={(e) => { e.stopPropagation(); startRename('terminal', t.id, t.name) }}>{t.name}</span>}
+                                : (
+                                  <span
+                                    className={`flex-1 truncate ${isStop ? 'italic' : ''}`}
+                                    title={isStop ? 'Zaustavljen — klik za ponovno pokretanje' : undefined}
+                                    onDoubleClick={(e) => { e.stopPropagation(); startRename('terminal', t.id, t.name) }}
+                                  >
+                                    {t.name}
+                                  </span>
+                                )}
+                              {!isEditing('terminal', t.id) && (
+                                <button aria-label={`Obriši terminal ${t.name}`} title="Obriši terminal"
+                                  onClick={(e) => { e.stopPropagation(); onDeleteTerminal(t.id) }}
+                                  className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
+                              )}
                             </div>
                           )
                         })}
