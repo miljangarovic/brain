@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from './useStore'
 import {
-  createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
+  createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, toggleGroupViewMode,
   addTerminal, removeTerminal, setActiveTerminal,
   getActiveGroup, allTerminals
 } from './store'
@@ -99,6 +99,8 @@ export default function App() {
           onClose={(id) => apply((s) => removeTerminal(s, id))}
           onAdd={openDialog}
           onLaunch={(kind) => { if (state.activeGroupId) launchAgent(state.activeGroupId, kind) }}
+          viewMode={activeGroup?.viewMode ?? 'tabs'}
+          onToggleView={() => { if (activeGroup) apply((s) => toggleGroupViewMode(s, activeGroup.id)) }}
         />
 
         <div className="relative flex-1 bg-surface">
