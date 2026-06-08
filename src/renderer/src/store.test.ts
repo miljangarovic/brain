@@ -4,7 +4,8 @@ import {
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
   setActiveGroup, setActiveFeature, setActiveTerminal,
-  getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals
+  getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
+  setReviewRound, findReviewerFor, featureIdOfTerminal, getTerminalById
 } from './store'
 import { migrateWorkspace } from './migrate'
 
@@ -184,5 +185,51 @@ describe('store reducers', () => {
     expect(isHidden(s, bId)).toBe(true)
     s = removeTerminal(s, bId)      // deleting b prunes it from hidden
     expect(isHidden(s, bId)).toBe(false)
+  })
+})
+
+describe('review store', () => {
+  const link = (originId: string, round = 1) => ({
+    originTerminalId: originId, reviewKind: 'spec' as const,
+    specPath: '/a/spec.md', reviewDir: '/r', round
+  })
+
+  it('addTerminal can attach a review link', () => {
+    let s = addGroup(createInitialState(), 'g', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 'review: codex', kind: 'codex', review: link('origin-1') })
+    const t = getActiveTerminal(s)!
+    expect(t.review?.originTerminalId).toBe('origin-1')
+    expect(t.review?.round).toBe(1)
+  })
+
+  it('findReviewerFor locates the reviewer of an origin', () => {
+    let s = addGroup(createInitialState(), 'g', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 'A', kind: 'claude' })
+    const aId = getActiveTerminal(s)!.id
+    s = addTerminal(s, fid, { name: 'review: codex', kind: 'codex', review: link(aId) })
+    const reviewer = findReviewerFor(s, aId)
+    expect(reviewer?.name).toBe('review: codex')
+    expect(findReviewerFor(s, 'nope')).toBeNull()
+  })
+
+  it('setReviewRound bumps the round on a reviewer terminal', () => {
+    let s = addGroup(createInitialState(), 'g', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 'review: codex', kind: 'codex', review: link('o', 1) })
+    const bId = getActiveTerminal(s)!.id
+    s = setReviewRound(s, bId, 2)
+    expect(findReviewerFor(s, 'o')?.review?.round).toBe(2)
+  })
+
+  it('featureIdOfTerminal / getTerminalById resolve a terminal', () => {
+    let s = addGroup(createInitialState(), 'g', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 'A', kind: 'claude' })
+    const aId = getActiveTerminal(s)!.id
+    expect(featureIdOfTerminal(s, aId)).toBe(fid)
+    expect(getTerminalById(s, aId)?.name).toBe('A')
+    expect(featureIdOfTerminal(s, 'x')).toBeNull()
   })
 })
