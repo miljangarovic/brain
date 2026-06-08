@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ContextMenu } from './ContextMenu'
+import { ClaudeIcon, CodexIcon, ShellIcon } from './icons'
 
 export type AddKind = 'shell' | 'claude' | 'codex'
 
@@ -32,9 +33,9 @@ export function AddMenuButton({
           y={menu.y}
           onClose={() => setMenu(null)}
           items={[
-            { label: 'Claude', onSelect: () => onAdd('claude') },
-            { label: 'Codex', onSelect: () => onAdd('codex') },
-            { label: 'Terminal', onSelect: () => onAdd('shell') }
+            { label: 'Claude', icon: <ClaudeIcon />, onSelect: () => onAdd('claude') },
+            { label: 'Codex', icon: <CodexIcon />, onSelect: () => onAdd('codex') },
+            { label: 'Terminal', icon: <ShellIcon className="text-fg-muted" />, onSelect: () => onAdd('shell') }
           ]}
         />
       )}
