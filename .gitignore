@@ -4,3 +4,4 @@ out/
 .superpowers/
 *.log
 .DS_Store
+.idea/
