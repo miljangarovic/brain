@@ -8,13 +8,26 @@ import { ReviewStatusDot } from './ReviewStatusDot'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
 
-// Final 0-based index for a feature dropped above/below `overId`, accounting for
-// the removal of the dragged item from its original slot. Pure — unit-tested.
-export function featureDropIndex(features: { id: string }[], overId: string, below: boolean, fromId: string): number {
-  const from = features.findIndex((f) => f.id === fromId)
-  const over = features.findIndex((f) => f.id === overId)
-  const insertion = below ? over + 1 : over
-  return insertion > from ? insertion - 1 : insertion
+// Insertion point (0..n) among rows with vertical midpoints `midpoints` for a
+// cursor at `cursorY`: the first row the cursor sits above, else past the end.
+// Cursor above the first row → 0 (becomes first); below the last → n (last).
+export function insertionFromMidpoints(midpoints: number[], cursorY: number): number {
+  const i = midpoints.findIndex((m) => cursorY < m)
+  return i === -1 ? midpoints.length : i
+}
+
+// Convert an insertion point in the original array into the dragged item's final
+// 0-based index, accounting for its removal from `fromIndex`.
+export function reorderToIndex(insertion: number, fromIndex: number): number {
+  return insertion > fromIndex ? insertion - 1 : insertion
+}
+
+// Vertical midpoints of the feature rows inside a group's features container.
+function featureRowMidpoints(container: Element): number[] {
+  return Array.from(container.querySelectorAll('[data-feature-id]')).map((el) => {
+    const r = el.getBoundingClientRect()
+    return r.top + r.height / 2
+  })
 }
 
 const SIDEBAR_MIN = 180
@@ -65,7 +78,7 @@ export function Sidebar(props: {
   // click/double-click still collapses/renames (HTML5 drag starts only on move).
   const dragRef = useRef<{ featureId: string; groupId: string } | null>(null)
   const [drag, setDrag] = useState<{ featureId: string } | null>(null)
-  const [dropAt, setDropAt] = useState<{ featureId: string; below: boolean } | null>(null)
+  const [dropAt, setDropAt] = useState<{ groupId: string; index: number } | null>(null)
   const clearDrag = () => { dragRef.current = null; setDrag(null); setDropAt(null) }
 
   // Resizable width, persisted across reloads. Dragging the right-edge handle
@@ -164,8 +177,28 @@ export function Sidebar(props: {
             </div>
 
             {!g.collapsed && (
-              <div className="pl-3">
-                {g.features.map((f) => (
+              <div
+                className="pl-3"
+                data-group-features={g.id}
+                onDragOver={(e) => {
+                  const d = dragRef.current
+                  if (!d) return
+                  if (d.groupId !== g.id) { setDropAt(null); return }   // hovering another project — clear stale line
+                  e.preventDefault()
+                  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+                  setDropAt({ groupId: g.id, index: insertionFromMidpoints(featureRowMidpoints(e.currentTarget), e.clientY) })
+                }}
+                onDrop={(e) => {
+                  const d = dragRef.current
+                  if (!d || d.groupId !== g.id) { clearDrag(); return }
+                  e.preventDefault()
+                  const from = g.features.findIndex((x) => x.id === d.featureId)
+                  const to = reorderToIndex(insertionFromMidpoints(featureRowMidpoints(e.currentTarget), e.clientY), from)
+                  if (to !== from) onMoveFeature(d.featureId, to)
+                  clearDrag()
+                }}
+              >
+                {g.features.map((f, i) => (
                   <div key={f.id}>
                     <div
                       data-feature-id={f.id}
@@ -173,26 +206,12 @@ export function Sidebar(props: {
                       draggable={!isEditing('feature', f.id)}
                       onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { featureId: f.id, groupId: g.id }; setDrag({ featureId: f.id }) }}
                       onDragEnd={clearDrag}
-                      onDragOver={(e) => {
-                        const d = dragRef.current
-                        if (!d || d.groupId !== g.id) return
-                        e.preventDefault()
-                        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-                        const r = e.currentTarget.getBoundingClientRect()
-                        setDropAt({ featureId: f.id, below: e.clientY > r.top + r.height / 2 })
-                      }}
-                      onDrop={(e) => {
-                        const d = dragRef.current
-                        if (!d || d.groupId !== g.id) { clearDrag(); return }
-                        e.preventDefault()
-                        const r = e.currentTarget.getBoundingClientRect()
-                        const below = e.clientY > r.top + r.height / 2
-                        if (d.featureId !== f.id) onMoveFeature(d.featureId, featureDropIndex(g.features, f.id, below, d.featureId))
-                        clearDrag()
-                      }}
                     >
-                      {dropAt?.featureId === f.id && (
-                        <div className={`pointer-events-none absolute inset-x-1 h-0.5 rounded bg-accent ${dropAt.below ? 'bottom-0' : 'top-0'}`} />
+                      {dropAt?.groupId === g.id && dropAt.index === i && (
+                        <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
+                      )}
+                      {dropAt?.groupId === g.id && dropAt.index === g.features.length && i === g.features.length - 1 && (
+                        <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
                       )}
                       <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className="w-4 text-fg-muted hover:text-fg">
                         {f.collapsed ? '▸' : '▾'}

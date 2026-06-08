@@ -22,12 +22,13 @@ Out of scope (YAGNI for now):
   still renames, because HTML5 drag only starts once the pointer actually moves.
   Dragging is disabled while the feature is being renamed. The row shows a
   grab cursor and dims (opacity) while it is the one being dragged.
-- While dragging over a feature row in the **same** project, a thin accent line
-  is drawn above or below the row (chosen by whether the cursor is in the top or
-  bottom half of the row) to indicate the drop position.
+- While dragging anywhere within the **same** project's feature area, a thin
+  accent line marks the insertion point (computed from the cursor's Y against the
+  feature rows' midpoints). Dragging above the first row marks the first
+  position; below the last row (e.g. over the `+ Feature` input) marks the last.
 - Dropping moves the dragged feature to the indicated position.
-- If the cursor is over a feature in a **different** project, no indicator is
-  shown and a drop is ignored (reorder is within-project only).
+- If the cursor is over a **different** project, no indicator is shown and a drop
+  is ignored (reorder is within-project only).
 - Reordering does not change which feature/terminal is currently active.
 
 ## State / logic (`store.ts`)
@@ -67,16 +68,23 @@ toIndex        = insertionPoint > from ? insertionPoint - 1 : insertionPoint
 - Drag state is held in React state (the dragged `featureId` + its `groupId`,
   and a `dropAt` for the indicator) rather than relying on `dataTransfer`
   payload — this keeps it testable.
-- The whole feature row (`<div draggable>` with `data-feature-id`) wires:
-  - `onDragStart`: record `{ featureId, groupId }`.
-  - `onDragOver`: if same group, `preventDefault()` and set the drop indicator
-    (target feature + above/below) based on cursor Y vs the row midpoint.
-  - `onDrop`: compute the final target index via the pure `featureDropIndex`
-    helper and call `onMoveFeature`; clear drag state.
-  - `onDragEnd`: clear drag state.
-- `featureDropIndex(features, overId, below, fromId)` is an exported pure helper
-  (the above/below + removal-shift math), unit-tested directly — the cursor
-  geometry itself is not exercised in jsdom.
+- The whole feature row (`<div draggable>` with `data-feature-id`) starts the
+  drag: `onDragStart` records `{ featureId, groupId }` (in a ref so dragover/drop
+  read it synchronously), `onDragEnd` clears it.
+- The drop target is the **group's features container** (`data-group-features`),
+  not the individual rows — so dropping above the first row or below the last
+  (e.g. over the `+ Feature` input) still resolves to a valid position:
+  - `onDragOver`: if the drag belongs to this group, `preventDefault()` +
+    `dropEffect='move'`, and set the insertion index from the cursor Y vs the
+    feature rows' midpoints; if it belongs to another group, clear the indicator.
+  - `onDrop`: convert the insertion point to the final index and call
+    `onMoveFeature` (skipping a no-op move).
+- The insertion line is an absolute, `pointer-events-none` element positioned at
+  the top of the row at the insertion index (or the bottom of the last row when
+  inserting at the end) — it never shifts layout or steals the drop target.
+- Two exported pure helpers carry the math, unit-tested directly (cursor geometry
+  is not exercised in jsdom): `insertionFromMidpoints(midpoints, cursorY)` →
+  insertion point `0..n`; `reorderToIndex(insertion, fromIndex)` → final index.
 
 ## App wiring (`App.tsx`)
 
@@ -100,8 +108,9 @@ new order is persisted automatically and restored on launch.
 - leaves active selection unchanged.
 
 `Sidebar.test.tsx`:
-- `featureDropIndex` pure-math cases (drop below last, above first, below next
-  sibling, above a later sibling with the removal shift).
-- feature rows are `draggable`; `dragStart` on row A then `drop` on row B calls
-  `onMoveFeature('A', <number>)` (wiring).
-- dragging onto a feature in another project does not call `onMoveFeature`.
+- `insertionFromMidpoints` (above first → 0, between rows → next index, below
+  last → past the end) and `reorderToIndex` (down-shift / up keeps point).
+- feature rows are `draggable`; `dragStart` on a row then `drop` on the project's
+  features zone calls `onMoveFeature('id', <number>)` (wiring).
+- dropping on a different project than the dragged feature does not call
+  `onMoveFeature`.

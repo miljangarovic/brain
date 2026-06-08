@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Sidebar, featureDropIndex } from './Sidebar'
+import { Sidebar, insertionFromMidpoints, reorderToIndex } from './Sidebar'
 import type { Group } from '@shared/types'
 
 const groups: Group[] = [
@@ -204,37 +204,40 @@ describe('Sidebar (3-level)', () => {
   })
 
   describe('feature reorder (drag-and-drop)', () => {
-    // featureDropIndex: pure final-index math (above/below + removal shift).
-    // jsdom can't drive the clientY/midpoint geometry, so the precise above/below
-    // behavior is covered here; the DOM tests below only verify the wiring.
-    const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
-    it('drops the first item below the last → last index', () => {
-      expect(featureDropIndex(items, 'c', true, 'a')).toBe(2)
+    // The cursor geometry can't be driven in jsdom, so the index math is covered
+    // by the two pure helpers; the DOM tests below only verify the wiring.
+    it('insertionFromMidpoints: above the first row → 0', () => {
+      expect(insertionFromMidpoints([10, 20, 30], 5)).toBe(0)
     })
-    it('drops the last item above the first → index 0', () => {
-      expect(featureDropIndex(items, 'a', false, 'c')).toBe(0)
+    it('insertionFromMidpoints: between rows → the next index', () => {
+      expect(insertionFromMidpoints([10, 20, 30], 15)).toBe(1)
     })
-    it('drops the first item below its next sibling → index 1', () => {
-      expect(featureDropIndex(items, 'b', true, 'a')).toBe(1)
+    it('insertionFromMidpoints: below the last row → past the end', () => {
+      expect(insertionFromMidpoints([10, 20, 30], 100)).toBe(3)
     })
-    it('drops above a later sibling accounts for the removed item', () => {
-      expect(featureDropIndex(items, 'c', false, 'a')).toBe(1) // a removed, insert before c
+    it('reorderToIndex: dragging down shifts for the removed item', () => {
+      expect(reorderToIndex(3, 0)).toBe(2) // insert past end, item was first → last
+    })
+    it('reorderToIndex: dragging up keeps the insertion point', () => {
+      expect(reorderToIndex(0, 2)).toBe(0) // to the front
     })
 
     const rowFor = (container: HTMLElement, id: string) =>
       container.querySelector(`[data-feature-id="${id}"]`) as HTMLElement
+    const dropZoneFor = (container: HTMLElement, groupId: string) =>
+      container.querySelector(`[data-group-features="${groupId}"]`) as HTMLElement
 
-    it('feature rows are draggable and a drop calls onMoveFeature with the dragged id', () => {
+    it('feature rows are draggable and dropping on the project zone calls onMoveFeature', () => {
       const onMoveFeature = vi.fn()
       const { container } = renderSidebar({ onMoveFeature })
       expect(rowFor(container, 'f1')).toHaveAttribute('draggable', 'true')
       fireEvent.dragStart(rowFor(container, 'f1'))
-      fireEvent.dragOver(rowFor(container, 'f2'))
-      fireEvent.drop(rowFor(container, 'f2'))
+      fireEvent.dragOver(dropZoneFor(container, 'g1'))
+      fireEvent.drop(dropZoneFor(container, 'g1'))
       expect(onMoveFeature).toHaveBeenCalledWith('f1', expect.any(Number))
     })
 
-    it('ignores a drop onto a feature in a different project', () => {
+    it('ignores a drop onto a different project than the dragged feature', () => {
       const twoGroups: Group[] = [
         { id: 'gA', name: 'A', cwd: '', collapsed: false, features: [{ id: 'fa', name: 'aa', collapsed: true, terminals: [] }] },
         { id: 'gB', name: 'B', cwd: '', collapsed: false, features: [{ id: 'fb', name: 'bb', collapsed: true, terminals: [] }] }
@@ -242,8 +245,8 @@ describe('Sidebar (3-level)', () => {
       const onMoveFeature = vi.fn()
       const { container } = renderSidebar({ groups: twoGroups, onMoveFeature })
       fireEvent.dragStart(rowFor(container, 'fa'))
-      fireEvent.dragOver(rowFor(container, 'fb'))
-      fireEvent.drop(rowFor(container, 'fb'))
+      fireEvent.dragOver(dropZoneFor(container, 'gB'))
+      fireEvent.drop(dropZoneFor(container, 'gB'))
       expect(onMoveFeature).not.toHaveBeenCalled()
     })
   })
