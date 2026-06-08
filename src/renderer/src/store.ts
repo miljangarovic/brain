@@ -6,7 +6,7 @@ export interface AppState {
   activeGroupId: string | null
   activeFeatureId: string | null
   activeTerminalId: string | null
-  stopped: string[] // terminal ids whose shell is stopped (transient; not persisted)
+  hidden: string[] // terminal ids hidden from the tab bar; their shell keeps running (transient)
 }
 
 // ---- helpers -------------------------------------------------------------
@@ -35,7 +35,7 @@ const selectFeature = (g: Group | null): { featureId: string | null; terminalId:
 export function createInitialState(ws: Workspace = createWorkspace()): AppState {
   const g = ws.groups[0] ?? null
   const sel = selectFeature(g)
-  return { workspace: ws, activeGroupId: g?.id ?? null, activeFeatureId: sel.featureId, activeTerminalId: sel.terminalId, stopped: [] }
+  return { workspace: ws, activeGroupId: g?.id ?? null, activeFeatureId: sel.featureId, activeTerminalId: sel.terminalId, hidden: [] }
 }
 
 // ---- groups --------------------------------------------------------------
@@ -149,7 +149,7 @@ export function renameTerminal(state: AppState, terminalId: string, name: string
 }
 
 export function removeTerminal(state: AppState, terminalId: string): AppState {
-  const stopped = state.stopped.filter((x) => x !== terminalId)
+  const hidden = state.hidden.filter((x) => x !== terminalId)
   let activeTerminalId = state.activeTerminalId
   const workspace = mapGroups(state.workspace, (g) => ({
     ...g,
@@ -159,42 +159,42 @@ export function removeTerminal(state: AppState, terminalId: string): AppState {
       const terminals = f.terminals.filter((t) => t.id !== terminalId)
       if (activeTerminalId === terminalId) {
         const cand = terminals[idx] ?? terminals[idx - 1]
-        const pick = cand && !stopped.includes(cand.id) ? cand : terminals.find((t) => !stopped.includes(t.id))
+        const pick = cand && !hidden.includes(cand.id) ? cand : terminals.find((t) => !hidden.includes(t.id))
         activeTerminalId = pick?.id ?? null
       }
       return { ...f, terminals }
     })
   }))
-  return { ...state, workspace, activeTerminalId, stopped }
+  return { ...state, workspace, activeTerminalId, hidden }
 }
 
-// Stop a terminal's shell but keep its slot (it can be restarted). If it was the
-// active one, move selection to a running sibling.
-export function stopTerminal(state: AppState, terminalId: string): AppState {
-  if (state.stopped.includes(terminalId)) return state
-  const stopped = [...state.stopped, terminalId]
+// Hide a terminal from the tab bar — its shell keeps running (the TerminalView
+// stays mounted). If it was the active one, move selection to a visible sibling.
+export function hideTerminal(state: AppState, terminalId: string): AppState {
+  if (state.hidden.includes(terminalId)) return state
+  const hidden = [...state.hidden, terminalId]
   let activeTerminalId = state.activeTerminalId
   if (activeTerminalId === terminalId) {
     const loc = featureOfTerminal(state.workspace, terminalId)
-    const sib = loc?.feature.terminals.find((t) => t.id !== terminalId && !stopped.includes(t.id))
+    const sib = loc?.feature.terminals.find((t) => t.id !== terminalId && !hidden.includes(t.id))
     activeTerminalId = sib?.id ?? null
   }
-  return { ...state, stopped, activeTerminalId }
+  return { ...state, hidden, activeTerminalId }
 }
 
-// Un-stop a terminal (a fresh shell will spawn on mount) and activate it.
-export function restartTerminal(state: AppState, terminalId: string): AppState {
+// Un-hide a terminal (it reappears as a tab with its preserved shell) and activate it.
+export function showTerminal(state: AppState, terminalId: string): AppState {
   const loc = featureOfTerminal(state.workspace, terminalId)
   return {
     ...state,
-    stopped: state.stopped.filter((x) => x !== terminalId),
+    hidden: state.hidden.filter((x) => x !== terminalId),
     activeGroupId: loc?.group.id ?? state.activeGroupId,
     activeFeatureId: loc?.feature.id ?? state.activeFeatureId,
     activeTerminalId: terminalId
   }
 }
 
-export const isStopped = (s: AppState, terminalId: string): boolean => s.stopped.includes(terminalId)
+export const isHidden = (s: AppState, terminalId: string): boolean => s.hidden.includes(terminalId)
 
 // ---- active selection ----------------------------------------------------
 export function setActiveGroup(state: AppState, groupId: string): AppState {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Sidebar } from './Sidebar'
 import type { Group } from '@shared/types'
@@ -36,7 +36,6 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onDeleteTerminal: noop,
     onOpenInFiles: noop,
     liveAgents: {},
-    stopped: [] as string[],
     ...overrides
   }
   return render(<Sidebar {...props} />)
@@ -124,10 +123,30 @@ describe('Sidebar (3-level)', () => {
     expect(onDeleteTerminal).toHaveBeenCalledWith('t1')
   })
 
-  it('dims a stopped terminal', () => {
-    renderSidebar({ stopped: ['t1'] })
-    const item = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
-    expect(item.className).toContain('opacity-50')
+  it('single click on a group name collapses it (after the click delay)', () => {
+    vi.useFakeTimers()
+    try {
+      const onToggleGroup = vi.fn()
+      renderSidebar({ onToggleGroup })
+      fireEvent.click(screen.getByText('proj'))
+      vi.advanceTimersByTime(250)
+      expect(onToggleGroup).toHaveBeenCalledWith('g1')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('single click on a feature name collapses it (after the click delay)', () => {
+    vi.useFakeTimers()
+    try {
+      const onToggleFeature = vi.fn()
+      renderSidebar({ onToggleFeature })
+      fireEvent.click(screen.getByText('auth'))
+      vi.advanceTimersByTime(250)
+      expect(onToggleFeature).toHaveBeenCalledWith('f1')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('right-click on a group offers Open in Files', async () => {

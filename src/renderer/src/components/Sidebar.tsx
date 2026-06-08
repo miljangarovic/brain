@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Group } from '@shared/types'
 import type { AgentKind } from '../agents'
 import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon, TrashIcon } from './icons'
@@ -25,10 +25,9 @@ export function Sidebar(props: {
   onDeleteFeature: (id: string) => void
   onDeleteTerminal: (id: string) => void
   onOpenInFiles: (groupId: string) => void
-  stopped: string[]
 }) {
   const {
-    groups, activeTerminalId, liveAgents, stopped, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
+    groups, activeTerminalId, liveAgents, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles
   } = props
@@ -58,6 +57,18 @@ export function Sidebar(props: {
     />
   )
 
+  // Single click on a group/feature name collapses it; double click renames.
+  // A short timer disambiguates the two so a dblclick doesn't also fire collapse.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onNameClick = (collapse: () => void) => {
+    if (clickTimer.current) clearTimeout(clickTimer.current)
+    clickTimer.current = setTimeout(() => { clickTimer.current = null; collapse() }, 200)
+  }
+  const onNameDblClick = (rename: () => void) => {
+    if (clickTimer.current) { clearTimeout(clickTimer.current); clickTimer.current = null }
+    rename()
+  }
+
   const [featureDraft, setFeatureDraft] = useState<Record<string, string>>({})
   const submitFeature = (gid: string) => {
     const name = (featureDraft[gid] ?? '').trim()
@@ -81,7 +92,9 @@ export function Sidebar(props: {
                 {g.collapsed ? '▸' : '▾'}
               </button>
               {isEditing('group', g.id) ? renameInput(`Preimenuj grupu ${g.name}`) : (
-                <span className="flex-1 min-w-0 flex items-baseline gap-1.5 cursor-text" onDoubleClick={() => startRename('group', g.id, g.name)}>
+                <span className="flex-1 min-w-0 flex items-baseline gap-1.5 cursor-pointer"
+                  onClick={() => onNameClick(() => onToggleGroup(g.id))}
+                  onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>
                   <span className="truncate text-sm font-semibold text-fg-bright">{g.name}</span>
                   {g.cwd && <span className="truncate text-xs text-fg-muted/70">{g.cwd}</span>}
                 </span>
@@ -98,7 +111,9 @@ export function Sidebar(props: {
                         {f.collapsed ? '▸' : '▾'}
                       </button>
                       {isEditing('feature', f.id) ? renameInput(`Preimenuj feature ${f.name}`) : (
-                        <span className="flex-1 truncate text-sm font-medium text-fg cursor-text" onDoubleClick={() => startRename('feature', f.id, f.name)}>{f.name}</span>
+                        <span className="flex-1 truncate text-sm font-medium text-fg cursor-pointer"
+                          onClick={() => onNameClick(() => onToggleFeature(f.id))}
+                          onDoubleClick={() => onNameDblClick(() => startRename('feature', f.id, f.name))}>{f.name}</span>
                       )}
                       <button aria-label={`Novi terminal u ${f.name}`} title="Novi terminal" onClick={() => onAddTerminal(f.id)} className={`${hoverBtn} text-base leading-none hover:text-accent`}>+</button>
                       <button aria-label={`Novi Claude terminal u ${f.name}`} title="Claude" onClick={() => onLaunchAgent(f.id, 'claude')} className={`${hoverBtn} text-base leading-none`}><ClaudeIcon /></button>
@@ -111,21 +126,16 @@ export function Sidebar(props: {
                       <div className="pl-2">
                         {f.terminals.map((t) => {
                           const active = t.id === activeTerminalId
-                          const isStop = stopped.includes(t.id)
                           return (
                             <div key={t.id} data-term-id={t.id} onClick={() => onSelectTerminal(t.id)}
                               className={`group flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${
-                                active ? 'border-accent bg-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'} ${
-                                isStop ? 'opacity-50' : ''}`}>
-                              <TerminalKindIcon kind={isStop ? 'shell' : (liveAgents[t.id] ?? t.kind ?? 'shell')} className="shrink-0 text-fg-muted" />
+                                active ? 'border-accent bg-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
+                              <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />
                               {isEditing('terminal', t.id)
                                 ? renameInput(`Preimenuj terminal ${t.name}`)
                                 : (
-                                  <span
-                                    className={`flex-1 truncate ${isStop ? 'italic' : ''}`}
-                                    title={isStop ? 'Zaustavljen — klik za ponovno pokretanje' : undefined}
-                                    onDoubleClick={(e) => { e.stopPropagation(); startRename('terminal', t.id, t.name) }}
-                                  >
+                                  <span className="flex-1 truncate"
+                                    onDoubleClick={(e) => { e.stopPropagation(); startRename('terminal', t.id, t.name) }}>
                                     {t.name}
                                   </span>
                                 )}
