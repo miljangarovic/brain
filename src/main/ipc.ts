@@ -42,5 +42,19 @@ export function registerIpc(opts: {
   })
   ipcMain.on(IPC.shellOpenPath, (_e, p: { path: string }) => { void shell.openPath(p.path || os.homedir()) })
 
+  // Poll each PTY's foreground process name; push changes so the renderer can
+  // show a live agent icon (claude/codex) and revert it when the agent exits.
+  const lastProc = new Map<string, string>()
+  setInterval(() => {
+    const win = getWin()
+    if (!win || win.isDestroyed()) return
+    for (const { id, process } of ptyManager.snapshotProcesses()) {
+      if (lastProc.get(id) !== process) {
+        lastProc.set(id, process)
+        win.webContents.send(IPC.ptyProc, { id, process })
+      }
+    }
+  }, 1000)
+
   return saver
 }
