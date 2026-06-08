@@ -4,7 +4,7 @@ import { useStore } from './useStore'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
-  addTerminal, renameTerminal, removeTerminal,
+  addTerminal, renameTerminal, removeTerminal, stopTerminal, restartTerminal, isStopped,
   setActiveTerminal,
   getActiveGroup, getActiveFeature, allTerminals
 } from './store'
@@ -15,11 +15,14 @@ import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { TerminalView } from './components/TerminalView'
 import { NewGroupDialog, NewGroupInput } from './components/NewGroupDialog'
+import { ConfirmDialog } from './components/ConfirmDialog'
 
 export default function App() {
   const { state, setState, apply } = useStore()
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [confirm, setConfirm] = useState<{ message: string; action: () => void } | null>(null)
+  const askDelete = (message: string, action: () => void) => setConfirm({ message, action })
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
     return window.terminaltor.onPtyProc((id, process) => {
@@ -44,9 +47,9 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {           // turn off active terminal (keeps slot)
         e.preventDefault()
-        if (state.activeTerminalId) apply((s) => removeTerminal(s, state.activeTerminalId!))
+        if (state.activeTerminalId) apply((s) => stopTerminal(s, state.activeTerminalId!))
       } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyG') {
         e.preventDefault()
         if (state.activeFeatureId) apply((s) => toggleFeatureViewMode(s, state.activeFeatureId!))
@@ -58,9 +61,10 @@ export default function App() {
     }
     const cycleTab = (dir: number) => {
       const f = getActiveFeature(state)
-      if (!f || f.terminals.length === 0) return
-      const idx = f.terminals.findIndex((t) => t.id === state.activeTerminalId)
-      const next = f.terminals[(idx + dir + f.terminals.length) % f.terminals.length]
+      const running = f?.terminals.filter((t) => !state.stopped.includes(t.id)) ?? []
+      if (running.length === 0) return
+      const idx = running.findIndex((t) => t.id === state.activeTerminalId)
+      const next = running[(idx + dir + running.length) % running.length]
       apply((s) => setActiveTerminal(s, next.id))
     }
     window.addEventListener('keydown', onKey)
@@ -76,10 +80,13 @@ export default function App() {
     setGroupDialogOpen(false)
   }
 
-  const terminals = allTerminals(state)
+  // Only RUNNING terminals get a live TerminalView/PTY; stopped ones keep their slot.
+  const isRunning = (id: string) => !state.stopped.includes(id)
+  const terminals = allTerminals(state).filter((t) => isRunning(t.id))
+  const featureRunning = (activeFeature?.terminals ?? []).filter((t) => isRunning(t.id))
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
-  const featureTerminalIds = new Set((activeFeature?.terminals ?? []).map((t) => t.id))
-  const { cols, rows } = gridDimensions(featureTerminalIds.size)
+  const featureTerminalIds = new Set(featureRunning.map((t) => t.id))
+  const { cols, rows } = gridDimensions(featureRunning.length)
 
   return (
     <div className="flex h-screen text-fg bg-panel">
@@ -87,7 +94,8 @@ export default function App() {
         groups={state.workspace.groups}
         activeTerminalId={state.activeTerminalId}
         liveAgents={liveAgents}
-        onSelectTerminal={(id) => apply((s) => setActiveTerminal(s, id))}
+        stopped={state.stopped}
+        onSelectTerminal={(id) => apply((s) => (isStopped(s, id) ? restartTerminal(s, id) : setActiveTerminal(s, id)))}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
         onAddGroup={() => setGroupDialogOpen(true)}
@@ -98,8 +106,18 @@ export default function App() {
         onRenameGroup={(id, name) => apply((s) => renameGroup(s, id, name))}
         onRenameFeature={(id, name) => apply((s) => renameFeature(s, id, name))}
         onRenameTerminal={(id, name) => apply((s) => renameTerminal(s, id, name))}
-        onDeleteGroup={(id) => apply((s) => deleteGroup(s, id))}
-        onDeleteFeature={(id) => apply((s) => deleteFeature(s, id))}
+        onDeleteGroup={(id) => {
+          const g = state.workspace.groups.find((x) => x.id === id)
+          askDelete(`Obrisati grupu "${g?.name ?? ''}"? Svi feature-i i terminali u njoj se zatvaraju.`, () => apply((s) => deleteGroup(s, id)))
+        }}
+        onDeleteFeature={(id) => {
+          const f = state.workspace.groups.flatMap((g) => g.features).find((x) => x.id === id)
+          askDelete(`Obrisati feature "${f?.name ?? ''}"? Terminali u njemu se zatvaraju.`, () => apply((s) => deleteFeature(s, id)))
+        }}
+        onDeleteTerminal={(id) => {
+          const t = allTerminals(state).find((x) => x.id === id)
+          askDelete(`Obrisati terminal "${t?.name ?? ''}"?`, () => apply((s) => removeTerminal(s, id)))
+        }}
         onOpenInFiles={(gid) => {
           const g = state.workspace.groups.find((x) => x.id === gid)
           window.terminaltor.openPath(g?.cwd ?? '')
@@ -108,12 +126,12 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <TabBar
-          terminals={activeFeature?.terminals ?? []}
+          terminals={featureRunning}
           activeId={state.activeTerminalId}
           liveAgents={liveAgents}
           viewMode={activeFeature?.viewMode ?? 'tabs'}
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
-          onClose={(id) => apply((s) => removeTerminal(s, id))}
+          onClose={(id) => apply((s) => stopTerminal(s, id))}
           onAdd={() => { if (activeFeature) apply((s) => addTerminal(s, activeFeature.id, { name: 'shell' })) }}
           onLaunch={(kind) => { if (activeFeature) launchAgent(activeFeature.id, kind) }}
           onToggleView={() => { if (activeFeature) apply((s) => toggleFeatureViewMode(s, activeFeature.id)) }}
@@ -126,7 +144,7 @@ export default function App() {
           {terminals.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
               <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
-              <span className="text-sm">{activeGroup ? 'Dodaj terminal u feature.' : 'Napravi grupu da počneš.'}</span>
+              <span className="text-sm">{activeGroup ? 'Dodaj ili pokreni terminal.' : 'Napravi grupu da počneš.'}</span>
             </div>
           )}
           {terminals.map((t) => {
@@ -151,6 +169,13 @@ export default function App() {
       </div>
 
       {groupDialogOpen && <NewGroupDialog onCreate={createGroup} onCancel={() => setGroupDialogOpen(false)} />}
+      {confirm && (
+        <ConfirmDialog
+          message={confirm.message}
+          onConfirm={() => { confirm.action(); setConfirm(null) }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
     </div>
   )
 }

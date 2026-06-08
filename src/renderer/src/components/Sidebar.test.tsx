@@ -33,8 +33,10 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onRenameTerminal: noop,
     onDeleteGroup: noop,
     onDeleteFeature: noop,
+    onDeleteTerminal: noop,
     onOpenInFiles: noop,
     liveAgents: {},
+    stopped: [] as string[],
     ...overrides
   }
   return render(<Sidebar {...props} />)
@@ -113,6 +115,19 @@ describe('Sidebar (3-level)', () => {
     await userEvent.clear(screen.getByLabelText('Preimenuj terminal claude'))
     await userEvent.type(screen.getByLabelText('Preimenuj terminal claude'), 'c2{Enter}')
     expect(onRenameTerminal).toHaveBeenCalledWith('t1', 'c2')
+  })
+
+  it('deletes a terminal via its hover trash button', async () => {
+    const onDeleteTerminal = vi.fn()
+    renderSidebar({ onDeleteTerminal })
+    await userEvent.click(screen.getByLabelText('Obriši terminal claude'))
+    expect(onDeleteTerminal).toHaveBeenCalledWith('t1')
+  })
+
+  it('dims a stopped terminal', () => {
+    renderSidebar({ stopped: ['t1'] })
+    const item = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
+    expect(item.className).toContain('opacity-50')
   })
 
   it('right-click on a group offers Open in Files', async () => {
