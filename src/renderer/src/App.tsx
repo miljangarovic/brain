@@ -5,7 +5,7 @@ import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
-  setActiveTerminal,
+  setActiveTerminal, setActiveFeature,
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, findReviewerFor, allTerminals
 } from './store'
 import { migrateWorkspace } from './migrate'
@@ -15,6 +15,7 @@ import { useReview } from './review/useReview'
 import { gridDimensions } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
+import { FeatureHeader } from './components/FeatureHeader'
 import { TerminalView } from './components/TerminalView'
 import { NewGroupDialog, NewGroupInput } from './components/NewGroupDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
@@ -128,7 +129,7 @@ export default function App() {
         onAddFeature={(gid, name) => apply((s) => addFeature(s, gid, name))}
         onAddTerminal={(fid) => apply((s) => addTerminal(s, fid, { name: 'shell' }))}
         onLaunchAgent={launchAgent}
-        onToggleFeatureView={(fid) => apply((s) => toggleFeatureViewMode(s, fid))}
+        onToggleFeatureView={(fid) => apply((s) => toggleFeatureViewMode(setActiveFeature(s, fid), fid))}
         onRenameGroup={(id, name) => apply((s) => renameGroup(s, id, name))}
         onRenameFeature={(id, name) => apply((s) => renameFeature(s, id, name))}
         onRenameTerminal={(id, name) => apply((s) => renameTerminal(s, id, name))}
@@ -153,22 +154,28 @@ export default function App() {
       />
 
       <div className="flex-1 flex flex-col min-w-0">
+        {activeFeature && (
+          <FeatureHeader
+            featureName={activeFeature.name}
+            viewMode={activeFeature.viewMode ?? 'tabs'}
+            onToggleView={() => apply((s) => toggleFeatureViewMode(s, activeFeature.id))}
+            onAdd={(kind) => (kind === 'shell'
+              ? apply((s) => addTerminal(s, activeFeature.id, { name: 'shell' }))
+              : launchAgent(activeFeature.id, kind))}
+            relay={relayFlags}
+            onReturnToOrigin={() => { if (activeTerminal) void review.relayToOrigin(activeTerminal.id) }}
+            onReReview={() => { if (activeTerminal) void review.reReview(activeTerminal.id) }}
+            onMarkApplied={() => { if (activeTerminal) review.markApplied(activeTerminal.id) }}
+          />
+        )}
         <TabBar
           terminals={featureVisible}
           activeId={state.activeTerminalId}
           liveAgents={liveAgents}
-          viewMode={activeFeature?.viewMode ?? 'tabs'}
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
           onClose={(id) => apply((s) => hideTerminal(s, id))}
-          onAdd={() => { if (activeFeature) apply((s) => addTerminal(s, activeFeature.id, { name: 'shell' })) }}
-          onLaunch={(kind) => { if (activeFeature) launchAgent(activeFeature.id, kind) }}
-          onToggleView={() => { if (activeFeature) apply((s) => toggleFeatureViewMode(s, activeFeature.id)) }}
           reviewStatus={reviewStatus}
           onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
-          relay={relayFlags}
-          onReturnToOrigin={() => { if (activeTerminal) void review.relayToOrigin(activeTerminal.id) }}
-          onReReview={() => { if (activeTerminal) void review.reReview(activeTerminal.id) }}
-          onMarkApplied={() => { if (activeTerminal) review.markApplied(activeTerminal.id) }}
         />
 
         <div

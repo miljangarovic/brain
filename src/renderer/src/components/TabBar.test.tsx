@@ -11,20 +11,16 @@ const terms: Terminal[] = [
 ]
 function noop() {}
 
-// Defaults for the review/relay props added in V5; spread into each render so
+// Defaults for the review props; spread into each render so
 // existing assertions stay focused on the behavior under test.
 const reviewProps = {
   reviewStatus: {},
   onReviewTerminal: noop,
-  relay: { canReturn: false, canReReview: false, canMarkApplied: false },
-  onReturnToOrigin: noop,
-  onReReview: noop,
-  onMarkApplied: noop
 }
 
 describe('TabBar', () => {
   it('renders a tab per terminal and marks the active one', () => {
-    render(<TabBar terminals={terms} activeId="a" viewMode="tabs" liveAgents={{}} onToggleView={noop} onSelect={noop} onClose={noop} onAdd={noop} onLaunch={noop} {...reviewProps} />)
+    render(<TabBar terminals={terms} activeId="a" liveAgents={{}} onSelect={noop} onClose={noop} {...reviewProps} />)
     expect(screen.getByText('claude-api')).toBeInTheDocument()
     expect(screen.getByText('tests')).toBeInTheDocument()
     expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('claude-api')
@@ -32,7 +28,7 @@ describe('TabBar', () => {
 
   it('calls onSelect when a tab is clicked', async () => {
     const onSelect = vi.fn()
-    render(<TabBar terminals={terms} activeId="a" viewMode="tabs" liveAgents={{}} onToggleView={noop} onSelect={onSelect} onClose={noop} onAdd={noop} onLaunch={noop} {...reviewProps} />)
+    render(<TabBar terminals={terms} activeId="a" liveAgents={{}} onSelect={onSelect} onClose={noop} {...reviewProps} />)
     await userEvent.click(screen.getByText('tests'))
     expect(onSelect).toHaveBeenCalledWith('b')
   })
@@ -40,53 +36,23 @@ describe('TabBar', () => {
   it('calls onClose without selecting when the × is clicked', async () => {
     const onSelect = vi.fn()
     const onClose = vi.fn()
-    render(<TabBar terminals={terms} activeId="a" viewMode="tabs" liveAgents={{}} onToggleView={noop} onSelect={onSelect} onClose={onClose} onAdd={noop} onLaunch={noop} {...reviewProps} />)
+    render(<TabBar terminals={terms} activeId="a" liveAgents={{}} onSelect={onSelect} onClose={onClose} {...reviewProps} />)
     await userEvent.click(screen.getByLabelText('Zatvori tests'))
     expect(onClose).toHaveBeenCalledWith('b')
     expect(onSelect).not.toHaveBeenCalled()
   })
 
-  it('calls onAdd when + is clicked', async () => {
-    const onAdd = vi.fn()
-    render(<TabBar terminals={terms} activeId="a" viewMode="tabs" liveAgents={{}} onToggleView={noop} onSelect={noop} onClose={noop} onAdd={onAdd} onLaunch={noop} {...reviewProps} />)
-    await userEvent.click(screen.getByLabelText('Novi terminal'))
-    expect(onAdd).toHaveBeenCalled()
-  })
-
-  it('launches an agent via its quick button', async () => {
-    const onLaunch = vi.fn()
-    render(<TabBar terminals={terms} activeId="a" viewMode="tabs" liveAgents={{}} onToggleView={noop} onSelect={noop} onClose={noop} onAdd={noop} onLaunch={onLaunch} {...reviewProps} />)
-    await userEvent.click(screen.getByLabelText('Novi Claude terminal'))
-    expect(onLaunch).toHaveBeenCalledWith('claude')
-    await userEvent.click(screen.getByLabelText('Novi Codex terminal'))
-    expect(onLaunch).toHaveBeenCalledWith('codex')
-  })
-
   it('shows the kind icon on an agent tab', () => {
     const agentTerms: Terminal[] = [{ id: 'a', name: 'claude', cwd: '', kind: 'claude' }]
-    render(<TabBar terminals={agentTerms} activeId="a" viewMode="tabs" liveAgents={{}} onToggleView={noop} onSelect={noop} onClose={noop} onAdd={noop} onLaunch={noop} {...reviewProps} />)
+    render(<TabBar terminals={agentTerms} activeId="a" liveAgents={{}} onSelect={noop} onClose={noop} {...reviewProps} />)
     const tab = screen.getByRole('tab')
     expect(within(tab).getByTestId('icon-claude')).toBeInTheDocument()
   })
 
-  it('toggles the view when the grid button is clicked', async () => {
-    const onToggleView = vi.fn()
-    render(<TabBar terminals={terms} activeId="a" viewMode="tabs" liveAgents={{}} onToggleView={onToggleView}
-      onSelect={noop} onClose={noop} onAdd={noop} onLaunch={noop} {...reviewProps} />)
-    await userEvent.click(screen.getByLabelText('Grid prikaz'))
-    expect(onToggleView).toHaveBeenCalled()
-  })
-
-  it('labels the toggle for switching back when already in grid', () => {
-    render(<TabBar terminals={terms} activeId="a" viewMode="grid" liveAgents={{}} onToggleView={noop}
-      onSelect={noop} onClose={noop} onAdd={noop} onLaunch={noop} {...reviewProps} />)
-    expect(screen.getByLabelText('Tabs prikaz')).toBeInTheDocument()
-  })
-
   it('a live agent overrides the tab icon', () => {
     const t = [{ id: 'a', name: 'work', cwd: '' }]
-    render(<TabBar terminals={t} activeId="a" viewMode="tabs" liveAgents={{ a: 'claude' }}
-      onSelect={noop} onClose={noop} onAdd={noop} onLaunch={noop} onToggleView={noop} {...reviewProps} />)
+    render(<TabBar terminals={t} activeId="a" liveAgents={{ a: 'claude' }}
+      onSelect={noop} onClose={noop} {...reviewProps} />)
     const tab = screen.getByRole('tab')
     expect(within(tab).getByTestId('icon-claude')).toBeInTheDocument()
   })

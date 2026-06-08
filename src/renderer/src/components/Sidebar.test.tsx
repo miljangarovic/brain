@@ -75,19 +75,22 @@ describe('Sidebar (3-level)', () => {
     expect(onAddFeature).toHaveBeenCalledWith('g1', 'payments')
   })
 
-  it('adds a terminal to a feature via the hover + button', async () => {
+  it('adds a terminal to a feature via the AddMenuButton', async () => {
     const onAddTerminal = vi.fn()
     renderSidebar({ onAddTerminal })
-    await userEvent.click(screen.getByLabelText('Novi terminal u auth'))
+    await userEvent.click(screen.getByLabelText('Dodaj u auth'))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Terminal' }))
     expect(onAddTerminal).toHaveBeenCalledWith('f1')
   })
 
-  it('launches claude/codex into a feature', async () => {
+  it('launches claude/codex into a feature via the AddMenuButton', async () => {
     const onLaunchAgent = vi.fn()
     renderSidebar({ onLaunchAgent })
-    await userEvent.click(screen.getByLabelText('Novi Claude terminal u auth'))
+    await userEvent.click(screen.getByLabelText('Dodaj u auth'))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
     expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'claude')
-    await userEvent.click(screen.getByLabelText('Novi Codex terminal u auth'))
+    await userEvent.click(screen.getByLabelText('Dodaj u auth'))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
     expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
   })
 
