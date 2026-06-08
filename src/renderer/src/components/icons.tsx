@@ -42,6 +42,21 @@ export function ShellIcon({ className }: IconProps) {
   )
 }
 
+export function GridIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-grid" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
+    >
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.2" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.2" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.2" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.2" />
+    </svg>
+  )
+}
+
 export function TerminalKindIcon({ kind, className }: { kind: TerminalKind; className?: string }) {
   if (kind === 'claude') return <ClaudeIcon className={className} />
   if (kind === 'codex') return <CodexIcon className={className} />

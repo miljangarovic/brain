@@ -41,6 +41,18 @@ export function toggleGroupCollapsed(state: AppState, groupId: string): AppState
   }
 }
 
+export function toggleGroupViewMode(state: AppState, groupId: string): AppState {
+  return {
+    ...state,
+    workspace: {
+      groups: state.workspace.groups.map(g =>
+        g.id === groupId
+          ? { ...g, viewMode: (g.viewMode ?? 'tabs') === 'tabs' ? 'grid' : 'tabs' }
+          : g)
+    }
+  }
+}
+
 export function deleteGroup(state: AppState, groupId: string): AppState {
   const groups = state.workspace.groups.filter(g => g.id !== groupId)
   let { activeGroupId, activeTerminalId } = state

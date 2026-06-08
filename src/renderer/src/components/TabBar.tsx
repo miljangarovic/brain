@@ -1,17 +1,19 @@
 // src/renderer/src/components/TabBar.tsx
 import type { Terminal } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, ClaudeIcon, CodexIcon } from './icons'
+import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon } from './icons'
 
 export function TabBar({
-  terminals, activeId, onSelect, onClose, onAdd, onLaunch
+  terminals, activeId, viewMode, onSelect, onClose, onAdd, onLaunch, onToggleView
 }: {
   terminals: Terminal[]
   activeId: string | null
+  viewMode: 'tabs' | 'grid'
   onSelect: (id: string) => void
   onClose: (id: string) => void
   onAdd: () => void
   onLaunch: (kind: AgentKind) => void
+  onToggleView: () => void
 }) {
   return (
     <div role="tablist" className="flex items-stretch gap-px h-9 px-2 bg-panel border-b border-line overflow-x-auto">
@@ -41,6 +43,15 @@ export function TabBar({
         )
       })}
       <div className="ml-1 self-center flex items-center gap-0.5 text-base leading-none">
+        <button
+          aria-label={viewMode === 'grid' ? 'Tabs prikaz' : 'Grid prikaz'}
+          aria-pressed={viewMode === 'grid'}
+          title={viewMode === 'grid' ? 'Prebaci na tabove' : 'Prebaci na grid'}
+          onClick={onToggleView}
+          className={`px-1.5 transition-colors ${viewMode === 'grid' ? 'text-accent' : 'text-fg-muted hover:text-accent'}`}
+        >
+          <GridIcon />
+        </button>
         <button
           aria-label="Novi terminal"
           onClick={onAdd}

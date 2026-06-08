@@ -12,6 +12,13 @@ npm run dev       # pokreni aplikaciju
 npm test          # unit testovi
 ```
 
+## Pakovanje
+
+```bash
+npm run dist      # pravi instalere (Linux AppImage/.deb; mac dmg/zip; win nsis) u release/
+npm run dist:dir  # samo raspakovan build (bez instalera), za brzu provjeru
+```
+
 ## Prečice
 
 - `Ctrl+Shift+T` — novi terminal u aktivnoj grupi
