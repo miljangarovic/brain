@@ -19,7 +19,8 @@ export const nodePtySpawner: PtySpawner = ({ shell, cwd, cols, rows }) => {
     resize: (c, r) => { try { proc.resize(c, r) } catch { /* pty may have exited */ } },
     kill: () => { try { proc.kill() } catch { /* already gone */ } },
     onData: (cb) => { proc.onData(cb) },
-    onExit: (cb) => { proc.onExit(({ exitCode }) => cb(exitCode)) }
+    onExit: (cb) => { proc.onExit(({ exitCode }) => cb(exitCode)) },
+    processName: () => proc.process ?? ''
   }
   return handle
 }

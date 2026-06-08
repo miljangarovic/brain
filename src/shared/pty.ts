@@ -13,6 +13,7 @@ export interface PtyHandle {
   kill(): void
   onData(cb: (data: string) => void): void
   onExit(cb: (exitCode: number) => void): void
+  processName(): string
 }
 
 export type PtySpawner = (opts: {

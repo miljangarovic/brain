@@ -28,4 +28,8 @@ export class PtyManager {
     if (h) { h.kill(); this.handles.delete(id) }
   }
   has(id: string): boolean { return this.handles.has(id) }
+
+  snapshotProcesses(): { id: string; process: string }[] {
+    return Array.from(this.handles.entries()).map(([id, h]) => ({ id, process: h.processName() }))
+  }
 }

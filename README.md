@@ -40,6 +40,12 @@ Grupa (sa radnim direktorijumom) → Feature → Terminal. Terminal nasljeđuje 
 grupe. Dvoklik na ime grupe/feature-a/terminala ga preimenuje. Tabovi i grid
 prikaz važe po aktivnom feature-u.
 
+## Native
+
+- **Browse…** u dijalogu nove grupe bira radni direktorijum nativnim pickerom.
+- **Desni klik na grupu** → Preimenuj / Open in Files (otvori cwd u file manageru).
+- Ikonica terminala se uživo mijenja kad `claude`/`codex` radi (i vraća kad izađe).
+
 ## Perzistencija
 
 Struktura (grupe + terminali + cwd + startup komanda) čuva se u

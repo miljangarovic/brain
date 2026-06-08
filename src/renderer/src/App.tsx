@@ -9,7 +9,7 @@ import {
   getActiveGroup, getActiveFeature, allTerminals
 } from './store'
 import { migrateWorkspace } from './migrate'
-import { AGENTS, type AgentKind } from './agents'
+import { AGENTS, detectAgent, type AgentKind } from './agents'
 import { gridDimensions } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
@@ -20,6 +20,12 @@ export default function App() {
   const { state, setState, apply } = useStore()
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
+  useEffect(() => {
+    return window.terminaltor.onPtyProc((id, process) => {
+      setLiveAgents((m) => ({ ...m, [id]: detectAgent(process) ?? undefined }))
+    })
+  }, [])
 
   useEffect(() => {
     window.terminaltor.loadWorkspace().then((ws) => {
@@ -80,6 +86,7 @@ export default function App() {
       <Sidebar
         groups={state.workspace.groups}
         activeTerminalId={state.activeTerminalId}
+        liveAgents={liveAgents}
         onSelectTerminal={(id) => apply((s) => setActiveTerminal(s, id))}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
@@ -93,12 +100,17 @@ export default function App() {
         onRenameTerminal={(id, name) => apply((s) => renameTerminal(s, id, name))}
         onDeleteGroup={(id) => apply((s) => deleteGroup(s, id))}
         onDeleteFeature={(id) => apply((s) => deleteFeature(s, id))}
+        onOpenInFiles={(gid) => {
+          const g = state.workspace.groups.find((x) => x.id === gid)
+          window.terminaltor.openPath(g?.cwd ?? '')
+        }}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
         <TabBar
           terminals={activeFeature?.terminals ?? []}
           activeId={state.activeTerminalId}
+          liveAgents={liveAgents}
           viewMode={activeFeature?.viewMode ?? 'tabs'}
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
           onClose={(id) => apply((s) => removeTerminal(s, id))}

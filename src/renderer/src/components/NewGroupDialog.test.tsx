@@ -29,4 +29,16 @@ describe('NewGroupDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Otkaži' }))
     expect(onCancel).toHaveBeenCalled()
   })
+
+  it('fills cwd from the native folder picker', async () => {
+    ;(window as unknown as { terminaltor: { pickDirectory: () => Promise<string | null> } }).terminaltor = {
+      pickDirectory: vi.fn().mockResolvedValue('/picked/dir')
+    }
+    const onCreate = vi.fn()
+    render(<NewGroupDialog onCreate={onCreate} onCancel={() => {}} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Browse…' }))
+    await userEvent.type(screen.getByLabelText('Ime grupe'), 'g')
+    await userEvent.click(screen.getByRole('button', { name: 'Kreiraj' }))
+    expect(onCreate).toHaveBeenCalledWith({ name: 'g', cwd: '/picked/dir' })
+  })
 })

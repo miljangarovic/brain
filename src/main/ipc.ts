@@ -1,5 +1,6 @@
 // src/main/ipc.ts
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, dialog, shell } from 'electron'
+import * as os from 'os'
 import { IPC } from '@shared/ipc'
 import { PtyManager } from './ptyManager'
 import { loadWorkspace, createDebouncedSaver } from './persistence'
@@ -31,6 +32,32 @@ export function registerIpc(opts: {
   ipcMain.on(IPC.ptyInput, (_e, p: { id: string; data: string }) => ptyManager.write(p.id, p.data))
   ipcMain.on(IPC.ptyResize, (_e, p: { id: string; cols: number; rows: number }) => ptyManager.resize(p.id, p.cols, p.rows))
   ipcMain.on(IPC.ptyKill, (_e, p: { id: string }) => ptyManager.kill(p.id))
+
+  ipcMain.handle(IPC.dialogPickDirectory, async () => {
+    const win = getWin()
+    const res = win
+      ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+      : await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+  })
+  ipcMain.on(IPC.shellOpenPath, (_e, p: { path: string }) => { void shell.openPath(p.path || os.homedir()) })
+
+  // Poll each PTY's foreground process name; push changes so the renderer can
+  // show a live agent icon (claude/codex) and revert it when the agent exits.
+  const lastProc = new Map<string, string>()
+  setInterval(() => {
+    const win = getWin()
+    if (!win || win.isDestroyed()) return
+    const snap = ptyManager.snapshotProcesses()
+    const live = new Set(snap.map((s) => s.id))
+    for (const id of lastProc.keys()) if (!live.has(id)) lastProc.delete(id) // drop dead terminals
+    for (const { id, process } of snap) {
+      if (lastProc.get(id) !== process) {
+        lastProc.set(id, process)
+        win.webContents.send(IPC.ptyProc, { id, process })
+      }
+    }
+  }, 1000)
 
   return saver
 }

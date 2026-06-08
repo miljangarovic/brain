@@ -10,4 +10,7 @@ export interface TerminaltorApi {
   killPty(id: string): void
   onPtyData(cb: (id: string, data: string) => void): () => void
   onPtyExit(cb: (id: string, code: number) => void): () => void
+  pickDirectory(): Promise<string | null>
+  openPath(path: string): void
+  onPtyProc(cb: (id: string, process: string) => void): () => void
 }

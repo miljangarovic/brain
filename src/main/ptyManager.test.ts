@@ -14,6 +14,7 @@ function makeFake() {
       kill: () => { handle.killed = true },
       onData: (cb) => { dataCb = cb },
       onExit: (cb) => { exitCb = cb },
+      processName: () => 'bash',
       emitData: (d) => dataCb(d),
       emitExit: (c) => exitCb(c)
     }
@@ -89,5 +90,16 @@ describe('PtyManager', () => {
       m.resize('ghost', 10, 10)
       m.kill('ghost')
     }).not.toThrow()
+  })
+
+  it('snapshotProcesses lists the foreground process per live terminal', () => {
+    const { spawner } = makeFake()
+    const m = new PtyManager(spawner)
+    m.create({ id: 't1', cwd: '', shell: '', cols: 80, rows: 24 })
+    m.create({ id: 't2', cwd: '', shell: '', cols: 80, rows: 24 })
+    expect(m.snapshotProcesses()).toEqual([
+      { id: 't1', process: 'bash' },
+      { id: 't2', process: 'bash' }
+    ])
   })
 })
