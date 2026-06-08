@@ -6,5 +6,8 @@ export const IPC = {
   ptyResize: 'pty:resize',
   ptyKill: 'pty:kill',
   ptyData: 'pty:data',
-  ptyExit: 'pty:exit'
+  ptyExit: 'pty:exit',
+  dialogPickDirectory: 'dialog:pickDirectory',
+  shellOpenPath: 'shell:openPath',
+  ptyProc: 'pty:proc'
 } as const

@@ -20,7 +20,14 @@ const api: TerminaltorApi = {
     const listener = (_e: Electron.IpcRendererEvent, p: { id: string; code: number }) => cb(p.id, p.code)
     ipcRenderer.on(IPC.ptyExit, listener)
     return () => ipcRenderer.removeListener(IPC.ptyExit, listener)
-  }
+  },
+  pickDirectory: () => ipcRenderer.invoke(IPC.dialogPickDirectory) as Promise<string | null>,
+  openPath: (path: string) => ipcRenderer.send(IPC.shellOpenPath, { path }),
+  onPtyProc: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: { id: string; process: string }) => cb(p.id, p.process)
+    ipcRenderer.on(IPC.ptyProc, listener)
+    return () => ipcRenderer.removeListener(IPC.ptyProc, listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('terminaltor', api)
