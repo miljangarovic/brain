@@ -58,12 +58,15 @@ export function Sidebar(props: {
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; terminalId: string } | null>(null)
 
   // Feature drag-and-drop reorder (within the same group only). The whole feature
-  // row is draggable; `drag` holds the active drag, `dropAt` drives the
-  // insertion-line indicator. A plain click/double-click still collapses/renames
-  // (HTML5 drag only starts once the pointer actually moves).
-  const [drag, setDrag] = useState<{ featureId: string; groupId: string } | null>(null)
+  // row is draggable. The active drag lives in a ref (read synchronously in
+  // dragover/drop so `preventDefault` is never skipped by a stale closure — that
+  // is what makes the drop reliably accepted). `drag`/`dropAt` are state only for
+  // the visuals (dimming the dragged row, the insertion-line indicator). A plain
+  // click/double-click still collapses/renames (HTML5 drag starts only on move).
+  const dragRef = useRef<{ featureId: string; groupId: string } | null>(null)
+  const [drag, setDrag] = useState<{ featureId: string } | null>(null)
   const [dropAt, setDropAt] = useState<{ featureId: string; below: boolean } | null>(null)
-  const clearDrag = () => { setDrag(null); setDropAt(null) }
+  const clearDrag = () => { dragRef.current = null; setDrag(null); setDropAt(null) }
 
   // Resizable width, persisted across reloads. Dragging the right-edge handle
   // sets the width to the cursor's x (the sidebar is flush against the left edge).
@@ -164,28 +167,33 @@ export function Sidebar(props: {
               <div className="pl-3">
                 {g.features.map((f) => (
                   <div key={f.id}>
-                    {dropAt?.featureId === f.id && !dropAt.below && <div className="mx-2 h-0.5 rounded bg-accent" />}
                     <div
                       data-feature-id={f.id}
-                      className={`group flex items-center gap-1 px-2 py-1 hover:bg-hover ${drag?.featureId === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      className={`relative group flex items-center gap-1 px-2 py-1 hover:bg-hover ${drag?.featureId === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
                       draggable={!isEditing('feature', f.id)}
-                      onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; setDrag({ featureId: f.id, groupId: g.id }) }}
+                      onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { featureId: f.id, groupId: g.id }; setDrag({ featureId: f.id }) }}
                       onDragEnd={clearDrag}
                       onDragOver={(e) => {
-                        if (!drag || drag.groupId !== g.id) return
+                        const d = dragRef.current
+                        if (!d || d.groupId !== g.id) return
                         e.preventDefault()
+                        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
                         const r = e.currentTarget.getBoundingClientRect()
                         setDropAt({ featureId: f.id, below: e.clientY > r.top + r.height / 2 })
                       }}
                       onDrop={(e) => {
-                        if (!drag || drag.groupId !== g.id) { clearDrag(); return }
+                        const d = dragRef.current
+                        if (!d || d.groupId !== g.id) { clearDrag(); return }
                         e.preventDefault()
                         const r = e.currentTarget.getBoundingClientRect()
                         const below = e.clientY > r.top + r.height / 2
-                        if (drag.featureId !== f.id) onMoveFeature(drag.featureId, featureDropIndex(g.features, f.id, below, drag.featureId))
+                        if (d.featureId !== f.id) onMoveFeature(d.featureId, featureDropIndex(g.features, f.id, below, d.featureId))
                         clearDrag()
                       }}
                     >
+                      {dropAt?.featureId === f.id && (
+                        <div className={`pointer-events-none absolute inset-x-1 h-0.5 rounded bg-accent ${dropAt.below ? 'bottom-0' : 'top-0'}`} />
+                      )}
                       <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className="w-4 text-fg-muted hover:text-fg">
                         {f.collapsed ? '▸' : '▾'}
                       </button>
@@ -203,7 +211,6 @@ export function Sidebar(props: {
                       <button aria-label={`Grid view ${f.name}`} title="Grid" onClick={() => onToggleFeatureView(f.id)} className={`${hoverBtn} ${(f.viewMode ?? 'tabs') === 'grid' ? 'text-accent opacity-100' : ''}`}><GridIcon /></button>
                       <button aria-label={`Delete feature ${f.name}`} title="Delete feature" onClick={() => onDeleteFeature(f.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
                     </div>
-                    {dropAt?.featureId === f.id && dropAt.below && <div className="mx-2 h-0.5 rounded bg-accent" />}
 
                     {!f.collapsed && (
                       <div className="pl-2">
