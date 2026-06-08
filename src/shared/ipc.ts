@@ -15,5 +15,6 @@ export const IPC = {
   reviewResolveDir: 'review:resolveDir',
   fsWatch: 'fs:watch',
   fsUnwatch: 'fs:unwatch',
-  fsChanged: 'fs:changed'
+  fsChanged: 'fs:changed',
+  ptyBusy: 'pty:busy'
 } as const

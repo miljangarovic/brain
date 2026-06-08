@@ -13,6 +13,7 @@ export interface TerminaltorApi {
   pickDirectory(): Promise<string | null>
   openPath(path: string): void
   onPtyProc(cb: (id: string, process: string) => void): () => void
+  onPtyBusy(cb: (id: string, busy: boolean) => void): () => void
   pickFile(opts?: { defaultPath?: string }): Promise<string | null>
   suggestSpec(cwd: string): Promise<string | null>
   resolveReviewDir(originTerminalId: string, round: number): Promise<{ reviewDir: string; reviewFile: string }>
