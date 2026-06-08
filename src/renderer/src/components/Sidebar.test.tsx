@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Sidebar } from './Sidebar'
+import { Sidebar, insertionFromMidpoints, reorderToIndex } from './Sidebar'
 import type { Group } from '@shared/types'
 
 const groups: Group[] = [
@@ -28,6 +28,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onAddTerminal: noop,
     onLaunchAgent: noop,
     onToggleFeatureView: noop,
+    onMoveFeature: noop,
     onRenameGroup: noop,
     onRenameFeature: noop,
     onRenameTerminal: noop,
@@ -45,10 +46,10 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
 }
 
 describe('Sidebar (3-level)', () => {
-  it('renders groups, the group cwd, features, and terminals of expanded features', () => {
+  it('renders groups, features, and terminals of expanded features (no cwd next to the name)', () => {
     renderSidebar({ activeTerminalId: 't1' })
     expect(screen.getByText('proj')).toBeInTheDocument()
-    expect(screen.getByText('/home/me/proj')).toBeInTheDocument()
+    expect(screen.queryByText('/home/me/proj')).not.toBeInTheDocument()
     expect(screen.getByText('auth')).toBeInTheDocument()
     expect(screen.getByText('ui')).toBeInTheDocument()
     expect(screen.getByText('claude')).toBeInTheDocument()
@@ -200,5 +201,53 @@ describe('Sidebar (3-level)', () => {
     fireEvent.contextMenu(screen.getByText('proj'))
     await userEvent.click(screen.getByText('Open in Files'))
     expect(onOpenInFiles).toHaveBeenCalledWith('g1')
+  })
+
+  describe('feature reorder (drag-and-drop)', () => {
+    // The cursor geometry can't be driven in jsdom, so the index math is covered
+    // by the two pure helpers; the DOM tests below only verify the wiring.
+    it('insertionFromMidpoints: above the first row → 0', () => {
+      expect(insertionFromMidpoints([10, 20, 30], 5)).toBe(0)
+    })
+    it('insertionFromMidpoints: between rows → the next index', () => {
+      expect(insertionFromMidpoints([10, 20, 30], 15)).toBe(1)
+    })
+    it('insertionFromMidpoints: below the last row → past the end', () => {
+      expect(insertionFromMidpoints([10, 20, 30], 100)).toBe(3)
+    })
+    it('reorderToIndex: dragging down shifts for the removed item', () => {
+      expect(reorderToIndex(3, 0)).toBe(2) // insert past end, item was first → last
+    })
+    it('reorderToIndex: dragging up keeps the insertion point', () => {
+      expect(reorderToIndex(0, 2)).toBe(0) // to the front
+    })
+
+    const rowFor = (container: HTMLElement, id: string) =>
+      container.querySelector(`[data-feature-id="${id}"]`) as HTMLElement
+    const dropZoneFor = (container: HTMLElement, groupId: string) =>
+      container.querySelector(`[data-group-features="${groupId}"]`) as HTMLElement
+
+    it('feature rows are draggable and dropping on the project zone calls onMoveFeature', () => {
+      const onMoveFeature = vi.fn()
+      const { container } = renderSidebar({ onMoveFeature })
+      expect(rowFor(container, 'f1')).toHaveAttribute('draggable', 'true')
+      fireEvent.dragStart(rowFor(container, 'f1'))
+      fireEvent.dragOver(dropZoneFor(container, 'g1'))
+      fireEvent.drop(dropZoneFor(container, 'g1'))
+      expect(onMoveFeature).toHaveBeenCalledWith('f1', expect.any(Number))
+    })
+
+    it('ignores a drop onto a different project than the dragged feature', () => {
+      const twoGroups: Group[] = [
+        { id: 'gA', name: 'A', cwd: '', collapsed: false, features: [{ id: 'fa', name: 'aa', collapsed: true, terminals: [] }] },
+        { id: 'gB', name: 'B', cwd: '', collapsed: false, features: [{ id: 'fb', name: 'bb', collapsed: true, terminals: [] }] }
+      ]
+      const onMoveFeature = vi.fn()
+      const { container } = renderSidebar({ groups: twoGroups, onMoveFeature })
+      fireEvent.dragStart(rowFor(container, 'fa'))
+      fireEvent.dragOver(dropZoneFor(container, 'gB'))
+      fireEvent.drop(dropZoneFor(container, 'gB'))
+      expect(onMoveFeature).not.toHaveBeenCalled()
+    })
   })
 })

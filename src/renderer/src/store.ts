@@ -114,6 +114,21 @@ export function deleteFeature(state: AppState, featureId: string): AppState {
   return { ...state, workspace: ws, activeFeatureId, activeTerminalId }
 }
 
+// Reorder a feature within its own group. `toIndex` is the desired final
+// 0-based position: the feature is removed from its current slot and re-inserted
+// at clamp(toIndex, 0, len-1), so it ends up exactly at `toIndex`. Other groups,
+// the feature's terminals, and the active selection are left untouched.
+export function moveFeature(state: AppState, featureId: string, toIndex: number): AppState {
+  const group = groupOfFeature(state.workspace, featureId)
+  if (!group) return state
+  const moved = group.features.find((f) => f.id === featureId)
+  if (!moved) return state
+  const rest = group.features.filter((f) => f.id !== featureId)
+  const dest = Math.max(0, Math.min(toIndex, rest.length))
+  const features = [...rest.slice(0, dest), moved, ...rest.slice(dest)]
+  return { ...state, workspace: mapGroup(state.workspace, group.id, (g) => ({ ...g, features })) }
+}
+
 // ---- terminals -----------------------------------------------------------
 export function addTerminal(
   state: AppState,

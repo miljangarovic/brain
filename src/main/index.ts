@@ -13,7 +13,7 @@ function createWindow(): void {
   // Dev (Linux/Windows) taskbar icon. A packaged build uses the icon embedded
   // by electron-builder, and `assets/` is not bundled — so existsSync makes this
   // a no-op in production and it only kicks in while developing.
-  const iconPath = join(app.getAppPath(), 'assets', 'branding', 'png', 'terminaltor-256.png')
+  const iconPath = join(app.getAppPath(), 'assets', 'branding', 'png', 'orchestrix-256.png')
   const icon = existsSync(iconPath) ? iconPath : undefined
 
   const win = new BrowserWindow({

@@ -4,7 +4,7 @@ import { useStore } from './useStore'
 import { removedIds } from './ptyReaper'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
-  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode,
+  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
   setActiveTerminal, setActiveFeature,
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, findReviewerFor, allTerminals
@@ -160,6 +160,7 @@ export default function App() {
         onAddTerminal={(fid) => addShellTerminal(fid)}
         onLaunchAgent={launchAgent}
         onToggleFeatureView={(fid) => apply((s) => toggleFeatureViewMode(setActiveFeature(s, fid), fid))}
+        onMoveFeature={(featureId, toIndex) => apply((s) => moveFeature(s, featureId, toIndex))}
         onRenameGroup={(id, name) => apply((s) => renameGroup(s, id, name))}
         onRenameFeature={(id, name) => apply((s) => renameFeature(s, id, name))}
         onRenameTerminal={(id, name) => apply((s) => renameTerminal(s, id, name))}

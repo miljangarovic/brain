@@ -8,6 +8,28 @@ import { ReviewStatusDot } from './ReviewStatusDot'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
 
+// Insertion point (0..n) among rows with vertical midpoints `midpoints` for a
+// cursor at `cursorY`: the first row the cursor sits above, else past the end.
+// Cursor above the first row → 0 (becomes first); below the last → n (last).
+export function insertionFromMidpoints(midpoints: number[], cursorY: number): number {
+  const i = midpoints.findIndex((m) => cursorY < m)
+  return i === -1 ? midpoints.length : i
+}
+
+// Convert an insertion point in the original array into the dragged item's final
+// 0-based index, accounting for its removal from `fromIndex`.
+export function reorderToIndex(insertion: number, fromIndex: number): number {
+  return insertion > fromIndex ? insertion - 1 : insertion
+}
+
+// Vertical midpoints of the feature rows inside a group's features container.
+function featureRowMidpoints(container: Element): number[] {
+  return Array.from(container.querySelectorAll('[data-feature-id]')).map((el) => {
+    const r = el.getBoundingClientRect()
+    return r.top + r.height / 2
+  })
+}
+
 const SIDEBAR_MIN = 180
 const SIDEBAR_MAX = 560
 const SIDEBAR_DEFAULT = 256
@@ -25,6 +47,7 @@ export function Sidebar(props: {
   onAddTerminal: (featureId: string) => void
   onLaunchAgent: (featureId: string, kind: AgentKind) => void
   onToggleFeatureView: (featureId: string) => void
+  onMoveFeature: (featureId: string, toIndex: number) => void
   onRenameGroup: (id: string, name: string) => void
   onRenameFeature: (id: string, name: string) => void
   onRenameTerminal: (id: string, name: string) => void
@@ -39,13 +62,24 @@ export function Sidebar(props: {
 }) {
   const {
     groups, activeTerminalId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
-    onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView,
+    onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveFeature,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed
   } = props
 
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; terminalId: string } | null>(null)
+
+  // Feature drag-and-drop reorder (within the same group only). The whole feature
+  // row is draggable. The active drag lives in a ref (read synchronously in
+  // dragover/drop so `preventDefault` is never skipped by a stale closure — that
+  // is what makes the drop reliably accepted). `drag`/`dropAt` are state only for
+  // the visuals (dimming the dragged row, the insertion-line indicator). A plain
+  // click/double-click still collapses/renames (HTML5 drag starts only on move).
+  const dragRef = useRef<{ featureId: string; groupId: string } | null>(null)
+  const [drag, setDrag] = useState<{ featureId: string } | null>(null)
+  const [dropAt, setDropAt] = useState<{ groupId: string; index: number } | null>(null)
+  const clearDrag = () => { dragRef.current = null; setDrag(null); setDropAt(null) }
 
   // Resizable width, persisted across reloads. Dragging the right-edge handle
   // sets the width to the cursor's x (the sidebar is flush against the left edge).
@@ -132,21 +166,50 @@ export function Sidebar(props: {
                 {g.collapsed ? '▸' : '▾'}
               </button>
               {isEditing('group', g.id) ? renameInput(`Rename project ${g.name}`) : (
-                <span className="flex-1 min-w-0 flex items-baseline gap-1.5 cursor-pointer"
+                <span className="flex-1 min-w-0 truncate text-sm font-semibold text-fg-bright cursor-pointer"
                   onClick={() => onNameClick(() => onToggleGroup(g.id))}
-                  onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>
-                  <span className="truncate text-sm font-semibold text-fg-bright">{g.name}</span>
-                  {g.cwd && <span className="truncate text-xs text-fg-muted opacity-30">{g.cwd}</span>}
-                </span>
+                  onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>{g.name}</span>
               )}
               <button aria-label={`Delete project ${g.name}`} title="Delete project" onClick={() => onDeleteGroup(g.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
             </div>
 
             {!g.collapsed && (
-              <div className="pl-3">
-                {g.features.map((f) => (
+              <div
+                className="pl-3"
+                data-group-features={g.id}
+                onDragOver={(e) => {
+                  const d = dragRef.current
+                  if (!d) return
+                  if (d.groupId !== g.id) { setDropAt(null); return }   // hovering another project — clear stale line
+                  e.preventDefault()
+                  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+                  setDropAt({ groupId: g.id, index: insertionFromMidpoints(featureRowMidpoints(e.currentTarget), e.clientY) })
+                }}
+                onDrop={(e) => {
+                  const d = dragRef.current
+                  if (!d || d.groupId !== g.id) { clearDrag(); return }
+                  e.preventDefault()
+                  const from = g.features.findIndex((x) => x.id === d.featureId)
+                  const to = reorderToIndex(insertionFromMidpoints(featureRowMidpoints(e.currentTarget), e.clientY), from)
+                  if (to !== from) onMoveFeature(d.featureId, to)
+                  clearDrag()
+                }}
+              >
+                {g.features.map((f, i) => (
                   <div key={f.id}>
-                    <div className="group flex items-center gap-1 px-2 py-1 hover:bg-hover">
+                    <div
+                      data-feature-id={f.id}
+                      className={`relative group flex items-center gap-1 px-2 py-1 hover:bg-hover ${drag?.featureId === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      draggable={!isEditing('feature', f.id)}
+                      onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { featureId: f.id, groupId: g.id }; setDrag({ featureId: f.id }) }}
+                      onDragEnd={clearDrag}
+                    >
+                      {dropAt?.groupId === g.id && dropAt.index === i && (
+                        <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
+                      )}
+                      {dropAt?.groupId === g.id && dropAt.index === g.features.length && i === g.features.length - 1 && (
+                        <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
+                      )}
                       <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className="w-4 text-fg-muted hover:text-fg">
                         {f.collapsed ? '▸' : '▾'}
                       </button>
