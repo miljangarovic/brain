@@ -67,8 +67,9 @@ export function addTerminal(
     shell: shell || undefined,
     kind: input.kind && input.kind !== 'shell' ? input.kind : undefined
   }
+  // Expand the target group so a freshly added terminal is always visible.
   const groups = state.workspace.groups.map(g =>
-    g.id === groupId ? { ...g, terminals: [...g.terminals, term] } : g)
+    g.id === groupId ? { ...g, collapsed: false, terminals: [...g.terminals, term] } : g)
   return { ...state, workspace: { groups }, activeGroupId: groupId, activeTerminalId: term.id }
 }
 

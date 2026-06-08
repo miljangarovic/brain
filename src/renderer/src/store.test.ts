@@ -130,4 +130,13 @@ describe('store reducers', () => {
     s = addTerminal(s, gid, { name: 'sh', cwd: '' })
     expect(s.workspace.groups[0].terminals[0].kind).toBeUndefined()
   })
+
+  it('addTerminal expands a collapsed target group', () => {
+    let s = addGroup(createInitialState(), 'g')
+    const gid = s.workspace.groups[0].id
+    s = toggleGroupCollapsed(s, gid)
+    expect(s.workspace.groups[0].collapsed).toBe(true)
+    s = addTerminal(s, gid, { name: 'x', cwd: '' })
+    expect(s.workspace.groups[0].collapsed).toBe(false)
+  })
 })
