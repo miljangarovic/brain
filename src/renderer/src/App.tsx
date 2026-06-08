@@ -35,6 +35,13 @@ export default function App() {
     })
   }, [])
 
+  // Live "is producing output" flag per terminal — drives the busy spinner in
+  // the tab bar and sidebar. Main emits only on idle↔busy transitions.
+  const [busy, setBusy] = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    return window.terminaltor.onPtyBusy((id, b) => setBusy((m) => ({ ...m, [id]: b })))
+  }, [])
+
   const [reviewStatus, setReviewStatus] = useState<Record<string, ReviewStatus | undefined>>({})
   const [reviewReq, setReviewReq] = useState<{ id: string; reviewer?: AgentKind } | null>(null)
   const setStatus = useCallback(
@@ -136,6 +143,7 @@ export default function App() {
         groups={state.workspace.groups}
         activeTerminalId={state.activeTerminalId}
         liveAgents={liveAgents}
+        busy={busy}
         onSelectTerminal={(id) => apply((s) => (isHidden(s, id) ? showTerminal(s, id) : setActiveTerminal(s, id)))}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
@@ -186,6 +194,7 @@ export default function App() {
           terminals={featureVisible}
           activeId={state.activeTerminalId}
           liveAgents={liveAgents}
+          busy={busy}
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
           onClose={(id) => apply((s) => hideTerminal(s, id))}
           reviewStatus={reviewStatus}
