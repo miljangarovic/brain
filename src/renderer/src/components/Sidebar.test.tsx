@@ -72,11 +72,11 @@ describe('Sidebar (3-level)', () => {
     expect(onAddFeature).toHaveBeenCalledWith('g1', 'payments')
   })
 
-  it('adds a terminal to a feature inline (name only)', async () => {
+  it('adds a terminal to a feature via the hover + button', async () => {
     const onAddTerminal = vi.fn()
     renderSidebar({ onAddTerminal })
-    await userEvent.type(screen.getByLabelText('Novi terminal u auth'), 'shell{Enter}')
-    expect(onAddTerminal).toHaveBeenCalledWith('f1', 'shell')
+    await userEvent.click(screen.getByLabelText('Novi terminal u auth'))
+    expect(onAddTerminal).toHaveBeenCalledWith('f1')
   })
 
   it('launches claude/codex into a feature', async () => {
