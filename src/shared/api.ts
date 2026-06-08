@@ -1,7 +1,7 @@
 import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
 
-export interface TerminaltorApi {
+export interface OrchestrixApi {
   loadWorkspace(): Promise<Workspace>
   saveWorkspace(ws: Workspace): void
   createPty(opts: PtyCreateOptions): void

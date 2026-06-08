@@ -25,12 +25,12 @@ export function ReviewDialog({
 
   useEffect(() => {
     let cancelled = false
-    window.terminaltor.suggestSpec(cwd).then((p) => { if (!cancelled && p) setSpecPath(p) })
+    window.orchestrix.suggestSpec(cwd).then((p) => { if (!cancelled && p) setSpecPath(p) })
     return () => { cancelled = true }
   }, [cwd])
 
   const browse = async () => {
-    const p = await window.terminaltor.pickFile({ defaultPath: specPath || cwd })
+    const p = await window.orchestrix.pickFile({ defaultPath: specPath || cwd })
     if (p) setSpecPath(p)
   }
 
@@ -47,7 +47,7 @@ export function ReviewDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
       <div className="w-[30rem] rounded-xl bg-elevated border border-line p-5 shadow-2xl shadow-black/50" onClick={(e) => e.stopPropagation()}>
         <h2 className="mb-1 text-lg font-semibold tracking-tight text-fg-bright">Review</h2>
-        <p className="mb-4 text-xs text-fg-muted">Recenzira se terminal „{originName}".</p>
+        <p className="mb-4 text-xs text-fg-muted">Reviewing terminal “{originName}”.</p>
 
         <div className="mb-3">
           <span className="text-sm text-fg">Reviewer</span>
@@ -58,36 +58,36 @@ export function ReviewDialog({
         </div>
 
         <div className="mb-3">
-          <span className="text-sm text-fg">Tip</span>
+          <span className="text-sm text-fg">Type</span>
           <div className="mt-1 flex gap-2">
             <button type="button" aria-label="Spec/plan" aria-pressed={kind === 'spec'} className={seg(kind === 'spec')} onClick={() => setKind('spec')}>Spec/plan</button>
-            <button type="button" aria-label="Implementacija" aria-pressed={kind === 'impl'} className={seg(kind === 'impl')} onClick={() => setKind('impl')}>Implementacija</button>
+            <button type="button" aria-label="Implementation" aria-pressed={kind === 'impl'} className={seg(kind === 'impl')} onClick={() => setKind('impl')}>Implementation</button>
           </div>
         </div>
 
         {kind === 'spec' ? (
           <label className="block mb-3 text-sm text-fg">
-            Spec fajl
+            Spec file
             <div className="mt-1 flex gap-2">
-              <input aria-label="Spec fajl" value={specPath} onChange={(e) => setSpecPath(e.target.value)}
+              <input aria-label="Spec file" value={specPath} onChange={(e) => setSpecPath(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') submit() }} className={field.replace('mt-1 ', '')} />
               <button type="button" onClick={browse} className="shrink-0 rounded-md bg-field px-3 text-sm text-fg-muted hover:text-fg transition">Browse…</button>
             </div>
           </label>
         ) : (
-          <p className="mb-3 text-sm text-fg-muted">Artefakt: <code className="text-fg">git diff</code> u <code className="text-fg">{cwd || '~'}</code>.</p>
+          <p className="mb-3 text-sm text-fg-muted">Artifact: <code className="text-fg">git diff</code> in <code className="text-fg">{cwd || '~'}</code>.</p>
         )}
 
         <label className="block mb-4 text-sm text-fg">
-          Namjera (opciono)
-          <input aria-label="Namjera (opciono)" value={intent} placeholder="koji je cilj…"
+          Intent (optional)
+          <input aria-label="Intent (optional)" value={intent} placeholder="what's the goal…"
             onChange={(e) => setIntent(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit() }} className={field} />
         </label>
 
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-fg hover:bg-hover transition-colors">Otkaži</button>
-          <button onClick={submit} className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:bg-accent-strong transition-colors">Pokreni review</button>
+          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-fg hover:bg-hover transition-colors">Cancel</button>
+          <button onClick={submit} className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:bg-accent-strong transition-colors">Start review</button>
         </div>
       </div>
     </div>

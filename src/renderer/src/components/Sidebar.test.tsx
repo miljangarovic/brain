@@ -65,21 +65,21 @@ describe('Sidebar (3-level)', () => {
   it('adds a group via the bottom input', async () => {
     const onAddGroup = vi.fn()
     renderSidebar({ onAddGroup })
-    await userEvent.click(screen.getByLabelText('Nova grupa'))
+    await userEvent.click(screen.getByLabelText('New Project'))
     expect(onAddGroup).toHaveBeenCalled()
   })
 
   it('adds a feature to a group', async () => {
     const onAddFeature = vi.fn()
     renderSidebar({ onAddFeature })
-    await userEvent.type(screen.getByLabelText('Novi feature u proj'), 'payments{Enter}')
+    await userEvent.type(screen.getByLabelText('New feature in proj'), 'payments{Enter}')
     expect(onAddFeature).toHaveBeenCalledWith('g1', 'payments')
   })
 
   it('adds a terminal to a feature via the AddMenuButton', async () => {
     const onAddTerminal = vi.fn()
     renderSidebar({ onAddTerminal })
-    await userEvent.click(screen.getByLabelText('Dodaj u auth'))
+    await userEvent.click(screen.getByLabelText('Add to auth'))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Terminal' }))
     expect(onAddTerminal).toHaveBeenCalledWith('f1')
   })
@@ -87,10 +87,10 @@ describe('Sidebar (3-level)', () => {
   it('launches claude/codex into a feature via the AddMenuButton', async () => {
     const onLaunchAgent = vi.fn()
     renderSidebar({ onLaunchAgent })
-    await userEvent.click(screen.getByLabelText('Dodaj u auth'))
+    await userEvent.click(screen.getByLabelText('Add to auth'))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
     expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'claude')
-    await userEvent.click(screen.getByLabelText('Dodaj u auth'))
+    await userEvent.click(screen.getByLabelText('Add to auth'))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
     expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
   })
@@ -114,25 +114,25 @@ describe('Sidebar (3-level)', () => {
     renderSidebar({ onRenameGroup, onRenameFeature, onRenameTerminal })
 
     await userEvent.dblClick(screen.getByText('proj'))
-    await userEvent.clear(screen.getByLabelText('Preimenuj grupu proj'))
-    await userEvent.type(screen.getByLabelText('Preimenuj grupu proj'), 'proj2{Enter}')
+    await userEvent.clear(screen.getByLabelText('Rename project proj'))
+    await userEvent.type(screen.getByLabelText('Rename project proj'), 'proj2{Enter}')
     expect(onRenameGroup).toHaveBeenCalledWith('g1', 'proj2')
 
     await userEvent.dblClick(screen.getByText('auth'))
-    await userEvent.clear(screen.getByLabelText('Preimenuj feature auth'))
-    await userEvent.type(screen.getByLabelText('Preimenuj feature auth'), 'auth2{Enter}')
+    await userEvent.clear(screen.getByLabelText('Rename feature auth'))
+    await userEvent.type(screen.getByLabelText('Rename feature auth'), 'auth2{Enter}')
     expect(onRenameFeature).toHaveBeenCalledWith('f1', 'auth2')
 
     await userEvent.dblClick(screen.getByText('claude'))
-    await userEvent.clear(screen.getByLabelText('Preimenuj terminal claude'))
-    await userEvent.type(screen.getByLabelText('Preimenuj terminal claude'), 'c2{Enter}')
+    await userEvent.clear(screen.getByLabelText('Rename terminal claude'))
+    await userEvent.type(screen.getByLabelText('Rename terminal claude'), 'c2{Enter}')
     expect(onRenameTerminal).toHaveBeenCalledWith('t1', 'c2')
   })
 
   it('auto-opens the rename input for a freshly-added terminal and consumes the signal', () => {
     const onPendingRenameConsumed = vi.fn()
     renderSidebar({ pendingRenameTerminalId: 't1', onPendingRenameConsumed })
-    expect(screen.getByLabelText('Preimenuj terminal claude')).toBeInTheDocument()
+    expect(screen.getByLabelText('Rename terminal claude')).toBeInTheDocument()
     expect(onPendingRenameConsumed).toHaveBeenCalled()
   })
 
@@ -154,7 +154,7 @@ describe('Sidebar (3-level)', () => {
     localStorage.clear()
     const { container } = renderSidebar()
     const root = container.firstChild as HTMLElement
-    fireEvent.mouseDown(screen.getByLabelText('Promeni širinu sidebar-a'))
+    fireEvent.mouseDown(screen.getByLabelText('Resize sidebar'))
     fireEvent.mouseMove(window, { clientX: 320 })
     fireEvent.mouseUp(window)
     expect(root.style.width).toBe('320px')
@@ -163,7 +163,7 @@ describe('Sidebar (3-level)', () => {
   it('deletes a terminal via its hover trash button', async () => {
     const onDeleteTerminal = vi.fn()
     renderSidebar({ onDeleteTerminal })
-    await userEvent.click(screen.getByLabelText('Obriši terminal claude'))
+    await userEvent.click(screen.getByLabelText('Delete terminal claude'))
     expect(onDeleteTerminal).toHaveBeenCalledWith('t1')
   })
 

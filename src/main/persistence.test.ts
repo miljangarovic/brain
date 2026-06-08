@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { loadWorkspace, writeWorkspace, createDebouncedSaver } from './persistence'
 import { createWorkspace } from '@shared/types'
 
-const tmpFile = () => join(tmpdir(), `terminaltor-test-${Math.random().toString(36).slice(2)}.json`)
+const tmpFile = () => join(tmpdir(), `orchestrix-test-${Math.random().toString(36).slice(2)}.json`)
 
 describe('persistence', () => {
   it('write then load round-trips a workspace', async () => {

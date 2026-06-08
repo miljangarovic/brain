@@ -5,7 +5,7 @@ import { ClaudeIcon, CodexIcon, ShellIcon } from './icons'
 export type AddKind = 'shell' | 'claude' | 'codex'
 
 export function AddMenuButton({
-  onAdd, className, title = 'Novi terminal', label = 'Dodaj terminal'
+  onAdd, className, title = 'New terminal', label = 'Add terminal'
 }: {
   onAdd: (kind: AddKind) => void
   className?: string

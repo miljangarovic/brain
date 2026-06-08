@@ -53,7 +53,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     fitRef.current = fit
     try { fit.fit() } catch { /* host may be hidden */ }
 
-    window.terminaltor.createPty({
+    window.orchestrix.createPty({
       id: terminal.id,
       cwd: terminal.cwd,
       shell: terminal.shell ?? '',
@@ -62,11 +62,11 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
       startupCommand: terminal.startupCommand
     })
 
-    const offData = window.terminaltor.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
-    const offExit = window.terminaltor.onPtyExit((id) => {
-      if (id === terminal.id) term.write('\r\n\x1b[33m[proces završen]\x1b[0m\r\n')
+    const offData = window.orchestrix.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
+    const offExit = window.orchestrix.onPtyExit((id) => {
+      if (id === terminal.id) term.write('\r\n\x1b[33m[process exited]\x1b[0m\r\n')
     })
-    const inputDisposable = term.onData((data) => window.terminaltor.writePty(terminal.id, data))
+    const inputDisposable = term.onData((data) => window.orchestrix.writePty(terminal.id, data))
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
@@ -76,7 +76,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
       // TUIs treat a bare LF (same as Ctrl+J) as "insert newline".
       if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey &&
           (e.code === 'Enter' || e.code === 'NumpadEnter')) {
-        window.terminaltor.writePty(terminal.id, '\n')
+        window.orchestrix.writePty(terminal.id, '\n')
         return false
       }
 
@@ -101,7 +101,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
       if (!rect || rect.width === 0 || rect.height === 0) return
       try {
         fit.fit()
-        window.terminaltor.resizePty(terminal.id, term.cols, term.rows)
+        window.orchestrix.resizePty(terminal.id, term.cols, term.rows)
       } catch { /* ignore */ }
     })
     ro.observe(host)
@@ -133,15 +133,15 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     if (!term || !fit) return
     try {
       fit.fit()
-      window.terminaltor.resizePty(terminal.id, term.cols, term.rows)
+      window.orchestrix.resizePty(terminal.id, term.cols, term.rows)
       term.focus()
     } catch { /* ignore */ }
   }, [active, terminal.id])
 
   const items: MenuItem[] = []
-  if (menu?.hasSelection) items.push({ label: 'Kopiraj', onSelect: copySelection })
-  items.push({ label: 'Nalijepi', onSelect: paste })
-  items.push({ label: 'Označi sve', onSelect: selectAll })
+  if (menu?.hasSelection) items.push({ label: 'Copy', onSelect: copySelection })
+  items.push({ label: 'Paste', onSelect: paste })
+  items.push({ label: 'Select all', onSelect: selectAll })
 
   // Right-click opens a copy/paste menu. Capture phase so we win even when the
   // running app (claude/codex) has mouse-tracking on and would grab the event.

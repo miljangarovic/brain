@@ -28,7 +28,7 @@ export function createDebouncedSaver(path: string, delayMs = 300) {
     try {
       await writeWorkspace(path, ws)
     } catch (err) {
-      console.error('[terminaltor] failed to save workspace:', err)
+      console.error('[orchestrix] failed to save workspace:', err)
     }
   }
 

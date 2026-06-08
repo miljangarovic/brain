@@ -1,10 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
-import type { TerminaltorApi } from '../shared/api'
+import type { OrchestrixApi } from '../shared/api'
 import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
 
-const api: TerminaltorApi = {
+const api: OrchestrixApi = {
   loadWorkspace: () => ipcRenderer.invoke(IPC.workspaceLoad) as Promise<Workspace>,
   saveWorkspace: (ws: Workspace) => ipcRenderer.send(IPC.workspaceSave, ws),
   createPty: (opts: PtyCreateOptions) => ipcRenderer.send(IPC.ptyCreate, opts),
@@ -46,4 +46,4 @@ const api: TerminaltorApi = {
   },
 }
 
-contextBridge.exposeInMainWorld('terminaltor', api)
+contextBridge.exposeInMainWorld('orchestrix', api)

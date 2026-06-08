@@ -21,7 +21,7 @@ export function NewGroupDialog({
   }
 
   const browse = async () => {
-    const dir = await window.terminaltor.pickDirectory()
+    const dir = await window.orchestrix.pickDirectory()
     if (dir) setCwd(dir)
   }
 
@@ -30,19 +30,19 @@ export function NewGroupDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
       <div className="w-[26rem] rounded-xl bg-elevated border border-line p-5 shadow-2xl shadow-black/50" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-4 text-lg font-semibold tracking-tight text-fg-bright">Nova grupa</h2>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight text-fg-bright">New Project</h2>
 
         <label className="block mb-3 text-sm text-fg">
-          Ime grupe
-          <input autoFocus aria-label="Ime grupe" value={name}
+          Project name
+          <input autoFocus aria-label="Project name" value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit() }} className={field} />
         </label>
 
         <label className="block mb-4 text-sm text-fg">
-          Radni direktorijum
+          Working directory
           <div className="mt-1 flex gap-2">
-            <input aria-label="Radni direktorijum" value={cwd} placeholder="~ (home ako prazno)"
+            <input aria-label="Working directory" value={cwd} placeholder="~ (home if empty)"
               onChange={(e) => setCwd(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
               className="flex-1 rounded-md bg-field px-2.5 py-1.5 text-fg-bright placeholder-fg-muted outline-none ring-1 ring-line focus:ring-accent transition" />
@@ -52,8 +52,8 @@ export function NewGroupDialog({
         </label>
 
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-fg hover:bg-hover transition-colors">Otkaži</button>
-          <button onClick={submit} className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:bg-accent-strong transition-colors">Kreiraj</button>
+          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-fg hover:bg-hover transition-colors">Cancel</button>
+          <button onClick={submit} className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:bg-accent-strong transition-colors">Create</button>
         </div>
       </div>
     </div>

@@ -50,8 +50,8 @@ export function TabBar({
               <ReviewIcon />
             </button>
             <button
-              aria-label={`Zatvori ${t.name}`}
-              title={`Sakrij (terminal nastavlja da radi; otvori ga iz sidebar-a)`}
+              aria-label={`Close ${t.name}`}
+              title={`Hide (the terminal keeps running; reopen it from the sidebar)`}
               onClick={(e) => { e.stopPropagation(); onClose(t.id) }}
               className="text-fg-muted hover:text-fg transition-colors"
             >
@@ -68,9 +68,9 @@ export function TabBar({
         const right = terminals.slice(idx + 1)
         const closeAll = (ts: Terminal[]) => ts.forEach((t) => onClose(t.id))
         const items: MenuItem[] = []
-        if (left.length + right.length > 0) items.push({ label: 'Zatvori ostale tabove', onSelect: () => closeAll([...left, ...right]) })
-        if (left.length > 0) items.push({ label: 'Zatvori sve levo', onSelect: () => closeAll(left) })
-        if (right.length > 0) items.push({ label: 'Zatvori sve desno', onSelect: () => closeAll(right) })
+        if (left.length + right.length > 0) items.push({ label: 'Close other tabs', onSelect: () => closeAll([...left, ...right]) })
+        if (left.length > 0) items.push({ label: 'Close tabs to the left', onSelect: () => closeAll(left) })
+        if (right.length > 0) items.push({ label: 'Close tabs to the right', onSelect: () => closeAll(right) })
         if (items.length === 0) return null
         return <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={items} />
       })()}

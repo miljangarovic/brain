@@ -26,15 +26,15 @@ export function useReview(
 
   const armWatch = useCallback((watchId: string, path: string, target: WatchTarget) => {
     targets.current.set(watchId, target)
-    window.terminaltor.watchFile(watchId, path)
+    window.orchestrix.watchFile(watchId, path)
   }, [])
 
-  // App subscribes this to window.terminaltor.onFsChanged.
+  // App subscribes this to window.orchestrix.onFsChanged.
   const handleFsChanged = useCallback((watchId: string) => {
     const t = targets.current.get(watchId)
     if (!t) return
     targets.current.delete(watchId)
-    window.terminaltor.unwatchFile(watchId)
+    window.orchestrix.unwatchFile(watchId)
     setStatus(t.terminalId, t.status)
   }, [setStatus])
 
@@ -42,7 +42,7 @@ export function useReview(
     const featureId = featureIdOfTerminal(state, a.originTerminalId)
     if (!featureId) return
     const round = 1
-    const { reviewDir, reviewFile } = await window.terminaltor.resolveReviewDir(a.originTerminalId, round)
+    const { reviewDir, reviewFile } = await window.orchestrix.resolveReviewDir(a.originTerminalId, round)
     const prompt = reviewerPrompt({ kind: a.kind, specPath: a.specPath, reviewFile, intent: a.intent })
     const startupCommand = buildReviewerCommand(AGENTS[a.reviewer].command, prompt)
     const reviewerId = createId()
@@ -61,9 +61,9 @@ export function useReview(
     const reviewer = getTerminalById(state, reviewerId)
     const link = reviewer?.review
     if (!link) return
-    const { reviewFile } = await window.terminaltor.resolveReviewDir(link.originTerminalId, link.round)
+    const { reviewFile } = await window.orchestrix.resolveReviewDir(link.originTerminalId, link.round)
     const text = relayToOriginPrompt({ kind: link.reviewKind, reviewFile, specPath: link.specPath })
-    window.terminaltor.writePty(link.originTerminalId, text + '\r')
+    window.orchestrix.writePty(link.originTerminalId, text + '\r')
     setStatus(reviewerId, undefined)
     setStatus(link.originTerminalId, 'applying')
     // Auto status for 'spec' only (single file to watch). 'impl' → manual mark (UI).
@@ -78,9 +78,9 @@ export function useReview(
     const link = reviewer?.review
     if (!reviewer || !link) return
     const round = link.round + 1
-    const { reviewFile } = await window.terminaltor.resolveReviewDir(originId, round)
+    const { reviewFile } = await window.orchestrix.resolveReviewDir(originId, round)
     const text = reReviewPrompt({ kind: link.reviewKind, specPath: link.specPath, reviewFile })
-    window.terminaltor.writePty(reviewer.id, text + '\r')
+    window.orchestrix.writePty(reviewer.id, text + '\r')
     apply((s) => setReviewRound(s, reviewer.id, round))
     setStatus(originId, undefined)
     setStatus(reviewer.id, 'reviewing')

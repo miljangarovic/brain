@@ -21,20 +21,20 @@ export function reviewerPrompt(a: ReviewerPromptArgs): string {
   const intent = a.intent?.trim()
   if (a.kind === 'spec') {
     return [
-      'Ti si reviewer — drugi AI agent. NE mijenjaj spec; samo napiši kritiku u fajl.',
-      `Pregledaj spec/plan u: ${a.specPath}.`,
-      `Cilj autora: ${intent || '(izvedi iz samog dokumenta)'}.`,
-      'Oceni kritički: ispravnost, rupe i nedorečenosti, kontradikcije, scope (YAGNI), izvodljivost.',
-      'Budi konkretan; predloži tačne izmjene.',
-      `Svoju kritiku UPIŠI u fajl (kreiraj ili prepiši): ${a.reviewFile}.`
+      'You are a reviewer — a second AI agent. Do NOT modify the spec; only WRITE your critique to a file.',
+      `Review the spec/plan at: ${a.specPath}.`,
+      `Author's goal: ${intent || '(infer it from the document itself)'}.`,
+      'Critique rigorously: correctness, gaps and ambiguities, contradictions, scope (YAGNI), feasibility.',
+      'Be concrete; propose exact changes.',
+      `WRITE your critique to the file (create or overwrite): ${a.reviewFile}.`
     ].join('\n')
   }
   return [
-    'Ti si reviewer — drugi AI agent. NE commituj; samo napiši kritiku u fajl.',
-    'Pokreni `git status` i `git diff` i pregledaj necommitovane izmjene u ovom repozitorijumu.',
-    `Cilj zadatka: ${intent || '(izvedi iz samih izmjena)'}.`,
-    'Oceni kritički: bugove, edge-case-ove, ispravnost, jasnoću, jednostavnost.',
-    `Svoju kritiku UPIŠI u fajl (kreiraj ili prepiši): ${a.reviewFile}.`
+    'You are a reviewer — a second AI agent. Do NOT commit; only WRITE your critique to a file.',
+    'Run `git status` and `git diff` and review the uncommitted changes in this repository.',
+    `Task goal: ${intent || '(infer it from the changes themselves)'}.`,
+    'Critique rigorously: bugs, edge cases, correctness, clarity, simplicity.',
+    `WRITE your critique to the file (create or overwrite): ${a.reviewFile}.`
   ].join('\n')
 }
 
@@ -46,9 +46,9 @@ export interface RelayPromptArgs {
 
 export function relayToOriginPrompt(a: RelayPromptArgs): string {
   if (a.kind === 'spec') {
-    return `Reviewer je ostavio kritiku u ${a.reviewFile}. Pročitaj je i ažuriraj ${a.specPath} gdje se slažeš; gdje se ne slažeš, kratko objasni zašto.`
+    return `The reviewer left a critique in ${a.reviewFile}. Read it and update ${a.specPath} where you agree; where you disagree, briefly explain why.`
   }
-  return `Reviewer je ostavio kritiku u ${a.reviewFile}. Pročitaj je i primijeni ispravke u kodu gdje se slažeš; gdje se ne slažeš, kratko objasni. Ne commituj.`
+  return `The reviewer left a critique in ${a.reviewFile}. Read it and apply the fixes in the code where you agree; where you disagree, briefly explain. Do not commit.`
 }
 
 export interface ReReviewPromptArgs {
@@ -59,7 +59,7 @@ export interface ReReviewPromptArgs {
 
 export function reReviewPrompt(a: ReReviewPromptArgs): string {
   if (a.kind === 'spec') {
-    return `Spec je ažuriran. Ponovo pregledaj ${a.specPath} i upiši novu kritiku u ${a.reviewFile}.`
+    return `The spec was updated. Review ${a.specPath} again and write a new critique to ${a.reviewFile}.`
   }
-  return `Izmjene su ažurirane. Ponovo pokreni git diff, pregledaj i upiši novu kritiku u ${a.reviewFile}.`
+  return `The changes were updated. Re-run git diff, review, and write a new critique to ${a.reviewFile}.`
 }

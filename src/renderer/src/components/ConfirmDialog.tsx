@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 export function ConfirmDialog({
-  message, confirmLabel = 'Obriši', onConfirm, onCancel
+  message, confirmLabel = 'Delete', onConfirm, onCancel
 }: {
   message: string
   confirmLabel?: string
@@ -21,7 +21,7 @@ export function ConfirmDialog({
       <div className="w-[24rem] rounded-xl bg-elevated border border-line p-5 shadow-2xl shadow-black/50" onClick={(e) => e.stopPropagation()}>
         <p className="mb-4 text-sm text-fg-bright">{message}</p>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-fg hover:bg-hover transition-colors">Otkaži</button>
+          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-fg hover:bg-hover transition-colors">Cancel</button>
           <button ref={confirmRef} onClick={onConfirm} className="rounded-md bg-danger px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90 transition">{confirmLabel}</button>
         </div>
       </div>

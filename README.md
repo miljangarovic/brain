@@ -1,52 +1,54 @@
-# Terminaltor
+# OrchestriX
 
-Desktop wrapper nad terminalom za Linux: imenovani terminali sa punim PTY-jem,
-grupisani u cjeline (sidebar stablo + tabovi) — za organizaciju AI agenata po feature-ima.
+A desktop wrapper around the terminal for Linux: named terminals with full PTY,
+organized into projects (sidebar tree + tabs) — for orchestrating and monitoring
+AI agents per feature, even dozens at once.
 
-## Razvoj
+## Development
 
 ```bash
 npm install
-npm run rebuild   # rebuild node-pty za Electron ABI
-npm run dev       # pokreni aplikaciju
-npm test          # unit testovi
+npm run rebuild   # rebuild node-pty for the Electron ABI
+npm run dev       # run the app
+npm test          # unit tests
 ```
 
-## Pakovanje
+## Packaging
 
 ```bash
-npm run dist      # pravi instalere (Linux AppImage/.deb; mac dmg/zip; win nsis) u release/
-npm run dist:dir  # samo raspakovan build (bez instalera), za brzu provjeru
+npm run dist      # build installers (Linux AppImage/.deb; mac dmg/zip; win nsis) into release/
+npm run dist:dir  # unpacked build only (no installer), for a quick check
 ```
 
-## Prečice
+## Shortcuts
 
-- `Ctrl+Shift+T` — novi terminal u aktivnoj grupi
-- `Ctrl+Shift+W` — zatvori aktivni terminal
-- `Ctrl+PageDown` / `Ctrl+PageUp` — sljedeći / prethodni tab
-- `Ctrl+Shift+C` / `Ctrl+Shift+V` — kopiraj / nalijepi
-- `Shift+Enter` — novi red u unosu (umjesto slanja) — za claude/codex i slične agente
+- `Ctrl+Shift+T` — new terminal in the active project
+- `Ctrl+Shift+W` — close the active terminal
+- `Ctrl+PageDown` / `Ctrl+PageUp` — next / previous tab
+- `Ctrl+Shift+C` / `Ctrl+Shift+V` — copy / paste
+- `Shift+Enter` — newline in the input (instead of submitting) — for claude/codex and similar agents
 
-## Brzo pokretanje agenata
+## Launching agents quickly
 
-U tab baru (i na hover grupe u sidebar-u) pored `+` stoje dugmad **Claude** i
-**Codex**. Jedan klik kreira terminal koji odmah pokreće taj agent (`claude` /
-`codex` se očekuju na PATH-u). Terminali koji koriste agenta nose njegovu ikonicu
-u sidebar-u i u tabovima, i pamte se kroz restart.
+In the tab bar (and on hover of a project/feature in the sidebar) the `+` is
+joined by **Claude** and **Codex** buttons. A single click creates a terminal
+that immediately starts that agent (`claude` / `codex` are expected on the
+PATH). Terminals running an agent carry its icon in the sidebar and tabs, and
+are remembered across restarts.
 
-## Hijerarhija
+## Hierarchy
 
-Grupa (sa radnim direktorijumom) → Feature → Terminal. Terminal nasljeđuje cwd
-grupe. Dvoklik na ime grupe/feature-a/terminala ga preimenuje. Tabovi i grid
-prikaz važe po aktivnom feature-u.
+Project (with a working directory) → Feature → Terminal. A terminal inherits the
+project's cwd. Double-clicking a project/feature/terminal name renames it. Tabs
+and grid view apply to the active feature.
 
 ## Native
 
-- **Browse…** u dijalogu nove grupe bira radni direktorijum nativnim pickerom.
-- **Desni klik na grupu** → Preimenuj / Open in Files (otvori cwd u file manageru).
-- Ikonica terminala se uživo mijenja kad `claude`/`codex` radi (i vraća kad izađe).
+- **Browse…** in the new-project dialog picks the working directory with the native picker.
+- **Right-click a project** → Rename / Open in Files (open the cwd in the file manager).
+- A terminal's icon changes live when `claude`/`codex` is running (and reverts when it exits).
 
-## Perzistencija
+## Persistence
 
-Struktura (grupe + terminali + cwd + startup komanda) čuva se u
-`~/.config/Terminaltor/workspace.json` i obnavlja se na pokretanju sa svježim shell-ovima.
+The structure (projects + terminals + cwd + startup command) is saved to
+`~/.config/OrchestriX/workspace.json` and restored on launch with fresh shells.

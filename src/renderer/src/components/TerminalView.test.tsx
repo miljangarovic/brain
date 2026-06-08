@@ -46,7 +46,7 @@ const api = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  ;(window as unknown as { terminaltor: typeof api }).terminaltor = api
+  ;(window as unknown as { orchestrix: typeof api }).orchestrix = api
 })
 
 // Import after the mocks above are registered.

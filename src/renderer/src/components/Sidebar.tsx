@@ -128,18 +128,18 @@ export function Sidebar(props: {
         {groups.map((g) => (
           <div key={g.id} className="select-none">
             <div className="group flex items-center gap-1 px-2 py-1 hover:bg-hover" onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, groupId: g.id }) }}>
-              <button aria-label={`Skupi/raširi ${g.name}`} onClick={() => onToggleGroup(g.id)} className="w-4 text-fg-muted hover:text-fg">
+              <button aria-label={`Collapse/expand ${g.name}`} onClick={() => onToggleGroup(g.id)} className="w-4 text-fg-muted hover:text-fg">
                 {g.collapsed ? '▸' : '▾'}
               </button>
-              {isEditing('group', g.id) ? renameInput(`Preimenuj grupu ${g.name}`) : (
+              {isEditing('group', g.id) ? renameInput(`Rename project ${g.name}`) : (
                 <span className="flex-1 min-w-0 flex items-baseline gap-1.5 cursor-pointer"
                   onClick={() => onNameClick(() => onToggleGroup(g.id))}
                   onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>
                   <span className="truncate text-sm font-semibold text-fg-bright">{g.name}</span>
-                  {g.cwd && <span className="truncate text-xs text-fg-muted/40">{g.cwd}</span>}
+                  {g.cwd && <span className="truncate text-xs text-fg-muted opacity-30">{g.cwd}</span>}
                 </span>
               )}
-              <button aria-label={`Obriši grupu ${g.name}`} title="Obriši grupu" onClick={() => onDeleteGroup(g.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
+              <button aria-label={`Delete project ${g.name}`} title="Delete project" onClick={() => onDeleteGroup(g.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
             </div>
 
             {!g.collapsed && (
@@ -147,22 +147,22 @@ export function Sidebar(props: {
                 {g.features.map((f) => (
                   <div key={f.id}>
                     <div className="group flex items-center gap-1 px-2 py-1 hover:bg-hover">
-                      <button aria-label={`Skupi/raširi feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className="w-4 text-fg-muted hover:text-fg">
+                      <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className="w-4 text-fg-muted hover:text-fg">
                         {f.collapsed ? '▸' : '▾'}
                       </button>
-                      {isEditing('feature', f.id) ? renameInput(`Preimenuj feature ${f.name}`) : (
+                      {isEditing('feature', f.id) ? renameInput(`Rename feature ${f.name}`) : (
                         <span className="flex-1 truncate text-sm font-medium text-fg cursor-pointer"
                           onClick={() => onNameClick(() => onToggleFeature(f.id))}
                           onDoubleClick={() => onNameDblClick(() => startRename('feature', f.id, f.name))}>{f.name}</span>
                       )}
                       {f.terminals.some((t) => busy[t.id]) && <SpinnerIcon className="shrink-0 text-accent" />}
                       <AddMenuButton
-                        label={`Dodaj u ${f.name}`}
+                        label={`Add to ${f.name}`}
                         onAdd={(kind) => (kind === 'shell' ? onAddTerminal(f.id) : onLaunchAgent(f.id, kind))}
                         className={`${hoverBtn} text-base leading-none hover:text-accent`}
                       />
-                      <button aria-label={`Grid prikaz ${f.name}`} title="Grid" onClick={() => onToggleFeatureView(f.id)} className={`${hoverBtn} ${(f.viewMode ?? 'tabs') === 'grid' ? 'text-accent opacity-100' : ''}`}><GridIcon /></button>
-                      <button aria-label={`Obriši feature ${f.name}`} title="Obriši feature" onClick={() => onDeleteFeature(f.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
+                      <button aria-label={`Grid view ${f.name}`} title="Grid" onClick={() => onToggleFeatureView(f.id)} className={`${hoverBtn} ${(f.viewMode ?? 'tabs') === 'grid' ? 'text-accent opacity-100' : ''}`}><GridIcon /></button>
+                      <button aria-label={`Delete feature ${f.name}`} title="Delete feature" onClick={() => onDeleteFeature(f.id)} className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
                     </div>
 
                     {!f.collapsed && (
@@ -179,7 +179,7 @@ export function Sidebar(props: {
                                 : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
                               <ReviewStatusDot status={reviewStatus[t.id]} />
                               {isEditing('terminal', t.id)
-                                ? renameInput(`Preimenuj terminal ${t.name}`)
+                                ? renameInput(`Rename terminal ${t.name}`)
                                 : (
                                   <span className="flex-1 truncate"
                                     onDoubleClick={(e) => { e.stopPropagation(); startRename('terminal', t.id, t.name) }}>
@@ -191,7 +191,7 @@ export function Sidebar(props: {
                                   <button aria-label={`Review terminal ${t.name}`} title="Review"
                                     onClick={(e) => { e.stopPropagation(); onReviewTerminal(t.id) }}
                                     className={`${hoverBtn} text-base leading-none hover:text-accent`}><ReviewIcon /></button>
-                                  <button aria-label={`Obriši terminal ${t.name}`} title="Obriši terminal"
+                                  <button aria-label={`Delete terminal ${t.name}`} title="Delete terminal"
                                     onClick={(e) => { e.stopPropagation(); onDeleteTerminal(t.id) }}
                                     className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
                                 </>
@@ -205,7 +205,7 @@ export function Sidebar(props: {
                 ))}
                 <div className="px-2 pt-1 pb-0.5">
                   <input
-                    aria-label={`Novi feature u ${g.name}`} placeholder="+ Feature"
+                    aria-label={`New feature in ${g.name}`} placeholder="+ Feature"
                     value={featureDraft[g.id] ?? ''}
                     onChange={(e) => setFeatureDraft((d) => ({ ...d, [g.id]: e.target.value }))}
                     onKeyDown={(e) => { if (e.key === 'Enter') submitFeature(g.id) }}
@@ -219,9 +219,9 @@ export function Sidebar(props: {
       </div>
 
       <div className="p-2 border-t border-line">
-        <button aria-label="Nova grupa" onClick={onAddGroup}
+        <button aria-label="New Project" onClick={onAddGroup}
           className="w-full px-2 py-1.5 text-sm rounded-md bg-field text-fg-muted hover:text-accent outline-none transition">
-          + Nova grupa
+          + New Project
         </button>
       </div>
 
@@ -230,7 +230,7 @@ export function Sidebar(props: {
         if (!g) return null
         return (
           <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
-            { label: 'Preimenuj', onSelect: () => startRename('group', g.id, g.name) },
+            { label: 'Rename', onSelect: () => startRename('group', g.id, g.name) },
             { label: 'Open in Files', onSelect: () => onOpenInFiles(g.id) }
           ]} />
         )
@@ -244,7 +244,7 @@ export function Sidebar(props: {
       )}
 
       <div
-        role="separator" aria-label="Promeni širinu sidebar-a"
+        role="separator" aria-label="Resize sidebar"
         onMouseDown={startResize}
         className="absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize hover:bg-accent/60"
       />

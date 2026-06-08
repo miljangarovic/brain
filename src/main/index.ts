@@ -21,7 +21,7 @@ function createWindow(): void {
     height: 820,
     show: false,
     backgroundColor: '#21252b',
-    title: 'Terminaltor',
+    title: 'OrchestriX',
     ...(icon ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

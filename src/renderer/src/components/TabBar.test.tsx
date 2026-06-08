@@ -38,7 +38,7 @@ describe('TabBar', () => {
     const onSelect = vi.fn()
     const onClose = vi.fn()
     render(<TabBar terminals={terms} activeId="a" liveAgents={{}} onSelect={onSelect} onClose={onClose} {...reviewProps} />)
-    await userEvent.click(screen.getByLabelText('Zatvori tests'))
+    await userEvent.click(screen.getByLabelText('Close tests'))
     expect(onClose).toHaveBeenCalledWith('b')
     expect(onSelect).not.toHaveBeenCalled()
   })
@@ -66,9 +66,9 @@ describe('TabBar', () => {
     const onClose = vi.fn()
     render(<TabBar terminals={terms3} activeId="b" liveAgents={{}} onSelect={noop} onClose={onClose} {...reviewProps} />)
     fireEvent.contextMenu(screen.getByText('two'))
-    expect(screen.getByRole('menuitem', { name: 'Zatvori ostale tabove' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'Zatvori sve levo' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Zatvori sve desno' }))
+    expect(screen.getByRole('menuitem', { name: 'Close other tabs' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Close tabs to the left' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Close tabs to the right' }))
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledWith('c')
   })
@@ -81,8 +81,8 @@ describe('TabBar', () => {
     ]
     render(<TabBar terminals={terms3} activeId="a" liveAgents={{}} onSelect={noop} onClose={noop} {...reviewProps} />)
     fireEvent.contextMenu(screen.getByText('one'))
-    expect(screen.queryByRole('menuitem', { name: 'Zatvori sve levo' })).not.toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'Zatvori sve desno' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Close tabs to the left' })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Close tabs to the right' })).toBeInTheDocument()
   })
 
   it('a live agent overrides the tab icon', () => {
