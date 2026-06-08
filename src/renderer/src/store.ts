@@ -57,12 +57,14 @@ export function addTerminal(
   groupId: string,
   input: { name: string; cwd: string; startupCommand?: string; shell?: string }
 ): AppState {
+  const startupCommand = input.startupCommand?.trim()
+  const shell = input.shell?.trim()
   const term: Terminal = {
     id: createId(),
     name: input.name,
     cwd: input.cwd,
-    startupCommand: input.startupCommand?.trim() ? input.startupCommand : undefined,
-    shell: input.shell?.trim() ? input.shell : undefined
+    startupCommand: startupCommand || undefined,
+    shell: shell || undefined
   }
   const groups = state.workspace.groups.map(g =>
     g.id === groupId ? { ...g, terminals: [...g.terminals, term] } : g)

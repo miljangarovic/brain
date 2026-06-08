@@ -69,4 +69,51 @@ describe('store reducers', () => {
     expect(getActiveTerminal(s)?.name).toBe('x')
     expect(allTerminals(s)).toHaveLength(1)
   })
+
+  it('createInitialState on an empty workspace has no active selection', () => {
+    const s = createInitialState()
+    expect(s.activeGroupId).toBeNull()
+    expect(s.activeTerminalId).toBeNull()
+  })
+
+  it('removeTerminal preserves the active terminal when removing a different one', () => {
+    let s = addGroup(createInitialState(), 'g')
+    const gid = s.workspace.groups[0].id
+    s = addTerminal(s, gid, { name: 'a', cwd: '' })
+    s = addTerminal(s, gid, { name: 'b', cwd: '' })
+    const aId = s.workspace.groups[0].terminals[0].id
+    const bId = s.workspace.groups[0].terminals[1].id
+    s = setActiveTerminal(s, aId)
+    s = removeTerminal(s, bId)
+    expect(s.activeTerminalId).toBe(aId)
+  })
+
+  it('deleteGroup keeps the active selection when removing a non-active group', () => {
+    let s = addGroup(addGroup(createInitialState(), 'g1'), 'g2')
+    const g1 = s.workspace.groups[0].id
+    const g2 = s.workspace.groups[1].id
+    s = setActiveGroup(s, g1)
+    s = deleteGroup(s, g2)
+    expect(s.activeGroupId).toBe(g1)
+  })
+
+  it('addTerminal trims and drops blank startup command / shell', () => {
+    let s = addGroup(createInitialState(), 'g')
+    const gid = s.workspace.groups[0].id
+    s = addTerminal(s, gid, { name: 'x', cwd: '', startupCommand: '  claude  ', shell: '   ' })
+    const t = s.workspace.groups[0].terminals[0]
+    expect(t.startupCommand).toBe('claude')
+    expect(t.shell).toBeUndefined()
+  })
+
+  it('setActiveTerminal also activates the owning group', () => {
+    let s = addGroup(addGroup(createInitialState(), 'g1'), 'g2')
+    const g1 = s.workspace.groups[0].id
+    s = addTerminal(s, g1, { name: 'a', cwd: '' })
+    const aId = s.workspace.groups[0].terminals[0].id
+    s = setActiveGroup(s, s.workspace.groups[1].id) // make g2 active
+    s = setActiveTerminal(s, aId)
+    expect(s.activeGroupId).toBe(g1)
+    expect(s.activeTerminalId).toBe(aId)
+  })
 })
