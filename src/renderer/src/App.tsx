@@ -100,6 +100,10 @@ export default function App() {
         onRenameTerminal={(id, name) => apply((s) => renameTerminal(s, id, name))}
         onDeleteGroup={(id) => apply((s) => deleteGroup(s, id))}
         onDeleteFeature={(id) => apply((s) => deleteFeature(s, id))}
+        onOpenInFiles={(gid) => {
+          const g = state.workspace.groups.find((x) => x.id === gid)
+          window.terminaltor.openPath(g?.cwd ?? '')
+        }}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

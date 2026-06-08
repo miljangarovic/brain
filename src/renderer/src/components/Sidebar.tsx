@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Group } from '@shared/types'
 import type { AgentKind } from '../agents'
 import { TerminalKindIcon, ClaudeIcon, CodexIcon, GridIcon } from './icons'
+import { ContextMenu } from './ContextMenu'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
 
@@ -22,13 +23,15 @@ export function Sidebar(props: {
   onRenameTerminal: (id: string, name: string) => void
   onDeleteGroup: (id: string) => void
   onDeleteFeature: (id: string) => void
+  onOpenInFiles: (groupId: string) => void
 }) {
   const {
     groups, activeTerminalId, liveAgents, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView,
-    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature
+    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onOpenInFiles
   } = props
 
+  const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
   const [editing, setEditing] = useState<{ kind: RenameKind; id: string } | null>(null)
   const [draft, setDraft] = useState('')
   const startRename = (kind: RenameKind, id: string, current: string) => { setEditing({ kind, id }); setDraft(current) }
@@ -76,7 +79,7 @@ export function Sidebar(props: {
       <div className="flex-1 overflow-y-auto py-1">
         {groups.map((g) => (
           <div key={g.id} className="select-none">
-            <div className="group flex items-center gap-1 px-2 py-1 hover:bg-hover">
+            <div className="group flex items-center gap-1 px-2 py-1 hover:bg-hover" onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, groupId: g.id }) }}>
               <button aria-label={`Skupi/raširi ${g.name}`} onClick={() => onToggleGroup(g.id)} className="w-4 text-fg-muted hover:text-fg">
                 {g.collapsed ? '▸' : '▾'}
               </button>
@@ -151,6 +154,17 @@ export function Sidebar(props: {
           + Nova grupa
         </button>
       </div>
+
+      {menu && (() => {
+        const g = groups.find((x) => x.id === menu.groupId)
+        if (!g) return null
+        return (
+          <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
+            { label: 'Preimenuj', onSelect: () => startRename('group', g.id, g.name) },
+            { label: 'Open in Files', onSelect: () => onOpenInFiles(g.id) }
+          ]} />
+        )
+      })()}
     </div>
   )
 }

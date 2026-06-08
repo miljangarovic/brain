@@ -33,6 +33,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onRenameTerminal: noop,
     onDeleteGroup: noop,
     onDeleteFeature: noop,
+    onOpenInFiles: noop,
     liveAgents: {},
     ...overrides
   }
@@ -112,5 +113,14 @@ describe('Sidebar (3-level)', () => {
     await userEvent.clear(screen.getByLabelText('Preimenuj terminal claude'))
     await userEvent.type(screen.getByLabelText('Preimenuj terminal claude'), 'c2{Enter}')
     expect(onRenameTerminal).toHaveBeenCalledWith('t1', 'c2')
+  })
+
+  it('right-click on a group offers Open in Files', async () => {
+    const onOpenInFiles = vi.fn()
+    renderSidebar({ onOpenInFiles })
+    const { fireEvent } = await import('@testing-library/react')
+    fireEvent.contextMenu(screen.getByText('proj'))
+    await userEvent.click(screen.getByText('Open in Files'))
+    expect(onOpenInFiles).toHaveBeenCalledWith('g1')
   })
 })
