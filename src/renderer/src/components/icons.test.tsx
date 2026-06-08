@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { TerminalKindIcon } from './icons'
+import { TerminalKindIcon, GridIcon } from './icons'
 
 describe('TerminalKindIcon', () => {
   it('renders the matching icon per kind', () => {
@@ -10,5 +10,12 @@ describe('TerminalKindIcon', () => {
     expect(screen.getByTestId('icon-codex')).toBeInTheDocument()
     rerender(<TerminalKindIcon kind="shell" />)
     expect(screen.getByTestId('icon-shell')).toBeInTheDocument()
+  })
+})
+
+describe('GridIcon', () => {
+  it('renders a grid glyph', () => {
+    render(<GridIcon />)
+    expect(screen.getByTestId('icon-grid')).toBeInTheDocument()
   })
 })
