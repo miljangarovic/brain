@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
-  createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
+  createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
-  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
+  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
   setReviewRound, findReviewerFor, featureIdOfTerminal, getTerminalById
@@ -172,6 +172,99 @@ describe('store reducers', () => {
     it('returns state unchanged for an unknown feature id', () => {
       const { s } = threeFeatures()
       expect(moveFeature(s, 'nope', 0)).toBe(s)
+    })
+  })
+
+  describe('moveGroup', () => {
+    // Workspace with three projects: [a, b, c].
+    const threeGroups = () => addGroup(addGroup(addGroup(createInitialState(), 'a', ''), 'b', ''), 'c', '')
+    const names = (s: ReturnType<typeof addGroup>) => s.workspace.groups.map((g) => g.name)
+
+    it('moves a project down to a later index', () => {
+      const s = threeGroups()
+      expect(names(moveGroup(s, s.workspace.groups[0].id, 2))).toEqual(['b', 'c', 'a'])
+    })
+
+    it('moves a project up to an earlier index', () => {
+      const s = threeGroups()
+      expect(names(moveGroup(s, s.workspace.groups[2].id, 0))).toEqual(['c', 'a', 'b'])
+    })
+
+    it('is a no-op when moved to its current index', () => {
+      const s = threeGroups()
+      expect(names(moveGroup(s, s.workspace.groups[1].id, 1))).toEqual(['a', 'b', 'c'])
+    })
+
+    it('clamps an out-of-range index to the last position', () => {
+      const s = threeGroups()
+      expect(names(moveGroup(s, s.workspace.groups[0].id, 99))).toEqual(['b', 'c', 'a'])
+    })
+
+    it('does not change the active selection', () => {
+      const s = threeGroups()
+      const out = moveGroup(s, s.workspace.groups[0].id, 2)
+      expect(out.activeGroupId).toBe(s.activeGroupId)
+      expect(out.activeFeatureId).toBe(s.activeFeatureId)
+      expect(out.activeTerminalId).toBe(s.activeTerminalId)
+    })
+
+    it('returns state unchanged for an unknown group id', () => {
+      const s = threeGroups()
+      expect(moveGroup(s, 'nope', 0)).toBe(s)
+    })
+  })
+
+  describe('moveTerminal', () => {
+    // One feature with three terminals: [t1, t2, t3].
+    const threeTerminals = () => {
+      let s = addGroup(createInitialState(), 'a', '')
+      const fid = firstGroup(s).features[0].id
+      s = addTerminal(s, fid, { name: 't1' })
+      s = addTerminal(s, fid, { name: 't2' })
+      s = addTerminal(s, fid, { name: 't3' })
+      return { s, fid }
+    }
+    const termNames = (s: ReturnType<typeof addGroup>) => firstGroup(s).features[0].terminals.map((t) => t.name)
+
+    it('moves a terminal down to a later index', () => {
+      const { s } = threeTerminals()
+      expect(termNames(moveTerminal(s, firstGroup(s).features[0].terminals[0].id, 2))).toEqual(['t2', 't3', 't1'])
+    })
+
+    it('moves a terminal up to an earlier index', () => {
+      const { s } = threeTerminals()
+      expect(termNames(moveTerminal(s, firstGroup(s).features[0].terminals[2].id, 0))).toEqual(['t3', 't1', 't2'])
+    })
+
+    it('is a no-op when moved to its current index', () => {
+      const { s } = threeTerminals()
+      expect(termNames(moveTerminal(s, firstGroup(s).features[0].terminals[1].id, 1))).toEqual(['t1', 't2', 't3'])
+    })
+
+    it('clamps an out-of-range index to the last position', () => {
+      const { s } = threeTerminals()
+      expect(termNames(moveTerminal(s, firstGroup(s).features[0].terminals[0].id, 99))).toEqual(['t2', 't3', 't1'])
+    })
+
+    it('leaves terminals of other features untouched', () => {
+      let { s } = threeTerminals()
+      s = addFeature(s, firstGroup(s).id, 'other')
+      const otherFid = firstGroup(s).features[1].id
+      s = addTerminal(s, otherFid, { name: 'keep' })
+      const out = moveTerminal(s, firstGroup(s).features[0].terminals[0].id, 2)
+      expect(out.workspace.groups[0].features[1].terminals.map((t) => t.name)).toEqual(['keep'])
+    })
+
+    it('does not change the active selection', () => {
+      const { s } = threeTerminals()
+      const out = moveTerminal(s, firstGroup(s).features[0].terminals[0].id, 2)
+      expect(out.activeTerminalId).toBe(s.activeTerminalId)
+      expect(out.activeFeatureId).toBe(s.activeFeatureId)
+    })
+
+    it('returns state unchanged for an unknown terminal id', () => {
+      const { s } = threeTerminals()
+      expect(moveTerminal(s, 'nope', 0)).toBe(s)
     })
   })
 

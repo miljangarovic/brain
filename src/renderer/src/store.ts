@@ -72,6 +72,18 @@ export function deleteGroup(state: AppState, groupId: string): AppState {
   return { ...state, workspace: { groups }, activeGroupId, activeFeatureId, activeTerminalId }
 }
 
+// Reorder a project within the workspace. Mirrors `moveFeature`: remove it from
+// its current slot and re-insert at clamp(toIndex, 0, len-1). Every group's
+// contents and the active selection are left untouched.
+export function moveGroup(state: AppState, groupId: string, toIndex: number): AppState {
+  const { groups } = state.workspace
+  const moved = groups.find((g) => g.id === groupId)
+  if (!moved) return state
+  const rest = groups.filter((g) => g.id !== groupId)
+  const dest = Math.max(0, Math.min(toIndex, rest.length))
+  return { ...state, workspace: { groups: [...rest.slice(0, dest), moved, ...rest.slice(dest)] } }
+}
+
 // ---- features ------------------------------------------------------------
 export function addFeature(state: AppState, groupId: string, name: string): AppState {
   const feature: Feature = { id: createId(), name, collapsed: false, terminals: [] }
@@ -162,6 +174,20 @@ export function renameTerminal(state: AppState, terminalId: string, name: string
       features: g.features.map((f) => ({ ...f, terminals: f.terminals.map((t) => (t.id === terminalId ? { ...t, name } : t)) }))
     }))
   }
+}
+
+// Reorder a terminal within its own feature. Mirrors `moveFeature`: remove it
+// from its current slot and re-insert at clamp(toIndex, 0, len-1). Other features
+// and the active selection are left untouched.
+export function moveTerminal(state: AppState, terminalId: string, toIndex: number): AppState {
+  const found = featureOfTerminal(state.workspace, terminalId)
+  if (!found) return state
+  const { feature } = found
+  const moved = feature.terminals.find((t) => t.id === terminalId)!
+  const rest = feature.terminals.filter((t) => t.id !== terminalId)
+  const dest = Math.max(0, Math.min(toIndex, rest.length))
+  const terminals = [...rest.slice(0, dest), moved, ...rest.slice(dest)]
+  return { ...state, workspace: mapFeature(state.workspace, feature.id, (f) => ({ ...f, terminals })) }
 }
 
 export function setReviewRound(state: AppState, terminalId: string, round: number): AppState {

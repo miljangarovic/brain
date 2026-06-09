@@ -28,7 +28,9 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onAddTerminal: noop,
     onLaunchAgent: noop,
     onToggleFeatureView: noop,
+    onMoveGroup: noop,
     onMoveFeature: noop,
+    onMoveTerminal: noop,
     onRenameGroup: noop,
     onRenameFeature: noop,
     onRenameTerminal: noop,
@@ -248,6 +250,62 @@ describe('Sidebar (3-level)', () => {
       fireEvent.dragOver(dropZoneFor(container, 'gB'))
       fireEvent.drop(dropZoneFor(container, 'gB'))
       expect(onMoveFeature).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('project reorder (drag-and-drop)', () => {
+    const twoGroups: Group[] = [
+      { id: 'gA', name: 'A', cwd: '', collapsed: true, features: [] },
+      { id: 'gB', name: 'B', cwd: '', collapsed: true, features: [] }
+    ]
+    const groupRow = (c: HTMLElement, id: string) => c.querySelector(`[data-group-id="${id}"]`) as HTMLElement
+    const groupsZone = (c: HTMLElement) => c.querySelector('[data-groups]') as HTMLElement
+
+    it('project rows are draggable and dropping on the groups zone calls onMoveGroup', () => {
+      const onMoveGroup = vi.fn()
+      const { container } = renderSidebar({ groups: twoGroups, onMoveGroup })
+      expect(groupRow(container, 'gA')).toHaveAttribute('draggable', 'true')
+      fireEvent.dragStart(groupRow(container, 'gA'))
+      fireEvent.dragOver(groupsZone(container))
+      fireEvent.drop(groupsZone(container))
+      expect(onMoveGroup).toHaveBeenCalledWith('gA', expect.any(Number))
+    })
+  })
+
+  describe('terminal reorder (drag-and-drop)', () => {
+    const termRow = (c: HTMLElement, id: string) => c.querySelector(`[data-term-id="${id}"]`) as HTMLElement
+    const termZone = (c: HTMLElement, featureId: string) => c.querySelector(`[data-feature-terminals="${featureId}"]`) as HTMLElement
+
+    it('terminal rows are draggable and dropping on the feature zone calls onMoveTerminal', () => {
+      const twoTerms: Group[] = [
+        { id: 'g1', name: 'proj', cwd: '', collapsed: false, features: [
+          { id: 'f1', name: 'auth', collapsed: false, terminals: [
+            { id: 't1', name: 'a', cwd: '' }, { id: 't2', name: 'b', cwd: '' }
+          ] }
+        ] }
+      ]
+      const onMoveTerminal = vi.fn()
+      const { container } = renderSidebar({ groups: twoTerms, onMoveTerminal })
+      expect(termRow(container, 't1')).toHaveAttribute('draggable', 'true')
+      fireEvent.dragStart(termRow(container, 't1'))
+      fireEvent.dragOver(termZone(container, 'f1'))
+      fireEvent.drop(termZone(container, 'f1'))
+      expect(onMoveTerminal).toHaveBeenCalledWith('t1', expect.any(Number))
+    })
+
+    it('ignores a drop onto a different feature than the dragged terminal', () => {
+      const twoFeatures: Group[] = [
+        { id: 'g1', name: 'proj', cwd: '', collapsed: false, features: [
+          { id: 'f1', name: 'auth', collapsed: false, terminals: [{ id: 't1', name: 'a', cwd: '' }] },
+          { id: 'f2', name: 'ui', collapsed: false, terminals: [{ id: 't2', name: 'b', cwd: '' }] }
+        ] }
+      ]
+      const onMoveTerminal = vi.fn()
+      const { container } = renderSidebar({ groups: twoFeatures, onMoveTerminal })
+      fireEvent.dragStart(termRow(container, 't1'))
+      fireEvent.dragOver(termZone(container, 'f2'))
+      fireEvent.drop(termZone(container, 'f2'))
+      expect(onMoveTerminal).not.toHaveBeenCalled()
     })
   })
 })

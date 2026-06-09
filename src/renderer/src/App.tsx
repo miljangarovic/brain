@@ -3,9 +3,9 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import { removedIds } from './ptyReaper'
 import {
-  createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed,
+  createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
-  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden,
+  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveTerminal, setActiveFeature,
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, findReviewerFor, allTerminals
 } from './store'
@@ -160,7 +160,9 @@ export default function App() {
         onAddTerminal={(fid) => addShellTerminal(fid)}
         onLaunchAgent={launchAgent}
         onToggleFeatureView={(fid) => apply((s) => toggleFeatureViewMode(setActiveFeature(s, fid), fid))}
+        onMoveGroup={(groupId, toIndex) => apply((s) => moveGroup(s, groupId, toIndex))}
         onMoveFeature={(featureId, toIndex) => apply((s) => moveFeature(s, featureId, toIndex))}
+        onMoveTerminal={(terminalId, toIndex) => apply((s) => moveTerminal(s, terminalId, toIndex))}
         onRenameGroup={(id, name) => apply((s) => renameGroup(s, id, name))}
         onRenameFeature={(id, name) => apply((s) => renameFeature(s, id, name))}
         onRenameTerminal={(id, name) => apply((s) => renameTerminal(s, id, name))}
