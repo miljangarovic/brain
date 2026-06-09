@@ -2,37 +2,54 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { FeatureHeader } from './FeatureHeader'
 
-const noRelay = { canReturn: false, canReReview: false, canMarkApplied: false }
+const noReview = { reviewerId: null, canApprove: false, isLast: false, needsDecision: false, active: false }
 const base = {
-  featureName: 'auth', viewMode: 'tabs' as const,
-  onToggleView: () => {}, onAdd: () => {},
-  relay: noRelay, onReturnToOrigin: () => {}, onReReview: () => {}, onMarkApplied: () => {}
+  featureName: 'auth', viewMode: 'tabs' as const, onToggleView: vi.fn(), onAdd: vi.fn(),
+  onApprovePhase: vi.fn(), onMoreRounds: vi.fn(), onAcceptPhase: vi.fn(), onStopLoop: vi.fn()
 }
 
 describe('FeatureHeader', () => {
-  it('shows the feature name', () => {
-    render(<FeatureHeader {...base} />)
+  it('shows the feature name and the grid toggle', () => {
+    render(<FeatureHeader {...base} review={noReview} />)
     expect(screen.getByText('auth')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Grid view' })).toBeInTheDocument()
   })
-  it('grid button calls onToggleView', () => {
+
+  it('grid toggle calls onToggleView', () => {
     const onToggleView = vi.fn()
-    render(<FeatureHeader {...base} onToggleView={onToggleView} />)
-    fireEvent.click(screen.getByLabelText('Grid view'))
+    render(<FeatureHeader {...base} onToggleView={onToggleView} review={noReview} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Grid view' }))
     expect(onToggleView).toHaveBeenCalled()
   })
-  it('add menu calls onAdd with the kind', () => {
-    const onAdd = vi.fn()
-    render(<FeatureHeader {...base} onAdd={onAdd} />)
-    fireEvent.click(screen.getByLabelText('Add terminal'))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
-    expect(onAdd).toHaveBeenCalledWith('codex')
+
+  it('shows "Stani petlju" while the loop is active', () => {
+    const onStopLoop = vi.fn()
+    render(<FeatureHeader {...base} onStopLoop={onStopLoop} review={{ ...noReview, reviewerId: 'b', active: true }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Stani petlju' }))
+    expect(onStopLoop).toHaveBeenCalledWith('b')
   })
-  it('shows relay buttons only when flagged and wires them', () => {
-    const onReturnToOrigin = vi.fn()
-    const { rerender } = render(<FeatureHeader {...base} />)
-    expect(screen.queryByText('→ Return to A')).toBeNull()
-    rerender(<FeatureHeader {...base} relay={{ ...noRelay, canReturn: true }} onReturnToOrigin={onReturnToOrigin} />)
-    fireEvent.click(screen.getByText('→ Return to A'))
-    expect(onReturnToOrigin).toHaveBeenCalled()
+
+  it('shows the phase gate and calls onApprovePhase', () => {
+    const onApprovePhase = vi.fn()
+    render(<FeatureHeader {...base} onApprovePhase={onApprovePhase} review={{ ...noReview, reviewerId: 'b', canApprove: true }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Odobri → sljedeća faza' }))
+    expect(onApprovePhase).toHaveBeenCalledWith('b')
+  })
+
+  it('labels the last-phase gate "Završi"', () => {
+    render(<FeatureHeader {...base} review={{ ...noReview, reviewerId: 'b', canApprove: true, isLast: true }} />)
+    expect(screen.getByRole('button', { name: 'Završi' })).toBeInTheDocument()
+  })
+
+  it('shows the three decision buttons on needs-decision', () => {
+    const onMoreRounds = vi.fn(); const onAcceptPhase = vi.fn(); const onStopLoop = vi.fn()
+    render(<FeatureHeader {...base} onMoreRounds={onMoreRounds} onAcceptPhase={onAcceptPhase} onStopLoop={onStopLoop}
+      review={{ ...noReview, reviewerId: 'b', needsDecision: true }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Još rundi' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Prihvati ovako' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(onMoreRounds).toHaveBeenCalledWith('b')
+    expect(onAcceptPhase).toHaveBeenCalledWith('b')
+    expect(onStopLoop).toHaveBeenCalledWith('b')
   })
 })
