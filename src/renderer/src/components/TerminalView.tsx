@@ -29,12 +29,13 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
   const paste = useCallback(() => {
     const term = xtermRef.current
     if (!term) return
+    markTouched(terminal.id) // right-click paste also counts as engaging the terminal
     // term.paste() (not raw writePty) so bracketed-paste mode is honoured — agents
     // like claude/codex rely on it to receive multi-line pastes as a single block.
     void navigator.clipboard.readText().then((text) => {
       if (text) { term.paste(text); term.focus() }
     })
-  }, [])
+  }, [terminal.id])
   const selectAll = useCallback(() => {
     const term = xtermRef.current
     if (!term) return
@@ -78,13 +79,16 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     const offExit = window.orchestrix.onPtyExit((id) => {
       if (id === terminal.id) term.write('\r\n\x1b[33m[process exited]\x1b[0m\r\n')
     })
-    // User keystrokes/paste mark this terminal "engaged" — attention's idle
-    // signals only fire for terminals you've actually worked in (term.onData is
-    // user input only; programmatic writes go through writePty, not this).
-    const inputDisposable = term.onData((data) => { markTouched(terminal.id); window.orchestrix.writePty(terminal.id, data) })
+    const inputDisposable = term.onData((data) => window.orchestrix.writePty(terminal.id, data))
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
+
+      // A real keypress in this terminal marks it "engaged" — attention's idle
+      // signals only fire for terminals you've actually worked in. (Must be a key
+      // event, NOT term.onData: xterm auto-replies to TUI queries via onData,
+      // which would falsely mark every agent touched on startup.)
+      markTouched(terminal.id)
 
       // Shift+Enter → insert a newline (LF) instead of submitting (CR).
       // Plain Enter still sends CR ("submit"); claude/codex and most readline/Ink

@@ -40,7 +40,7 @@ export function AttentionBell(props: {
           count > 0 ? 'text-amber-300 hover:bg-hover' : 'text-fg-muted hover:bg-hover'}`}
       >
         <BellIcon className="shrink-0" />
-        <span className="flex-1 text-left truncate">Pažnja</span>
+        <span className="flex-1 text-left truncate">Attention</span>
         {count > 0 && (
           <span className="shrink-0 min-w-5 px-1.5 text-center rounded-full bg-amber-400 text-[11px] font-semibold text-black">
             {count}
