@@ -5,7 +5,7 @@ import {
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
-  setReviewRound, findReviewerFor, featureIdOfTerminal, getTerminalById
+  patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById
 } from './store'
 import { migrateWorkspace } from './migrate'
 
@@ -373,8 +373,8 @@ describe('store reducers', () => {
 
 describe('review store', () => {
   const link = (originId: string, round = 1) => ({
-    originTerminalId: originId, reviewKind: 'spec' as const,
-    specPath: '/a/spec.md', reviewDir: '/r', round
+    originTerminalId: originId, phase: 'spec' as const, round, maxRounds: 5,
+    reviewDir: '/r', specPath: '/a/spec.md', intentPath: '/r/intent.md'
   })
 
   it('addTerminal can attach a review link', () => {
@@ -397,13 +397,16 @@ describe('review store', () => {
     expect(findReviewerFor(s, 'nope')).toBeNull()
   })
 
-  it('setReviewRound bumps the round on a reviewer terminal', () => {
+  it('patchReviewLink merges fields on a reviewer terminal', () => {
     let s = addGroup(createInitialState(), 'g', '/p')
     const fid = s.workspace.groups[0].features[0].id
     s = addTerminal(s, fid, { name: 'review: codex', kind: 'codex', review: link('o', 1) })
     const bId = getActiveTerminal(s)!.id
-    s = setReviewRound(s, bId, 2)
-    expect(findReviewerFor(s, 'o')?.review?.round).toBe(2)
+    s = patchReviewLink(s, bId, { phase: 'impl', round: 2 })
+    const r = findReviewerFor(s, 'o')?.review
+    expect(r?.phase).toBe('impl')
+    expect(r?.round).toBe(2)
+    expect(r?.maxRounds).toBe(5) // untouched fields preserved
   })
 
   it('featureIdOfTerminal / getTerminalById resolve a terminal', () => {

@@ -204,7 +204,7 @@ export function moveTerminal(state: AppState, terminalId: string, toIndex: numbe
   return { ...state, workspace: mapFeature(state.workspace, feature.id, (f) => ({ ...f, terminals })) }
 }
 
-export function setReviewRound(state: AppState, terminalId: string, round: number): AppState {
+export function patchReviewLink(state: AppState, terminalId: string, patch: Partial<ReviewLink>): AppState {
   return {
     ...state,
     workspace: mapGroups(state.workspace, (g) => ({
@@ -212,7 +212,7 @@ export function setReviewRound(state: AppState, terminalId: string, round: numbe
       features: g.features.map((f) => ({
         ...f,
         terminals: f.terminals.map((t) =>
-          t.id === terminalId && t.review ? { ...t, review: { ...t.review, round } } : t)
+          t.id === terminalId && t.review ? { ...t, review: { ...t.review, ...patch } } : t)
       }))
     }))
   }
