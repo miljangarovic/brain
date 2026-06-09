@@ -426,3 +426,37 @@ describe('review store', () => {
     expect(getTerminalById(s, 'fixed-id')?.name).toBe('B')
   })
 })
+
+import { isUnderReview, terminalPath } from './store'
+
+describe('attention store helpers', () => {
+  // Build: project "p" › feature "general" › terminals origin + reviewer(origin).
+  function withReviewer() {
+    let s = addGroup(createInitialState(), 'p', '/tmp')
+    const fid = s.activeFeatureId!
+    s = addTerminal(s, fid, { id: 'origin', name: 'impl', kind: 'claude' })
+    s = addTerminal(s, fid, {
+      id: 'rev', name: 'review: codex', kind: 'codex',
+      review: { originTerminalId: 'origin', phase: 'impl', round: 1, maxRounds: 5, reviewDir: '/x' }
+    })
+    return s
+  }
+
+  it('isUnderReview is true for a reviewer and its origin', () => {
+    const s = withReviewer()
+    expect(isUnderReview(s, 'rev')).toBe(true)
+    expect(isUnderReview(s, 'origin')).toBe(true)
+  })
+  it('isUnderReview is false for an unrelated terminal', () => {
+    let s = withReviewer()
+    s = addTerminal(s, s.activeFeatureId!, { id: 'solo', name: 'solo', kind: 'claude' })
+    expect(isUnderReview(s, 'solo')).toBe(false)
+  })
+  it('terminalPath renders Project › Feature › Terminal', () => {
+    const s = withReviewer()
+    expect(terminalPath(s, 'origin')).toBe('p › general › impl')
+  })
+  it('terminalPath is empty for an unknown id', () => {
+    expect(terminalPath(createInitialState(), 'nope')).toBe('')
+  })
+})
