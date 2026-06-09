@@ -43,4 +43,11 @@ describe('AttentionBell', () => {
     fireEvent.click(screen.getByRole('button', { name: /mute|unmute/i }))
     expect(onToggleMute).toHaveBeenCalled()
   })
+  it('closes the popover when Escape is pressed', () => {
+    render(<AttentionBell {...base} />)
+    fireEvent.click(screen.getByRole('button', { name: /attention/i }))
+    expect(screen.getByText('p › f › claude')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByText('p › f › claude')).not.toBeInTheDocument()
+  })
 })

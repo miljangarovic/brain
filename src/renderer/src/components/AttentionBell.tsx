@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AttentionState } from '../attention/detect'
 import { AttentionDot } from './AttentionDot'
 import { BellIcon, SpeakerIcon, SpeakerMutedIcon, TrashIcon } from './icons'
@@ -23,6 +23,13 @@ export function AttentionBell(props: {
   const { items, muted, onSelect, onClear, onClearAll, onToggleMute } = props
   const [open, setOpen] = useState(false)
   const count = items.length
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
 
   return (
     <div className="relative">
