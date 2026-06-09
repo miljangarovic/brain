@@ -197,7 +197,10 @@ export default function App() {
         }}
         onDeleteTerminal={(id) => {
           const t = allTerminals(state).find((x) => x.id === id)
-          askDelete(`Delete terminal "${t?.name ?? ''}"?`, () => apply((s) => removeTerminal(s, id)))
+          askDelete(`Delete terminal "${t?.name ?? ''}"?`, () => {
+            if (t?.review) review.stopLoop(id) // clear the bound origin's review status before removing the reviewer
+            apply((s) => removeTerminal(s, id))
+          })
         }}
         onOpenInFiles={(gid) => {
           const g = state.workspace.groups.find((x) => x.id === gid)
