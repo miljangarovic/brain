@@ -16,8 +16,19 @@ npm test          # unit tests
 ## Packaging
 
 ```bash
+# Linux only: system deps for building the .deb / AppImage targets
+sudo apt install -y dpkg fakeroot libfuse2
+
 npm run dist      # build installers (Linux AppImage/.deb; mac dmg/zip; win nsis) into release/
 npm run dist:dir  # unpacked build only (no installer), for a quick check
+```
+
+Install the built `.deb` (Linux):
+
+```bash
+sudo apt install ./release/0.1.0/orchestrix_0.1.0_amd64.deb   # resolves deps automatically
+# then launch from your app menu, or run: /opt/OrchestriX/orchestrix
+# uninstall: sudo apt remove orchestrix
 ```
 
 ## Shortcuts
