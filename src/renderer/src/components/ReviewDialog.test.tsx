@@ -13,26 +13,28 @@ beforeEach(() => {
 const baseProps = { originName: 'claude', defaultReviewer: 'codex' as const, cwd: '/p' }
 
 describe('ReviewDialog', () => {
-  it('prefills the suggested spec path on mount', async () => {
+  it('defaults to the intent phase with maxRounds 5 and no spec field', () => {
     render(<ReviewDialog {...baseProps} onStart={vi.fn()} onCancel={vi.fn()} />)
-    await waitFor(() => expect(screen.getByLabelText('Spec file')).toHaveValue('/p/docs/spec.md'))
+    expect(screen.getByLabelText('Intent')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('Max rounds')).toHaveValue(5)
+    expect(screen.queryByLabelText('Spec file')).toBeNull()
   })
 
-  it('starts a spec review with chosen reviewer + intent', async () => {
+  it('starts an intent review with the chosen reviewer and maxRounds', () => {
     const onStart = vi.fn()
     render(<ReviewDialog {...baseProps} onStart={onStart} onCancel={vi.fn()} />)
-    await waitFor(() => expect(screen.getByLabelText('Spec file')).toHaveValue('/p/docs/spec.md'))
-    fireEvent.change(screen.getByLabelText('Intent (optional)'), { target: { value: 'auth' } })
+    fireEvent.change(screen.getByLabelText('Max rounds'), { target: { value: '3' } })
     fireEvent.click(screen.getByRole('button', { name: 'Start review' }))
-    expect(onStart).toHaveBeenCalledWith({ reviewer: 'codex', kind: 'spec', specPath: '/p/docs/spec.md', intent: 'auth' })
+    expect(onStart).toHaveBeenCalledWith({ reviewer: 'codex', phase: 'intent', maxRounds: 3, specPath: undefined, intent: '' })
   })
 
-  it('implementation review needs no spec path', async () => {
+  it('spec phase shows + prefills the spec file and passes it on start', async () => {
     const onStart = vi.fn()
     render(<ReviewDialog {...baseProps} onStart={onStart} onCancel={vi.fn()} />)
-    fireEvent.click(screen.getByLabelText('Implementation'))
+    fireEvent.click(screen.getByLabelText('Spec/plan'))
+    await waitFor(() => expect(screen.getByLabelText('Spec file')).toHaveValue('/p/docs/spec.md'))
     fireEvent.click(screen.getByRole('button', { name: 'Start review' }))
-    expect(onStart).toHaveBeenCalledWith({ reviewer: 'codex', kind: 'impl', specPath: undefined, intent: '' })
+    expect(onStart).toHaveBeenCalledWith({ reviewer: 'codex', phase: 'spec', maxRounds: 5, specPath: '/p/docs/spec.md', intent: '' })
   })
 
   it('closes on Escape', () => {

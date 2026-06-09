@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { ReviewKind } from '@shared/types'
+import type { ReviewPhase } from '@shared/types'
 import type { AgentKind } from '../agents'
+import { PHASE_ORDER, PHASE_LABEL } from '../review/phases'
 
 export interface ReviewStartArgs {
   reviewer: AgentKind
-  kind: ReviewKind
+  phase: ReviewPhase
+  maxRounds: number
   specPath?: string
   intent: string
 }
@@ -19,7 +21,8 @@ export function ReviewDialog({
   onCancel: () => void
 }) {
   const [reviewer, setReviewer] = useState<AgentKind>(defaultReviewer)
-  const [kind, setKind] = useState<ReviewKind>('spec')
+  const [phase, setPhase] = useState<ReviewPhase>('intent')
+  const [maxRounds, setMaxRounds] = useState(5)
   const [specPath, setSpecPath] = useState('')
   const [intent, setIntent] = useState('')
 
@@ -29,11 +32,13 @@ export function ReviewDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [onCancel])
 
+  // Prefill a suggested spec only when the spec field is relevant (spec/impl phases).
   useEffect(() => {
+    if (phase === 'intent' || specPath) return
     let cancelled = false
     window.orchestrix.suggestSpec(cwd).then((p) => { if (!cancelled && p) setSpecPath(p) })
     return () => { cancelled = true }
-  }, [cwd])
+  }, [phase, cwd, specPath])
 
   const browse = async () => {
     const p = await window.orchestrix.pickFile({ defaultPath: specPath || cwd })
@@ -41,8 +46,11 @@ export function ReviewDialog({
   }
 
   const submit = () => {
-    if (kind === 'spec' && !specPath.trim()) return
-    onStart({ reviewer, kind, specPath: kind === 'spec' ? specPath.trim() : undefined, intent: intent.trim() })
+    onStart({
+      reviewer, phase, maxRounds,
+      specPath: phase === 'intent' ? undefined : (specPath.trim() || undefined),
+      intent: intent.trim()
+    })
   }
 
   const field = 'mt-1 w-full rounded-md bg-field px-2.5 py-1.5 text-fg-bright placeholder-fg-muted outline-none ring-1 ring-line focus:ring-accent transition'
@@ -53,7 +61,7 @@ export function ReviewDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
       <div className="w-[30rem] rounded-xl bg-elevated border border-line p-5 shadow-2xl shadow-black/50" onClick={(e) => e.stopPropagation()}>
         <h2 className="mb-1 text-lg font-semibold tracking-tight text-fg-bright">Review</h2>
-        <p className="mb-4 text-xs text-fg-muted">Reviewing terminal “{originName}”.</p>
+        <p className="mb-4 text-xs text-fg-muted">Reviewing terminal "{originName}".</p>
 
         <div className="mb-3">
           <span className="text-sm text-fg">Reviewer</span>
@@ -64,14 +72,23 @@ export function ReviewDialog({
         </div>
 
         <div className="mb-3">
-          <span className="text-sm text-fg">Type</span>
+          <span className="text-sm text-fg">Start phase</span>
           <div className="mt-1 flex gap-2">
-            <button type="button" aria-label="Spec/plan" aria-pressed={kind === 'spec'} className={seg(kind === 'spec')} onClick={() => setKind('spec')}>Spec/plan</button>
-            <button type="button" aria-label="Implementation" aria-pressed={kind === 'impl'} className={seg(kind === 'impl')} onClick={() => setKind('impl')}>Implementation</button>
+            {PHASE_ORDER.map((p) => (
+              <button key={p} type="button" aria-label={PHASE_LABEL[p]} aria-pressed={phase === p}
+                className={seg(phase === p)} onClick={() => setPhase(p)}>{PHASE_LABEL[p]}</button>
+            ))}
           </div>
         </div>
 
-        {kind === 'spec' ? (
+        <label className="block mb-3 text-sm text-fg">
+          Max rounds
+          <input aria-label="Max rounds" type="number" min={1} value={maxRounds}
+            onChange={(e) => setMaxRounds(Math.max(1, Number(e.target.value) || 1))}
+            className={field} />
+        </label>
+
+        {phase !== 'intent' && (
           <label className="block mb-3 text-sm text-fg">
             Spec file
             <div className="mt-1 flex gap-2">
@@ -80,8 +97,6 @@ export function ReviewDialog({
               <button type="button" onClick={browse} className="shrink-0 rounded-md bg-field px-3 text-sm text-fg-muted hover:text-fg transition">Browse…</button>
             </div>
           </label>
-        ) : (
-          <p className="mb-3 text-sm text-fg-muted">Artifact: <code className="text-fg">git diff</code> in <code className="text-fg">{cwd || '~'}</code>.</p>
         )}
 
         <label className="block mb-4 text-sm text-fg">
