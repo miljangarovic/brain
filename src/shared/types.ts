@@ -1,16 +1,24 @@
 export type TerminalKind = 'shell' | 'claude' | 'codex'
 
-export type ReviewKind = 'spec' | 'impl'
+export type ReviewPhase = 'intent' | 'spec' | 'impl'
 
 export interface ReviewLink {
   originTerminalId: string   // A — the implementer this terminal reviews
-  reviewKind: ReviewKind
-  specPath?: string          // absolute path of the artifact (only 'spec')
-  reviewDir: string          // absolute dir for review-N.md (outside the project)
-  round: number              // current round (1-based)
+  phase: ReviewPhase         // where we are in the pipeline
+  round: number              // 1-based round WITHIN the current phase
+  maxRounds: number          // safety cap before stopping for a decision
+  reviewDir: string          // absolute dir for review-<phase>-<round>.md (outside the project)
+  transcriptPath?: string    // origin agent's session JSONL (intent phase)
+  intentPath?: string        // artifact built in the intent phase
+  specPath?: string          // artifact for the spec phase
 }
 
-export type ReviewStatus = 'reviewing' | 'review-ready' | 'applying' | 'iteration-done'
+export type ReviewStatus =
+  | 'reviewing'        // B is writing its critique
+  | 'applying'         // A is applying the feedback
+  | 'under-review'     // A: loop active, awaiting/working — the origin indicator
+  | 'phase-approved'   // B: phase APPROVED, waiting at the user gate
+  | 'needs-decision'   // B: maxRounds reached, waiting for the user
 
 export interface Terminal {
   id: string
