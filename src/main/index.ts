@@ -16,7 +16,7 @@ function createWindow(): void {
   // in `process.resourcesPath`); in dev we read it straight from the repo.
   const iconPath = app.isPackaged
     ? join(process.resourcesPath, 'icon.png')
-    : join(app.getAppPath(), 'assets', 'branding', 'png', 'orchestrix-256.png')
+    : join(app.getAppPath(), 'assets', 'branding', 'png', 'brain-256.png')
   const icon = existsSync(iconPath) ? iconPath : undefined
 
   const win = new BrowserWindow({
@@ -24,7 +24,7 @@ function createWindow(): void {
     height: 820,
     show: false,
     backgroundColor: '#21252b',
-    title: 'OrchestriX',
+    title: 'Brain',
     ...(icon ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

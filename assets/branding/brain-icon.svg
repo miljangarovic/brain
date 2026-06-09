@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- BRAIN — app icon master.
+       A brain whose right hemisphere is a circuit tree (the agents) and whose
+       bottom contour runs out into a terminal line ending in a block cursor:
+       the brain that types. Palette = the app's One Dark identity. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#20252e"/>
+      <stop offset="1" stop-color="#11141a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#61afef" stop-opacity="0.20"/>
+      <stop offset="0.7" stop-color="#61afef" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#61afef" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2bbac5"/>
+      <stop offset="0.55" stop-color="#61afef"/>
+      <stop offset="1" stop-color="#528bff"/>
+    </linearGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- tile -->
+  <rect width="1024" height="1024" rx="228" fill="url(#tile)"/>
+  <rect x="3" y="3" width="1018" height="1018" rx="225" fill="none"
+        stroke="#ffffff" stroke-opacity="0.07" stroke-width="6"/>
+  <rect width="1024" height="1024" rx="228" fill="url(#glow)"/>
+
+  <g filter="url(#soft)">
+    <!-- ── LEFT hemisphere — organic ─────────────────────────────────────── -->
+    <!-- outer contour -->
+    <path d="M 488 238
+             C 420 218 352 240 322 292
+             C 252 296 206 352 212 420
+             C 162 458 150 530 186 586
+             C 178 656 226 716 300 728
+             C 332 776 404 792 460 766
+             C 472 760 482 752 488 742"
+          fill="none" stroke="url(#ink)" stroke-width="44"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- gyri folds -->
+    <path d="M 420 332 C 372 340 342 374 344 420" fill="none"
+          stroke="url(#ink)" stroke-width="38" stroke-linecap="round" opacity="0.85"/>
+    <path d="M 300 470 C 296 524 330 560 382 568" fill="none"
+          stroke="url(#ink)" stroke-width="38" stroke-linecap="round" opacity="0.85"/>
+    <path d="M 430 488 C 408 530 416 580 452 612" fill="none"
+          stroke="url(#ink)" stroke-width="38" stroke-linecap="round" opacity="0.7"/>
+
+    <!-- ── RIGHT hemisphere — circuit ────────────────────────────────────── -->
+    <!-- outer contour, bottom edge exits into the terminal line -->
+    <path d="M 536 238
+             C 604 218 672 240 702 292
+             C 772 296 818 352 812 420
+             C 862 458 874 530 838 586
+             C 846 656 798 716 724 728
+             C 700 762 656 780 612 776"
+          fill="none" stroke="url(#ink)" stroke-width="44"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- circuit traces -->
+    <path d="M 536 360 H 640 L 690 410" fill="none"
+          stroke="url(#ink)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 536 478 H 600 L 656 534 H 716" fill="none"
+          stroke="url(#ink)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 536 596 H 622 L 668 642" fill="none"
+          stroke="url(#ink)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- nodes -->
+    <circle cx="712" cy="432" r="26" fill="#2bbac5"/>
+    <circle cx="744" cy="534" r="26" fill="#61afef"/>
+    <circle cx="690" cy="664" r="26" fill="#528bff"/>
+    <!-- one magenta synapse — the spark -->
+    <circle cx="640" cy="300" r="22" fill="#d55fde"/>
+
+    <!-- ── corpus callosum gap is implicit; midline stem ─────────────────── -->
+    <path d="M 512 268 V 700" stroke="#1a1e26" stroke-width="26" stroke-linecap="round" opacity="0"/>
+
+    <!-- ── the terminal line + block cursor ──────────────────────────────── -->
+    <path d="M 612 776 C 618 812 650 834 696 836" fill="none"
+          stroke="url(#ink)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="728" y="794" width="60" height="86" rx="10" fill="#eef1f6"/>
+  </g>
+</svg>
