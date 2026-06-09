@@ -6,9 +6,12 @@ describe('statusDot', () => {
     expect(statusDot('reviewing')).toBe('spinner')
     expect(statusDot('applying')).toBe('spinner')
   })
-  it('review-ready/iteration-done → attention', () => {
-    expect(statusDot('review-ready')).toBe('attention')
-    expect(statusDot('iteration-done')).toBe('attention')
+  it('phase-approved/needs-decision → attention', () => {
+    expect(statusDot('phase-approved')).toBe('attention')
+    expect(statusDot('needs-decision')).toBe('attention')
+  })
+  it('under-review → active', () => {
+    expect(statusDot('under-review')).toBe('active')
   })
   it('undefined → null', () => {
     expect(statusDot(undefined)).toBeNull()

@@ -13,6 +13,8 @@ export const IPC = {
   dialogPickFile: 'dialog:pickFile',
   reviewSuggestSpec: 'review:suggestSpec',
   reviewResolveDir: 'review:resolveDir',
+  reviewResolveTranscript: 'review:resolveTranscript',
+  fsRead: 'fs:read',
   fsWatch: 'fs:watch',
   fsUnwatch: 'fs:unwatch',
   fsChanged: 'fs:changed',

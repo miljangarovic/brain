@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs'
 import { join } from 'path'
+import type { ReviewPhase } from '@shared/types'
 
 export interface MdEntry { path: string; mtimeMs: number }
 
@@ -39,14 +40,19 @@ export function reviewDirFor(userDataDir: string, originTerminalId: string): str
   return join(userDataDir, 'reviews', originTerminalId)
 }
 
-export function reviewFilePath(reviewDir: string, round: number): string {
-  return join(reviewDir, `review-${round}.md`)
+export function reviewFilePath(reviewDir: string, phase: ReviewPhase, round: number): string {
+  return join(reviewDir, `review-${phase}-${round}.md`)
 }
 
 export async function resolveReviewPaths(
-  userDataDir: string, originTerminalId: string, round: number
-): Promise<{ reviewDir: string; reviewFile: string }> {
+  userDataDir: string, originTerminalId: string, phase: ReviewPhase, round: number
+): Promise<{ reviewDir: string; reviewFile: string; intentPath: string; specPath: string }> {
   const reviewDir = reviewDirFor(userDataDir, originTerminalId)
   await fs.mkdir(reviewDir, { recursive: true })
-  return { reviewDir, reviewFile: reviewFilePath(reviewDir, round) }
+  return {
+    reviewDir,
+    reviewFile: reviewFilePath(reviewDir, phase, round),
+    intentPath: join(reviewDir, 'intent.md'),
+    specPath: join(reviewDir, 'spec.md')
+  }
 }

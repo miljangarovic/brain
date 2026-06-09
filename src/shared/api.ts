@@ -1,5 +1,6 @@
 import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
+import type { ReviewPhase } from './types'
 
 export interface OrchestrixApi {
   loadWorkspace(): Promise<Workspace>
@@ -16,7 +17,9 @@ export interface OrchestrixApi {
   onPtyBusy(cb: (id: string, busy: boolean) => void): () => void
   pickFile(opts?: { defaultPath?: string }): Promise<string | null>
   suggestSpec(cwd: string): Promise<string | null>
-  resolveReviewDir(originTerminalId: string, round: number): Promise<{ reviewDir: string; reviewFile: string }>
+  resolveReviewDir(originTerminalId: string, phase: ReviewPhase, round: number): Promise<{ reviewDir: string; reviewFile: string; intentPath: string; specPath: string }>
+  resolveTranscript(cwd: string, kind?: string): Promise<string | null>
+  readTextFile(path: string): Promise<string | null>
   watchFile(watchId: string, path: string): void
   unwatchFile(watchId: string): void
   onFsChanged(cb: (watchId: string) => void): () => void
