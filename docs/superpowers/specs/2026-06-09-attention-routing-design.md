@@ -198,12 +198,18 @@ terminale — bez duplih signala.
    „slegnu" (resume redraw → idle) i bez ovoga bi izbacili roj notifikacija.
    Tokom grace prozora `idle`/`exit` događaji se ignorišu (bez stanja, bez zvuka,
    bez notifikacije). Sprečava notification-storm na svakom pokretanju.
-9. **„Touched" gating:** idle-izvedeni signali (`waiting-input`/`done`) okidaju
-   samo za terminale u kojima je korisnik stvarno radio ove sesije (kucao/pejstovao
-   — `term.onData`). Restaurirani agenti koje korisnik nije dirao nikad ne alarmiraju
-   (ni dot ni notifikacija) dok ne počne da radi u njima. `error` (exit) NIJE
-   gate-ovan — pad je vredan znati i za nedirnut terminal. Ovo je primarna zaštita
-   od „za svaki terminal "{ime} je gotov"" spama pri otvaranju radnog prostora.
+9. **„Armed" gating (revizija „touched" pravila):** idle-izvedeni signali
+   (`waiting-input`/`done`) okidaju samo za terminale u kojima je korisnik kucao
+   **od poslednjeg alerta** (keydown naoruža, okidanje alerta razoruža). Restaurirani
+   agenti koje korisnik nije dirao nikad ne alarmiraju; pozadinski repaint posle
+   već isporučenog alerta ne okida ponovo. `error` (exit) NIJE gate-ovan — pad je
+   vredan znati i za nedirnut terminal.
+10. **Minimalni radni raspon (`MIN_WORK_MS` = 1.5s):** `busy→idle` prelaz važi kao
+   „turn je završen" samo ako je busy faza trajala ≥ 1.5s. Redraw blip (resize/
+   SIGWINCH/prebacivanje feature-a → burst izlaza → idle) traje ispod sekunde i
+   ne sme da okine „{ime} is done" za sesiju koja se nije ni vrtela. Span se meri
+   u rendereru od `busy:true` do `busy:false`; `busy:false` bez viđenog starta
+   računa se kao raspon 0 (suzbijeno).
 
 Prozor-fokus se prati u rendereru (`window` `focus`/`blur` + `document.hasFocus()`)
 — nije potreban novi IPC za fokus. „Aktivni terminal" je već u `App` stanju.
