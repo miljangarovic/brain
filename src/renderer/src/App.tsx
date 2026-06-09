@@ -7,7 +7,7 @@ import {
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveTerminal, setActiveFeature,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, findReviewerFor, allTerminals
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals
 } from './store'
 import { migrateWorkspace } from './migrate'
 import { createId } from '@shared/id'
