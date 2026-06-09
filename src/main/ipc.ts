@@ -5,7 +5,7 @@ import { IPC } from '@shared/ipc'
 import { PtyManager } from './ptyManager'
 import { createBusyTracker } from './busyTracker'
 import { loadWorkspace, createDebouncedSaver } from './persistence'
-import type { Workspace } from '@shared/types'
+import type { Workspace, ReviewPhase } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { createReviewWatcher } from './reviewWatcher'
@@ -85,12 +85,14 @@ export function registerIpc(opts: {
 
   ipcMain.handle(IPC.reviewSuggestSpec, (_e, cwd: string) => suggestSpec(cwd || os.homedir()))
 
-  ipcMain.handle(IPC.reviewResolveDir, (_e, p: { originTerminalId: string; phase: import('@shared/types').ReviewPhase; round: number }) =>
+  ipcMain.handle(IPC.reviewResolveDir, (_e, p: { originTerminalId: string; phase: ReviewPhase; round: number }) =>
     resolveReviewPaths(userDataDir, p.originTerminalId, p.phase, p.round))
 
   ipcMain.handle(IPC.reviewResolveTranscript, (_e, p: { cwd: string; kind?: string }) =>
     resolveTranscript({ cwd: p.cwd || os.homedir(), kind: p.kind }))
 
+  // Best-effort utf8 read for the renderer (e.g. parsing a review file's verdict).
+  // Returns null on any error (missing/unreadable) — the caller treats that as "no content".
   ipcMain.handle(IPC.fsRead, async (_e, p: { path: string }) => {
     try { return await fsp.readFile(p.path, 'utf8') } catch { return null }
   })
