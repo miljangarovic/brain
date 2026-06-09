@@ -4,10 +4,16 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { Terminal as TerminalModel } from '@shared/types'
+import { agentStartupCommand } from '../agents'
 import { getXtermTheme, MONO_FONT } from '../theme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
-export function TerminalView({ terminal, active }: { terminal: TerminalModel; active: boolean }) {
+// `resume` is set only for agent terminals restored after an app restart: their
+// PTY spawns resuming the terminal's own prior conversation (by session id when
+// known — claude --resume / codex resume <id> — else the cwd's most recent) so it
+// continues instead of starting fresh. No effect for plain shells or freshly
+// created terminals. The exact command is resolved by agentStartupCommand.
+export function TerminalView({ terminal, active, resume }: { terminal: TerminalModel; active: boolean; resume?: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -59,7 +65,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
       shell: terminal.shell ?? '',
       cols: term.cols || 80,
       rows: term.rows || 24,
-      startupCommand: terminal.startupCommand
+      startupCommand: agentStartupCommand({ kind: terminal.kind, sessionId: terminal.sessionId, resume }) ?? terminal.startupCommand
     })
 
     const offData = window.orchestrix.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })

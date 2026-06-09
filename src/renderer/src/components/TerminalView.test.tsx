@@ -65,4 +65,39 @@ describe('TerminalView PTY lifecycle', () => {
     unmount()
     expect(api.killPty).not.toHaveBeenCalled()
   })
+
+  it('spawns a restored claude terminal with its resume command', () => {
+    render(<TerminalView terminal={term} active resume />)
+    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't1', startupCommand: 'claude --continue' }))
+  })
+
+  it('spawns a restored codex terminal with its resume command', () => {
+    const codex: TerminalModel = { id: 't2', name: 'codex', cwd: '/x', startupCommand: 'codex', kind: 'codex' }
+    render(<TerminalView terminal={codex} active resume />)
+    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't2', startupCommand: 'codex resume --last' }))
+  })
+
+  it('a restored plain shell keeps its saved startup command (no resume form)', () => {
+    const shell: TerminalModel = { id: 't3', name: 'dev', cwd: '/x', startupCommand: 'npm run dev', kind: 'shell' }
+    render(<TerminalView terminal={shell} active resume />)
+    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't3', startupCommand: 'npm run dev' }))
+  })
+
+  it('pins a fresh claude session id so it can be resumed later', () => {
+    const claude: TerminalModel = { id: 't4', name: 'claude', cwd: '/x', startupCommand: 'claude', kind: 'claude', sessionId: 'sess-4' }
+    render(<TerminalView terminal={claude} active />)
+    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't4', startupCommand: 'claude --session-id sess-4' }))
+  })
+
+  it('resumes a restored claude terminal by its exact session id', () => {
+    const claude: TerminalModel = { id: 't4', name: 'claude', cwd: '/x', startupCommand: 'claude', kind: 'claude', sessionId: 'sess-4' }
+    render(<TerminalView terminal={claude} active resume />)
+    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't4', startupCommand: 'claude --resume sess-4' }))
+  })
+
+  it('resumes a restored codex terminal by its detected session id', () => {
+    const codex: TerminalModel = { id: 't5', name: 'codex', cwd: '/x', startupCommand: 'codex', kind: 'codex', sessionId: 'sess-5' }
+    render(<TerminalView terminal={codex} active resume />)
+    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't5', startupCommand: 'codex resume sess-5' }))
+  })
 })

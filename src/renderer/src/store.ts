@@ -159,7 +159,7 @@ export function moveFeature(state: AppState, featureId: string, toIndex: number)
 export function addTerminal(
   state: AppState,
   featureId: string,
-  input: { name: string; startupCommand?: string; kind?: TerminalKind; review?: ReviewLink; id?: string }
+  input: { name: string; startupCommand?: string; kind?: TerminalKind; review?: ReviewLink; id?: string; sessionId?: string }
 ): AppState {
   const group = groupOfFeature(state.workspace, featureId)
   const startupCommand = input.startupCommand?.trim()
@@ -169,7 +169,8 @@ export function addTerminal(
     cwd: group?.cwd ?? '',
     startupCommand: startupCommand || undefined,
     kind: input.kind && input.kind !== 'shell' ? input.kind : undefined,
-    ...(input.review ? { review: input.review } : {})
+    ...(input.review ? { review: input.review } : {}),
+    ...(input.sessionId ? { sessionId: input.sessionId } : {})
   }
   return {
     ...state,
@@ -193,6 +194,18 @@ export function renameTerminal(state: AppState, terminalId: string, name: string
 // Reorder a terminal within its own feature. Mirrors `moveFeature`: remove it
 // from its current slot and re-insert at clamp(toIndex, 0, len-1). Other features
 // and the active selection are left untouched.
+// Record the agent conversation id discovered for a terminal (codex, after its
+// rollout file appears). No-op if the terminal is gone by the time it resolves.
+export function setTerminalSessionId(state: AppState, terminalId: string, sessionId: string): AppState {
+  return {
+    ...state,
+    workspace: mapGroups(state.workspace, (g) => ({
+      ...g,
+      features: g.features.map((f) => ({ ...f, terminals: f.terminals.map((t) => (t.id === terminalId ? { ...t, sessionId } : t)) }))
+    }))
+  }
+}
+
 export function moveTerminal(state: AppState, terminalId: string, toIndex: number): AppState {
   const found = featureOfTerminal(state.workspace, terminalId)
   if (!found) return state

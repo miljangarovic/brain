@@ -10,7 +10,10 @@ import type { PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { createReviewWatcher } from './reviewWatcher'
 import { resolveTranscript } from './transcript'
+import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 // Registers all IPC channels exactly once. PTY data/exit are forwarded to the
 // CURRENT window via getWin() (so window re-creation doesn't leave a stale ref).
@@ -100,6 +103,25 @@ export function registerIpc(opts: {
   const reviewWatcher = createReviewWatcher((watchId) => send(IPC.fsChanged, { watchId }))
   ipcMain.on(IPC.fsWatch, (_e, p: { watchId: string; path: string }) => reviewWatcher.watch(p.watchId, p.path))
   ipcMain.on(IPC.fsUnwatch, (_e, p: { watchId: string }) => reviewWatcher.unwatch(p.watchId))
+
+  // Detect the session id a freshly launched codex terminal writes, so a later
+  // restart resumes exactly that conversation. `claimed` lives for the app run so
+  // two concurrent captures never hand out the same id; the mtime + cwd filters
+  // (in findCodexSessionId) keep us off old/other sessions. Best-effort: returns
+  // null if codex hasn't written a matching rollout within the poll window.
+  const claimedCodex = new Set<string>()
+  ipcMain.handle(IPC.agentCaptureSession, async (_e, p: { kind: string; cwd: string }) => {
+    if (p.kind !== 'codex') return null
+    const cwd = p.cwd || os.homedir()
+    const root = codexSessionsDir()
+    const sinceMs = Date.now()
+    for (let i = 0; i < 30; i++) {            // ~15s: codex writes its rollout shortly after start
+      const id = await findCodexSessionId({ root, cwd, sinceMs, claimed: claimedCodex })
+      if (id) { claimedCodex.add(id); return id }
+      await delay(500)
+    }
+    return null
+  })
 
   return saver
 }
