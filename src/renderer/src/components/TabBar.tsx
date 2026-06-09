@@ -36,7 +36,7 @@ export function TabBar({
             }`}
           >
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" />}
-            {busy[t.id]
+            {busy[t.id] && liveAgents[t.id]
               ? <SpinnerIcon className="shrink-0 text-accent" />
               : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
             <ReviewStatusDot status={reviewStatus[t.id]} />

@@ -20,6 +20,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
   const props = {
     groups,
     activeTerminalId: null as string | null,
+    activeFeatureId: null as string | null,
     onSelectTerminal: noop,
     onToggleGroup: noop,
     onToggleFeature: noop,
@@ -56,6 +57,17 @@ describe('Sidebar (3-level)', () => {
     expect(screen.getByText('ui')).toBeInTheDocument()
     expect(screen.getByText('claude')).toBeInTheDocument()
     expect(screen.queryByText('dev')).not.toBeInTheDocument()
+  })
+
+  it('marks the active feature (the one shown in the right pane) with aria-current', () => {
+    const rowOf = (c: HTMLElement, id: string) => c.querySelector(`[data-feature-id="${id}"]`) as HTMLElement
+    const first = renderSidebar({ activeFeatureId: 'f1' })
+    expect(rowOf(first.container, 'f1')).toHaveAttribute('aria-current', 'true')
+    expect(rowOf(first.container, 'f2')).not.toHaveAttribute('aria-current')
+    // the marker follows whichever feature is active
+    const second = renderSidebar({ activeFeatureId: 'f2' })
+    expect(rowOf(second.container, 'f1')).not.toHaveAttribute('aria-current')
+    expect(rowOf(second.container, 'f2')).toHaveAttribute('aria-current', 'true')
   })
 
   it('selects a terminal on click and shows its kind icon', () => {
@@ -98,11 +110,18 @@ describe('Sidebar (3-level)', () => {
     expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
   })
 
-  it('shows a spinner instead of the kind icon on a busy terminal row', () => {
-    renderSidebar({ busy: { t1: true } })
+  it('shows a spinner on a busy terminal only while a live agent is running', () => {
+    renderSidebar({ busy: { t1: true }, liveAgents: { t1: 'claude' } })
     const item = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
     expect(within(item).getByTestId('icon-spinner')).toBeInTheDocument()
     expect(within(item).queryByTestId('icon-claude')).not.toBeInTheDocument()
+  })
+
+  it('does not show a spinner on a busy terminal with no live agent (plain shell output)', () => {
+    renderSidebar({ busy: { t1: true } }) // busy, but liveAgents is empty
+    const item = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
+    expect(within(item).queryByTestId('icon-spinner')).not.toBeInTheDocument()
+    expect(within(item).getByTestId('icon-claude')).toBeInTheDocument() // static kind icon, not the spinner
   })
 
   it('a live agent wins over the static kind on a visible terminal', () => {
@@ -139,16 +158,22 @@ describe('Sidebar (3-level)', () => {
     expect(onPendingRenameConsumed).toHaveBeenCalled()
   })
 
-  it('shows a loading spinner on a feature row when any of its terminals is busy', () => {
-    renderSidebar({ busy: { t1: true } }) // t1 lives in the expanded 'auth' feature
+  it('shows a loading spinner on a feature row when a busy terminal is a live agent', () => {
+    renderSidebar({ busy: { t1: true }, liveAgents: { t1: 'claude' } }) // t1 lives in the expanded 'auth' feature
     const authRow = screen.getByText('auth').closest('div') as HTMLElement
     expect(within(authRow).getByTestId('icon-spinner')).toBeInTheDocument()
     const uiRow = screen.getByText('ui').closest('div') as HTMLElement
     expect(within(uiRow).queryByTestId('icon-spinner')).not.toBeInTheDocument()
   })
 
+  it('does not show the feature spinner when the busy terminal is not an agent', () => {
+    renderSidebar({ busy: { t1: true } }) // busy but no live agent
+    const authRow = screen.getByText('auth').closest('div') as HTMLElement
+    expect(within(authRow).queryByTestId('icon-spinner')).not.toBeInTheDocument()
+  })
+
   it('shows the feature spinner even when the feature is collapsed', () => {
-    renderSidebar({ busy: { t2: true } }) // t2 lives in the collapsed 'ui' feature
+    renderSidebar({ busy: { t2: true }, liveAgents: { t2: 'claude' } }) // t2 lives in the collapsed 'ui' feature
     const uiRow = screen.getByText('ui').closest('div') as HTMLElement
     expect(within(uiRow).getByTestId('icon-spinner')).toBeInTheDocument()
   })

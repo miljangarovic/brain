@@ -50,11 +50,18 @@ describe('TabBar', () => {
     expect(within(tab).getByTestId('icon-claude')).toBeInTheDocument()
   })
 
-  it('shows a spinner instead of the kind icon while the terminal is busy', () => {
-    render(<TabBar terminals={terms} activeId="a" liveAgents={{}}
+  it('shows a spinner on a busy tab only while a live agent is running', () => {
+    render(<TabBar terminals={terms} activeId="a" liveAgents={{ a: 'claude' }}
       onSelect={noop} onClose={noop} {...reviewProps} busy={{ a: true }} />)
     const tab = screen.getAllByRole('tab')[0]
     expect(within(tab).getByTestId('icon-spinner')).toBeInTheDocument()
+  })
+
+  it('does not show a spinner on a busy tab with no live agent (plain shell output)', () => {
+    render(<TabBar terminals={terms} activeId="a" liveAgents={{}}
+      onSelect={noop} onClose={noop} {...reviewProps} busy={{ a: true }} />)
+    const tab = screen.getAllByRole('tab')[0]
+    expect(within(tab).queryByTestId('icon-spinner')).not.toBeInTheDocument()
   })
 
   it('right-clicks a tab and closes all tabs to the right of it', async () => {

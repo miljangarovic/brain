@@ -27,7 +27,13 @@ export function registerIpc(opts: {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
 
-  const busy = createBusyTracker((id, isBusy) => send(IPC.ptyBusy, { id, busy: isBusy }))
+  // The spinner reflects an AI agent producing a response. Agents stream with
+  // pauses (model latency, tool use, sparse TUI redraws while generating code), so
+  // a short idle window would flicker the spinner off mid-answer — wait longer
+  // before declaring idle. (Only agent terminals show the spinner, gated in the
+  // renderer, so this longer tail is invisible on plain shells.)
+  const AGENT_IDLE_MS = 1500
+  const busy = createBusyTracker((id, isBusy) => send(IPC.ptyBusy, { id, busy: isBusy }), AGENT_IDLE_MS)
   ptyManager.onData((id, data) => { send(IPC.ptyData, { id, data }); busy.touch(id) })
   ptyManager.onExit((id, code) => { send(IPC.ptyExit, { id, code }); busy.end(id) })
 
