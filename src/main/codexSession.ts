@@ -13,14 +13,20 @@ export function codexSessionsDir(home: string = homedir()): string {
   return join(home, '.codex', 'sessions')
 }
 
-// The id + cwd from a rollout file's first (session_meta) line, or null if the
-// line isn't there yet / isn't valid JSON (a brand-new file may be momentarily
-// empty — the caller just retries on the next poll).
-export function parseSessionMeta(firstLine: string): { id: string; cwd: string } | null {
+// The id, cwd and creation time from a rollout file's first (session_meta) line,
+// or null if it isn't there yet / isn't valid (a brand-new file may be
+// momentarily empty — the caller just retries on the next poll). createdMs is the
+// session's OWN birth time (immutable); it stays put even when `codex resume`
+// later appends to the file, which is exactly what lets us tell a freshly created
+// session apart from an old one being resumed.
+export function parseSessionMeta(firstLine: string): { id: string; cwd: string; createdMs: number } | null {
   try {
     const rec = JSON.parse(firstLine)
     const p = rec?.type === 'session_meta' ? rec.payload : null
-    if (p && typeof p.id === 'string' && typeof p.cwd === 'string') return { id: p.id, cwd: p.cwd }
+    if (p && typeof p.id === 'string' && typeof p.cwd === 'string') {
+      const createdMs = Date.parse(p.timestamp ?? rec.timestamp)
+      if (!Number.isNaN(createdMs)) return { id: p.id, cwd: p.cwd, createdMs }
+    }
   } catch { /* not written yet / partial */ }
   return null
 }
@@ -63,34 +69,45 @@ async function firstLine(path: string): Promise<string> {
   }
 }
 
-// The id of the newest unclaimed codex rollout for `cwd` that was (re)written at
-// or after `sinceMs`. Returns null when nothing matches — the caller polls until
-// codex has written the file or the capture window elapses.
+// The id of the codex session this launch created: the rollout for `cwd` whose
+// session was BORN at/after `sinceMs` (the launch instant). Selecting on the
+// session's immutable birth time — not the file mtime — is what makes this
+// correct: an older session being resumed has a fresh mtime but an old birth
+// time, so it's excluded rather than mistaken for the new one. Returns null when
+// nothing matches yet; the caller polls until codex has written the file.
 export async function findCodexSessionId(opts: {
   root: string
   cwd: string
   sinceMs: number
   claimed: Set<string>
+  excluded?: Set<string>     // ids already assigned to other terminals — never reuse
 }): Promise<string | null> {
-  const { root, cwd, sinceMs, claimed } = opts
-  const SLACK_MS = 2000 // tolerate clock/mtime jitter around the launch instant
+  const { root, cwd, sinceMs, claimed, excluded } = opts
+  const SLACK_MS = 1000 // tolerate sub-second clock/timestamp rounding around launch
   const dirs = await newestSessionDirs(root)
-  const candidates: { id: string; mtimeMs: number }[] = []
+  const candidates: { id: string; createdMs: number }[] = []
   for (const dir of dirs) {
     let names: string[]
     try { names = await fs.readdir(dir) } catch { continue }
     for (const name of names) {
       if (!name.startsWith('rollout-') || !name.endsWith('.jsonl')) continue
       const full = join(dir, name)
+      // Cheap pre-filter: our session (and any kept warm by an active resume) has
+      // a fresh mtime, so a dormant old file can't be ours — skip it without
+      // reading its (large) meta line. Correctness still comes from createdMs.
       let mtimeMs: number
       try { mtimeMs = (await fs.stat(full)).mtimeMs } catch { continue }
       if (mtimeMs < sinceMs - SLACK_MS) continue
-      let meta: { id: string; cwd: string } | null
+      let meta: { id: string; cwd: string; createdMs: number } | null
       try { meta = parseSessionMeta(await firstLine(full)) } catch { continue }
-      if (!meta || meta.cwd !== cwd || claimed.has(meta.id)) continue
-      candidates.push({ id: meta.id, mtimeMs })
+      if (!meta || meta.cwd !== cwd) continue
+      if (meta.createdMs < sinceMs - SLACK_MS) continue        // born before this launch — not ours
+      if (claimed.has(meta.id) || excluded?.has(meta.id)) continue
+      candidates.push({ id: meta.id, createdMs: meta.createdMs })
     }
   }
-  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)
+  // The earliest session born at/after launch is ours; any later ones belong to
+  // subsequent launches (kept distinct via the claimed set).
+  candidates.sort((a, b) => a.createdMs - b.createdMs)
   return candidates[0]?.id ?? null
 }

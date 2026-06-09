@@ -166,7 +166,10 @@ export default function App() {
     apply((s) => addTerminal(s, featureId, { id, name: a.defaultName, startupCommand: a.command, kind, sessionId }))
     if (kind === 'codex') {
       const cwd = state.workspace.groups.find((g) => g.features.some((f) => f.id === featureId))?.cwd ?? ''
-      void window.orchestrix.captureAgentSession({ kind, cwd }).then((sid) => {
+      // Exclude ids already on other terminals so a fresh codex never re-grabs a
+      // session that's merely being resumed (its rollout looks recent on disk).
+      const exclude = allTerminals(state).map((t) => t.sessionId).filter((s): s is string => !!s)
+      void window.orchestrix.captureAgentSession({ kind, cwd, exclude }).then((sid) => {
         if (sid) apply((s) => setTerminalSessionId(s, id, sid))
       })
     }

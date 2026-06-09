@@ -110,13 +110,14 @@ export function registerIpc(opts: {
   // (in findCodexSessionId) keep us off old/other sessions. Best-effort: returns
   // null if codex hasn't written a matching rollout within the poll window.
   const claimedCodex = new Set<string>()
-  ipcMain.handle(IPC.agentCaptureSession, async (_e, p: { kind: string; cwd: string }) => {
+  ipcMain.handle(IPC.agentCaptureSession, async (_e, p: { kind: string; cwd: string; exclude?: string[] }) => {
     if (p.kind !== 'codex') return null
     const cwd = p.cwd || os.homedir()
     const root = codexSessionsDir()
-    const sinceMs = Date.now()
-    for (let i = 0; i < 30; i++) {            // ~15s: codex writes its rollout shortly after start
-      const id = await findCodexSessionId({ root, cwd, sinceMs, claimed: claimedCodex })
+    const excluded = new Set(p.exclude ?? [])  // ids already on other terminals — never hand out twice
+    const sinceMs = Date.now()                 // captured before codex spawns, so its session is born after this
+    for (let i = 0; i < 30; i++) {             // ~15s: codex writes its rollout shortly after start
+      const id = await findCodexSessionId({ root, cwd, sinceMs, claimed: claimedCodex, excluded })
       if (id) { claimedCodex.add(id); return id }
       await delay(500)
     }
