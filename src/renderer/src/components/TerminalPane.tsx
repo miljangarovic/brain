@@ -15,17 +15,24 @@ const ACTIVE_PANE_SHADOW =
   '0 0 0 1px var(--od-accent), 0 0 0 4px color-mix(in srgb, var(--od-accent) 16%, transparent), 0 12px 30px -16px rgba(0,0,0,0.75)'
 
 export function TerminalPane({
-  terminal, active, gridded, visibleInTabs, busy, liveAgent, reviewStatus, onActivate
+  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate
 }: {
   terminal: Terminal
   active: boolean
   gridded: boolean          // shown as a grid cell (grid mode + in the active feature)
+  gridRowSpan?: number      // rows this pane spans in column-major grid (>1 fills the odd-count gap)
   visibleInTabs: boolean    // shown in tabs mode (active, in feature, not gridded)
   busy: boolean
   liveAgent: 'claude' | 'codex' | undefined
   reviewStatus: ReviewStatus | undefined
   onActivate: () => void
 }) {
+  const gridStyle = gridded
+    ? {
+        ...(active ? { boxShadow: ACTIVE_PANE_SHADOW } : {}),
+        ...(gridRowSpan && gridRowSpan > 1 ? { gridRow: `span ${gridRowSpan}` } : {})
+      }
+    : { display: visibleInTabs ? 'block' : 'none' }
   return (
     <div
       onMouseDown={gridded ? onActivate : undefined}
@@ -33,9 +40,7 @@ export function TerminalPane({
         ? `relative flex flex-col min-h-0 min-w-0 overflow-hidden rounded-lg bg-surface border transition-colors duration-150 ${
             active ? 'border-accent' : 'border-divider hover:border-fg-muted'}`
         : 'absolute inset-0'}
-      style={gridded
-        ? (active ? { boxShadow: ACTIVE_PANE_SHADOW } : undefined)
-        : { display: visibleInTabs ? 'block' : 'none' }}
+      style={gridStyle}
     >
       {gridded && (
         <div className={`flex items-center gap-2 h-7 shrink-0 px-2.5 border-b border-line text-xs select-none transition-colors ${

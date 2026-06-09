@@ -46,6 +46,11 @@ const SIDEBAR_MIN = 180
 const SIDEBAR_MAX = 560
 const SIDEBAR_DEFAULT = 256
 
+// How long a single click on a group/feature name waits before collapsing, to
+// give a double-click (rename) time to cancel it. Lower = snappier collapse, but
+// too low and a slow double-click would collapse before the rename registers.
+const NAME_CLICK_DELAY_MS = 100
+
 export function Sidebar(props: {
   groups: Group[]
   activeTerminalId: string | null
@@ -160,7 +165,7 @@ export function Sidebar(props: {
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onNameClick = (collapse: () => void) => {
     if (clickTimer.current) clearTimeout(clickTimer.current)
-    clickTimer.current = setTimeout(() => { clickTimer.current = null; collapse() }, 200)
+    clickTimer.current = setTimeout(() => { clickTimer.current = null; collapse() }, NAME_CLICK_DELAY_MS)
   }
   const onNameDblClick = (rename: () => void) => {
     if (clickTimer.current) { clearTimeout(clickTimer.current); clickTimer.current = null }

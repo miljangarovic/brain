@@ -14,7 +14,7 @@ import { createId } from '@shared/id'
 import { AGENTS, detectAgent, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
-import { gridDimensions } from './layout'
+import { gridLayout } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { FeatureHeader } from './components/FeatureHeader'
@@ -143,7 +143,10 @@ export default function App() {
   const featureVisible = (activeFeature?.terminals ?? []).filter((t) => !state.hidden.includes(t.id))
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
   const featureTerminalIds = new Set(featureVisible.map((t) => t.id))
-  const { cols, rows } = gridDimensions(featureVisible.length)
+  const { cols, rows, lastSpan } = gridLayout(featureVisible.length)
+  // Column-major fill leaves any gap at the bottom of the last column, so the last
+  // pane stretches over it to keep the rightmost column full height (odd counts).
+  const lastFeatureTerminalId = featureVisible[featureVisible.length - 1]?.id
 
   return (
     <div className="flex h-screen text-fg bg-panel">
@@ -218,7 +221,7 @@ export default function App() {
 
         <div
           className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-2 p-2 bg-panel' : ''}`}
-          style={gridMode ? { gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
+          style={gridMode ? { gridAutoFlow: 'column', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
         >
           {featureVisible.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
@@ -235,6 +238,7 @@ export default function App() {
                 terminal={t}
                 active={isActive}
                 gridded={gridMode && inFeature}
+                gridRowSpan={gridMode && inFeature && t.id === lastFeatureTerminalId ? lastSpan : undefined}
                 visibleInTabs={inFeature && !gridMode && isActive}
                 busy={!!busy[t.id]}
                 liveAgent={liveAgents[t.id]}
