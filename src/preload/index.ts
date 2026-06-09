@@ -4,6 +4,20 @@ import type { OrchestrixApi } from '../shared/api'
 import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
 
+// pty:data / pty:exit are consumed by EVERY mounted terminal, and all terminals
+// stay mounted — so one ipcRenderer listener per terminal trips the default
+// 10-listener cap (MaxListenersExceeded warning) once ~10 terminals are open.
+// Keep a single ipcRenderer listener per channel and fan out to local
+// subscribers; each subscriber still filters by its own terminal id.
+const ptyDataSubs = new Set<(id: string, data: string) => void>()
+ipcRenderer.on(IPC.ptyData, (_e, p: { id: string; data: string }) => {
+  for (const cb of ptyDataSubs) cb(p.id, p.data)
+})
+const ptyExitSubs = new Set<(id: string, code: number) => void>()
+ipcRenderer.on(IPC.ptyExit, (_e, p: { id: string; code: number }) => {
+  for (const cb of ptyExitSubs) cb(p.id, p.code)
+})
+
 const api: OrchestrixApi = {
   loadWorkspace: () => ipcRenderer.invoke(IPC.workspaceLoad) as Promise<Workspace>,
   saveWorkspace: (ws: Workspace) => ipcRenderer.send(IPC.workspaceSave, ws),
@@ -11,16 +25,8 @@ const api: OrchestrixApi = {
   writePty: (id, data) => ipcRenderer.send(IPC.ptyInput, { id, data }),
   resizePty: (id, cols, rows) => ipcRenderer.send(IPC.ptyResize, { id, cols, rows }),
   killPty: (id) => ipcRenderer.send(IPC.ptyKill, { id }),
-  onPtyData: (cb) => {
-    const listener = (_e: Electron.IpcRendererEvent, p: { id: string; data: string }) => cb(p.id, p.data)
-    ipcRenderer.on(IPC.ptyData, listener)
-    return () => ipcRenderer.removeListener(IPC.ptyData, listener)
-  },
-  onPtyExit: (cb) => {
-    const listener = (_e: Electron.IpcRendererEvent, p: { id: string; code: number }) => cb(p.id, p.code)
-    ipcRenderer.on(IPC.ptyExit, listener)
-    return () => ipcRenderer.removeListener(IPC.ptyExit, listener)
-  },
+  onPtyData: (cb) => { ptyDataSubs.add(cb); return () => { ptyDataSubs.delete(cb) } },
+  onPtyExit: (cb) => { ptyExitSubs.add(cb); return () => { ptyExitSubs.delete(cb) } },
   pickDirectory: () => ipcRenderer.invoke(IPC.dialogPickDirectory) as Promise<string | null>,
   openPath: (path: string) => ipcRenderer.send(IPC.shellOpenPath, { path }),
   onPtyProc: (cb) => {
@@ -48,6 +54,12 @@ const api: OrchestrixApi = {
     return () => ipcRenderer.removeListener(IPC.fsChanged, listener)
   },
   captureAgentSession: (opts) => ipcRenderer.invoke(IPC.agentCaptureSession, opts) as Promise<string | null>,
+  showNotification: (opts) => ipcRenderer.send(IPC.notifyShow, opts),
+  onNotificationClick: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: { key: string }) => cb(p.key)
+    ipcRenderer.on(IPC.notificationClick, listener)
+    return () => ipcRenderer.removeListener(IPC.notificationClick, listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('orchestrix', api)

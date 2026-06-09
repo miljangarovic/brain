@@ -16,6 +16,7 @@ function noop() {}
 const reviewProps = {
   reviewStatus: {},
   busy: {},
+  attention: {},
 }
 
 describe('TabBar', () => {

@@ -11,26 +11,39 @@ const mktmp = async () => {
 }
 
 // Write a rollout-*.jsonl with a session_meta first line under root/YYYY/MM/DD.
-const writeRollout = async (root: string, day: string, id: string, cwd: string, stamp = '2026-04-27T18-31-26') => {
+// `createdIso` is the session's own (immutable) creation time, carried in the
+// first-line meta; the file's mtime is set separately so tests can mimic a
+// resumed session whose mtime is fresh while its createdMs stays old.
+const writeRollout = async (
+  root: string,
+  day: string,
+  id: string,
+  cwd: string,
+  opts: { createdIso?: string; mtimeMs?: number } = {}
+) => {
+  const createdIso = opts.createdIso ?? '2026-04-27T18:31:26.000Z'
   const [y, m, d] = day.split('-')
   const dir = join(root, y, m, d)
   await fs.mkdir(dir, { recursive: true })
+  const stamp = createdIso.replace(/[:.]/g, '-').slice(0, 19)
   const path = join(dir, `rollout-${stamp}-${id}.jsonl`)
-  const meta = JSON.stringify({ timestamp: '2026-04-27T16:33:42.804Z', type: 'session_meta', payload: { id, cwd } })
+  const meta = JSON.stringify({ timestamp: createdIso, type: 'session_meta', payload: { id, cwd, timestamp: createdIso } })
   await fs.writeFile(path, meta + '\n{"type":"event"}\n', 'utf8')
+  if (opts.mtimeMs !== undefined) await fs.utimes(path, new Date(opts.mtimeMs), new Date(opts.mtimeMs))
   return path
 }
 
 describe('parseSessionMeta', () => {
-  it('extracts id and cwd from a session_meta line', () => {
-    const line = JSON.stringify({ type: 'session_meta', payload: { id: 'abc', cwd: '/work/app', extra: 1 } })
-    expect(parseSessionMeta(line)).toEqual({ id: 'abc', cwd: '/work/app' })
+  it('extracts id, cwd and the session creation time from a session_meta line', () => {
+    const line = JSON.stringify({ type: 'session_meta', payload: { id: 'abc', cwd: '/work/app', timestamp: '2026-06-09T16:23:33.000Z' } })
+    expect(parseSessionMeta(line)).toEqual({ id: 'abc', cwd: '/work/app', createdMs: Date.parse('2026-06-09T16:23:33.000Z') })
   })
 
-  it('returns null for non-meta, partial, or non-JSON lines', () => {
+  it('returns null for non-meta, partial, non-JSON, or timestamp-less lines', () => {
     expect(parseSessionMeta('{"type":"event"}')).toBeNull()
     expect(parseSessionMeta('{"type":"session_met')).toBeNull()
     expect(parseSessionMeta('')).toBeNull()
+    expect(parseSessionMeta(JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/x' } }))).toBeNull()
   })
 })
 
@@ -54,42 +67,61 @@ describe('newestSessionDirs', () => {
 })
 
 describe('findCodexSessionId', () => {
-  it('returns the newest rollout id matching the cwd', async () => {
+  const launch = Date.parse('2026-06-09T16:24:37.000Z')
+
+  it('picks the session born at/after launch for the cwd', async () => {
     const root = await mktmp()
-    await writeRollout(root, '2026-04-27', 'old-id', '/work/app', '2026-04-27T10-00-00')
-    await new Promise((r) => setTimeout(r, 10))
-    const newPath = await writeRollout(root, '2026-04-27', 'new-id', '/work/app', '2026-04-27T18-31-26')
-    // bump mtime so "new-id" is unambiguously newest
-    const now = Date.now()
-    await fs.utimes(newPath, new Date(now), new Date(now))
-    const id = await findCodexSessionId({ root, cwd: '/work/app', sinceMs: now - 60_000, claimed: new Set() })
-    expect(id).toBe('new-id')
+    await writeRollout(root, '2026-06-09', 'before', '/work/app', { createdIso: '2026-06-09T16:23:33.000Z', mtimeMs: launch + 5_000 })
+    await writeRollout(root, '2026-06-09', 'after', '/work/app', { createdIso: '2026-06-09T16:24:38.000Z', mtimeMs: launch + 3_000 })
+    const id = await findCodexSessionId({ root, cwd: '/work/app', sinceMs: launch, claimed: new Set() })
+    expect(id).toBe('after')
+    await fs.rm(root, { recursive: true, force: true })
+  })
+
+  // The regression: a session created BEFORE launch but kept warm by an active
+  // resume (fresh mtime) must NOT be chosen over the genuinely new session — even
+  // though its mtime is newer. (codex resume appends to the original file, so its
+  // mtime moves forward while session_meta.timestamp stays at the original birth.)
+  it('ignores an older session whose mtime is fresh because it was just resumed', async () => {
+    const root = await mktmp()
+    await writeRollout(root, '2026-06-09', 'resumed-old', '/work/app', { createdIso: '2026-06-09T16:23:33.000Z', mtimeMs: launch + 30_000 })
+    await writeRollout(root, '2026-06-09', 'truly-new', '/work/app', { createdIso: '2026-06-09T16:24:38.000Z', mtimeMs: launch + 5_000 })
+    const id = await findCodexSessionId({ root, cwd: '/work/app', sinceMs: launch, claimed: new Set() })
+    expect(id).toBe('truly-new')
+    await fs.rm(root, { recursive: true, force: true })
+  })
+
+  it('with two fresh launches in the same cwd, the earliest unclaimed session is taken', async () => {
+    const root = await mktmp()
+    await writeRollout(root, '2026-06-09', 'first', '/work/app', { createdIso: '2026-06-09T16:24:38.000Z', mtimeMs: launch + 6_000 })
+    await writeRollout(root, '2026-06-09', 'second', '/work/app', { createdIso: '2026-06-09T16:24:45.000Z', mtimeMs: launch + 9_000 })
+    const claimed = new Set<string>()
+    const a = await findCodexSessionId({ root, cwd: '/work/app', sinceMs: launch, claimed })
+    expect(a).toBe('first'); claimed.add(a!)
+    const b = await findCodexSessionId({ root, cwd: '/work/app', sinceMs: launch, claimed })
+    expect(b).toBe('second')
     await fs.rm(root, { recursive: true, force: true })
   })
 
   it('ignores sessions from a different cwd', async () => {
     const root = await mktmp()
-    await writeRollout(root, '2026-04-27', 'other', '/somewhere/else')
-    const id = await findCodexSessionId({ root, cwd: '/work/app', sinceMs: 0, claimed: new Set() })
-    expect(id).toBeNull()
+    await writeRollout(root, '2026-06-09', 'other', '/somewhere/else', { createdIso: '2026-06-09T16:24:38.000Z', mtimeMs: launch + 5_000 })
+    expect(await findCodexSessionId({ root, cwd: '/work/app', sinceMs: launch, claimed: new Set() })).toBeNull()
     await fs.rm(root, { recursive: true, force: true })
   })
 
-  it('ignores already-claimed ids so concurrent captures never collide', async () => {
+  it('ignores already-claimed and explicitly-excluded ids', async () => {
     const root = await mktmp()
-    await writeRollout(root, '2026-04-27', 'taken', '/work/app')
-    const id = await findCodexSessionId({ root, cwd: '/work/app', sinceMs: 0, claimed: new Set(['taken']) })
-    expect(id).toBeNull()
+    await writeRollout(root, '2026-06-09', 'taken', '/work/app', { createdIso: '2026-06-09T16:24:38.000Z', mtimeMs: launch + 5_000 })
+    expect(await findCodexSessionId({ root, cwd: '/work/app', sinceMs: launch, claimed: new Set(['taken']) })).toBeNull()
+    expect(await findCodexSessionId({ root, cwd: '/work/app', sinceMs: launch, claimed: new Set(), excluded: new Set(['taken']) })).toBeNull()
     await fs.rm(root, { recursive: true, force: true })
   })
 
-  it('ignores sessions older than the launch instant', async () => {
+  it('ignores sessions created before the launch instant', async () => {
     const root = await mktmp()
-    const p = await writeRollout(root, '2026-04-27', 'stale', '/work/app')
-    const old = Date.now() - 600_000
-    await fs.utimes(p, new Date(old), new Date(old))
-    const id = await findCodexSessionId({ root, cwd: '/work/app', sinceMs: Date.now(), claimed: new Set() })
-    expect(id).toBeNull()
+    await writeRollout(root, '2026-06-09', 'stale', '/work/app', { createdIso: '2026-06-09T16:00:00.000Z', mtimeMs: launch + 5_000 })
+    expect(await findCodexSessionId({ root, cwd: '/work/app', sinceMs: launch, claimed: new Set() })).toBeNull()
     await fs.rm(root, { recursive: true, force: true })
   })
 })

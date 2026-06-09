@@ -26,5 +26,7 @@ export interface OrchestrixApi {
   // Best-effort: after a fresh agent launch, resolve the conversation/session id
   // it created (currently codex only — claude pins its id up front). Returns null
   // if none is found within the capture window.
-  captureAgentSession(opts: { kind: string; cwd: string }): Promise<string | null>
+  captureAgentSession(opts: { kind: string; cwd: string; exclude?: string[] }): Promise<string | null>
+  showNotification(opts: { key: string; title: string; body: string }): void
+  onNotificationClick(cb: (key: string) => void): () => void
 }

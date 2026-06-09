@@ -1,14 +1,15 @@
 // src/renderer/src/App.tsx
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import { removedIds } from './ptyReaper'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
-  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
+  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath
 } from './store'
+import { useAttention } from './attention/useAttention'
 import { migrateWorkspace } from './migrate'
 import { createId } from '@shared/id'
 import { AGENTS, detectAgent, type AgentKind } from './agents'
@@ -74,6 +75,11 @@ export default function App() {
   const review = useReview(state, apply, setStatus)
   useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
   useEffect(() => window.orchestrix.onPtyBusy(review.handleBusy), [review.handleBusy])
+
+  const attention = useAttention(state, apply)
+  useEffect(() => window.orchestrix.onPtyBusy(attention.handleBusy), [attention.handleBusy])
+  useEffect(() => window.orchestrix.onPtyExit(attention.handleExit), [attention.handleExit])
+  useEffect(() => window.orchestrix.onNotificationClick(attention.handleNotificationClick), [attention.handleNotificationClick])
 
   // Agent terminals present at first load are "restored" — their PTYs should
   // spawn with the agent's resume command so the previous session continues
@@ -166,7 +172,10 @@ export default function App() {
     apply((s) => addTerminal(s, featureId, { id, name: a.defaultName, startupCommand: a.command, kind, sessionId }))
     if (kind === 'codex') {
       const cwd = state.workspace.groups.find((g) => g.features.some((f) => f.id === featureId))?.cwd ?? ''
-      void window.orchestrix.captureAgentSession({ kind, cwd }).then((sid) => {
+      // Exclude ids already on other terminals so a fresh codex never re-grabs a
+      // session that's merely being resumed (its rollout looks recent on disk).
+      const exclude = allTerminals(state).map((t) => t.sessionId).filter((s): s is string => !!s)
+      void window.orchestrix.captureAgentSession({ kind, cwd, exclude }).then((sid) => {
         if (sid) apply((s) => setTerminalSessionId(s, id, sid))
       })
     }
@@ -179,6 +188,9 @@ export default function App() {
   // ALL terminals stay mounted so their shells keep running; hidden ones are just
   // omitted from the tab bar / grid (mounted but display:none).
   const terminals = allTerminals(state)
+  const attentionItems = useMemo(() => attention.queue.map((q) => ({
+    terminalId: q.terminalId, state: q.state, lastLine: q.lastLine, path: terminalPath(state, q.terminalId),
+  })), [attention.queue, state.workspace]) // eslint-disable-line react-hooks/exhaustive-deps -- terminalPath reads only state.workspace
   const featureVisible = (activeFeature?.terminals ?? []).filter((t) => !state.hidden.includes(t.id))
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
   const featureTerminalIds = new Set(featureVisible.map((t) => t.id))
@@ -196,7 +208,7 @@ export default function App() {
         activeGroupId={state.activeGroupId}
         liveAgents={liveAgents}
         busy={busy}
-        onSelectTerminal={(id) => apply((s) => (isHidden(s, id) ? showTerminal(s, id) : setActiveTerminal(s, id)))}
+        onSelectTerminal={(id) => apply((s) => showTerminal(s, id))}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
         onAddGroup={() => setGroupDialogOpen(true)}
@@ -233,6 +245,13 @@ export default function App() {
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
         pendingRenameTerminalId={renameTerminalId}
         onPendingRenameConsumed={() => setRenameTerminalId(null)}
+        attention={attention.attention}
+        attentionItems={attentionItems}
+        attentionMuted={attention.muted}
+        onAttentionSelect={(id) => { apply((s) => showTerminal(s, id)); attention.clear(id) }}
+        onAttentionClear={attention.clear}
+        onAttentionClearAll={attention.clearAll}
+        onToggleAttentionMute={attention.toggleMute}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -258,6 +277,7 @@ export default function App() {
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
           onClose={(id) => apply((s) => hideTerminal(s, id))}
           reviewStatus={reviewStatus}
+          attention={attention.attention}
         />
 
         <div

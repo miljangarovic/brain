@@ -87,3 +87,36 @@ export function SpinnerIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function BellIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-bell" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
+      <path d="M10.5 20a1.5 1.5 0 0 0 3 0" />
+    </svg>
+  )
+}
+
+export function SpeakerIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-speaker" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+      <path d="M16 9a3 3 0 0 1 0 6" />
+    </svg>
+  )
+}
+
+export function SpeakerMutedIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-speaker-muted" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+      <path d="M16 9l4 6M20 9l-4 6" />
+    </svg>
+  )
+}

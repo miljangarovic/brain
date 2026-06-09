@@ -334,3 +334,22 @@ export const featureIdOfTerminal = (s: AppState, terminalId: string): string | n
   for (const g of s.workspace.groups) for (const f of g.features) if (f.terminals.some((t) => t.id === terminalId)) return f.id
   return null
 }
+
+// A terminal the review loop owns: a reviewer (has a review link) or an origin
+// some active reviewer points at. Attention routing skips these — review status
+// already signals them.
+export const isUnderReview = (s: AppState, id: string): boolean => {
+  const t = getTerminalById(s, id)
+  if (t?.review) return true
+  return allTerminals(s).some((x) => x.review?.originTerminalId === id)
+}
+
+// "Project › Feature › Terminal" label for a terminal id; '' if not found.
+export function terminalPath(s: AppState, id: string): string {
+  for (const g of s.workspace.groups)
+    for (const f of g.features) {
+      const t = f.terminals.find((t) => t.id === id)
+      if (t) return `${g.name} › ${f.name} › ${t.name}`
+    }
+  return ''
+}

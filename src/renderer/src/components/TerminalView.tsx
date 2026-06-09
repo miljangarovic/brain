@@ -7,6 +7,8 @@ import type { Terminal as TerminalModel } from '@shared/types'
 import { agentStartupCommand } from '../agents'
 import { getXtermTheme, MONO_FONT } from '../theme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { registerTail, unregisterTail, readXtermTail } from '../attention/tailRegistry'
+import { markTouched } from '../attention/touched'
 
 // `resume` is set only for agent terminals restored after an app restart: their
 // PTY spawns resuming the terminal's own prior conversation (by session id when
@@ -27,12 +29,13 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
   const paste = useCallback(() => {
     const term = xtermRef.current
     if (!term) return
+    markTouched(terminal.id) // right-click paste also counts as engaging the terminal
     // term.paste() (not raw writePty) so bracketed-paste mode is honoured — agents
     // like claude/codex rely on it to receive multi-line pastes as a single block.
     void navigator.clipboard.readText().then((text) => {
       if (text) { term.paste(text); term.focus() }
     })
-  }, [])
+  }, [terminal.id])
   const selectAll = useCallback(() => {
     const term = xtermRef.current
     if (!term) return
@@ -59,6 +62,10 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     fitRef.current = fit
     try { fit.fit() } catch { /* host may be hidden */ }
 
+    // Let attention routing read this terminal's recent output (to tell a
+    // permission prompt from a finished turn) when it goes idle.
+    registerTail(terminal.id, () => readXtermTail(term, 20))
+
     window.orchestrix.createPty({
       id: terminal.id,
       cwd: terminal.cwd,
@@ -76,6 +83,12 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
+
+      // A real keypress in this terminal marks it "engaged" — attention's idle
+      // signals only fire for terminals you've actually worked in. (Must be a key
+      // event, NOT term.onData: xterm auto-replies to TUI queries via onData,
+      // which would falsely mark every agent touched on startup.)
+      markTouched(terminal.id)
 
       // Shift+Enter → insert a newline (LF) instead of submitting (CR).
       // Plain Enter still sends CR ("submit"); claude/codex and most readline/Ink
@@ -124,6 +137,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
       offExit()
       inputDisposable.dispose()
       ro.disconnect()
+      unregisterTail(terminal.id)
       term.dispose()
     }
     // Mount-once: the PTY lives as long as the terminal exists in the workspace,

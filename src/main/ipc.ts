@@ -1,5 +1,5 @@
 // src/main/ipc.ts
-import { ipcMain, BrowserWindow, dialog, shell } from 'electron'
+import { ipcMain, BrowserWindow, dialog, shell, Notification } from 'electron'
 import * as os from 'os'
 import { IPC } from '@shared/ipc'
 import { PtyManager } from './ptyManager'
@@ -9,6 +9,7 @@ import type { Workspace, ReviewPhase } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { createReviewWatcher } from './reviewWatcher'
+import { createNotifier } from './notifications'
 import { resolveTranscript } from './transcript'
 import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
@@ -104,19 +105,36 @@ export function registerIpc(opts: {
   ipcMain.on(IPC.fsWatch, (_e, p: { watchId: string; path: string }) => reviewWatcher.watch(p.watchId, p.path))
   ipcMain.on(IPC.fsUnwatch, (_e, p: { watchId: string }) => reviewWatcher.unwatch(p.watchId))
 
+  // Native OS notification when an agent needs the user. Click focuses the window
+  // and tells the renderer which terminal to jump to (key === terminalId).
+  const notifier = createNotifier({
+    isSupported: () => Notification.isSupported(),
+    create: ({ title, body }) => new Notification({ title, body }),
+    onClick: (key) => {
+      const win = getWin()
+      if (win && !win.isDestroyed()) {
+        if (win.isMinimized()) win.restore()
+        win.focus()
+      }
+      send(IPC.notificationClick, { key })
+    }
+  })
+  ipcMain.on(IPC.notifyShow, (_e, p: { key: string; title: string; body: string }) => notifier.show(p))
+
   // Detect the session id a freshly launched codex terminal writes, so a later
   // restart resumes exactly that conversation. `claimed` lives for the app run so
   // two concurrent captures never hand out the same id; the mtime + cwd filters
   // (in findCodexSessionId) keep us off old/other sessions. Best-effort: returns
   // null if codex hasn't written a matching rollout within the poll window.
   const claimedCodex = new Set<string>()
-  ipcMain.handle(IPC.agentCaptureSession, async (_e, p: { kind: string; cwd: string }) => {
+  ipcMain.handle(IPC.agentCaptureSession, async (_e, p: { kind: string; cwd: string; exclude?: string[] }) => {
     if (p.kind !== 'codex') return null
     const cwd = p.cwd || os.homedir()
     const root = codexSessionsDir()
-    const sinceMs = Date.now()
-    for (let i = 0; i < 30; i++) {            // ~15s: codex writes its rollout shortly after start
-      const id = await findCodexSessionId({ root, cwd, sinceMs, claimed: claimedCodex })
+    const excluded = new Set(p.exclude ?? [])  // ids already on other terminals — never hand out twice
+    const sinceMs = Date.now()                 // captured before codex spawns, so its session is born after this
+    for (let i = 0; i < 30; i++) {             // ~15s: codex writes its rollout shortly after start
+      const id = await findCodexSessionId({ root, cwd, sinceMs, claimed: claimedCodex, excluded })
       if (id) { claimedCodex.add(id); return id }
       await delay(500)
     }
