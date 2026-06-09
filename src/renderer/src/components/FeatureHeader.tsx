@@ -3,22 +3,19 @@ import { AddMenuButton, type AddKind } from './AddMenuButton'
 
 export interface ReviewControl {
   reviewerId: string | null
-  canApprove: boolean    // phase APPROVED → user gate
-  isLast: boolean        // current phase is the last (impl)
   needsDecision: boolean // maxRounds reached
   active: boolean        // loop running (reviewing or applying)
 }
 
 export function FeatureHeader({
   featureName, viewMode, onToggleView, onAdd,
-  review, onApprovePhase, onMoreRounds, onAcceptPhase, onStopLoop
+  review, onMoreRounds, onAcceptPhase, onStopLoop
 }: {
   featureName: string
   viewMode: 'tabs' | 'grid'
   onToggleView: () => void
   onAdd: (kind: AddKind) => void
   review: ReviewControl
-  onApprovePhase: (reviewerId: string) => void
   onMoreRounds: (reviewerId: string) => void
   onAcceptPhase: (reviewerId: string) => void
   onStopLoop: (reviewerId: string) => void
@@ -30,18 +27,14 @@ export function FeatureHeader({
     <div className="flex items-center gap-2 h-9 px-3 bg-panel border-b border-line">
       <span className="truncate text-sm font-medium text-fg-bright">{featureName}</span>
       <div className="ml-auto flex items-center gap-0.5 text-base leading-none">
-        {rid && review.canApprove && (
-          <button onClick={() => onApprovePhase(rid)} title="Approve this phase and continue"
-            className={btn}>{review.isLast ? 'Završi' : 'Odobri → sljedeća faza'}</button>
-        )}
         {rid && review.needsDecision && (
           <>
             <button onClick={() => onMoreRounds(rid)} title="Run more rounds" className={btn}>Još rundi</button>
-            <button onClick={() => onAcceptPhase(rid)} title="Accept as-is and move to the gate" className={btnMuted}>Prihvati ovako</button>
+            <button onClick={() => onAcceptPhase(rid)} title="Accept as approved (reviewer closes)" className={btnMuted}>Prihvati ovako</button>
             <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={btnMuted}>Stop</button>
           </>
         )}
-        {rid && review.active && !review.needsDecision && !review.canApprove && (
+        {rid && review.active && !review.needsDecision && (
           <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={btnMuted}>Stani petlju</button>
         )}
         <button

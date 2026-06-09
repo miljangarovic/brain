@@ -14,7 +14,6 @@ import { createId } from '@shared/id'
 import { AGENTS, detectAgent, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
-import { nextPhase } from './review/phases'
 import { gridLayout } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
@@ -54,14 +53,19 @@ export default function App() {
     })
   }, [])
 
-  // Live "is producing output" flag per terminal — drives the busy spinner in
-  // the tab bar and sidebar. Main emits only on idle↔busy transitions.
+  const [reviewStatus, setReviewStatus] = useState<Record<string, ReviewStatus | undefined>>({})
+
+  // Live "is producing output" flag per terminal — drives the busy spinner in the
+  // tab bar and sidebar. Main emits only on idle↔busy transitions. A terminal going
+  // busy also clears its green 'approved' review dot — its next request has started.
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   useEffect(() => {
-    return window.orchestrix.onPtyBusy((id, b) => setBusy((m) => ({ ...m, [id]: b })))
+    return window.orchestrix.onPtyBusy((id, b) => {
+      setBusy((m) => ({ ...m, [id]: b }))
+      if (b) setReviewStatus((m) => (m[id] === 'approved' ? { ...m, [id]: undefined } : m))
+    })
   }, [])
 
-  const [reviewStatus, setReviewStatus] = useState<Record<string, ReviewStatus | undefined>>({})
   const [reviewReq, setReviewReq] = useState<{ id: string; reviewer?: AgentKind } | null>(null)
   const setStatus = useCallback(
     (id: string, status: ReviewStatus | undefined) => setReviewStatus((m) => ({ ...m, [id]: status })),
@@ -107,8 +111,6 @@ export default function App() {
   const originStatus = featureReviewer?.review ? reviewStatus[featureReviewer.review.originTerminalId] : undefined
   const reviewControl = {
     reviewerId: featureReviewer?.id ?? null,
-    canApprove: reviewerStatus === 'phase-approved',
-    isLast: featureReviewer?.review ? nextPhase(featureReviewer.review.phase) === null : false,
     needsDecision: reviewerStatus === 'needs-decision',
     active: reviewerStatus === 'reviewing' || originStatus === 'applying'
   }
@@ -198,8 +200,8 @@ export default function App() {
         onDeleteTerminal={(id) => {
           const t = allTerminals(state).find((x) => x.id === id)
           askDelete(`Delete terminal "${t?.name ?? ''}"?`, () => {
-            if (t?.review) review.stopLoop(id) // clear the bound origin's review status before removing the reviewer
-            apply((s) => removeTerminal(s, id))
+            if (t?.review) review.stopLoop(id) // reviewer: stopLoop removes it and clears the origin's status
+            else apply((s) => removeTerminal(s, id))
           })
         }}
         onOpenInFiles={(gid) => {
@@ -222,7 +224,6 @@ export default function App() {
               ? addShellTerminal(activeFeature.id)
               : launchAgent(activeFeature.id, kind))}
             review={reviewControl}
-            onApprovePhase={(rid) => void review.advancePhase(rid)}
             onMoreRounds={(rid) => void review.moreRounds(rid)}
             onAcceptPhase={(rid) => review.acceptPhase(rid)}
             onStopLoop={(rid) => review.stopLoop(rid)}
