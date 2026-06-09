@@ -5,6 +5,9 @@ import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
+import { AttentionDot } from './AttentionDot'
+import { AttentionBell, type AttentionBellItem } from './AttentionBell'
+import type { AttentionState } from '../attention/detect'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
 
@@ -80,12 +83,20 @@ export function Sidebar(props: {
   onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
   pendingRenameTerminalId?: string | null
   onPendingRenameConsumed?: () => void
+  attention: Record<string, AttentionState | undefined>
+  attentionItems: AttentionBellItem[]
+  attentionMuted: boolean
+  onAttentionSelect: (terminalId: string) => void
+  onAttentionClear: (terminalId: string) => void
+  onAttentionClearAll: () => void
+  onToggleAttentionMute: () => void
 }) {
   const {
     groups, activeTerminalId, activeFeatureId, activeGroupId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveGroup, onMoveFeature, onMoveTerminal,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
-    reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed
+    reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
+    attention, attentionItems, attentionMuted, onAttentionSelect, onAttentionClear, onAttentionClearAll, onToggleAttentionMute
   } = props
 
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
@@ -182,6 +193,16 @@ export function Sidebar(props: {
 
   return (
     <div style={{ width }} className="relative shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
+      <div className="p-2 border-b border-line">
+        <AttentionBell
+          items={attentionItems}
+          muted={attentionMuted}
+          onSelect={onAttentionSelect}
+          onClear={onAttentionClear}
+          onClearAll={onAttentionClearAll}
+          onToggleMute={onToggleAttentionMute}
+        />
+      </div>
       <div
         className="flex-1 overflow-y-auto py-1"
         data-groups
@@ -338,6 +359,7 @@ export function Sidebar(props: {
                                 ? <SpinnerIcon className="shrink-0 text-accent" />
                                 : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
                               <ReviewStatusDot status={reviewStatus[t.id]} />
+                              <AttentionDot state={attention[t.id]} />
                               {isEditing('terminal', t.id)
                                 ? renameInput(`Rename terminal ${t.name}`)
                                 : (

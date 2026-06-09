@@ -44,6 +44,13 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     busy: {},
     reviewStatus: {},
     onReviewTerminal: noop,
+    attention: {},
+    attentionItems: [],
+    attentionMuted: false,
+    onAttentionSelect: noop,
+    onAttentionClear: noop,
+    onAttentionClearAll: noop,
+    onToggleAttentionMute: noop,
     ...overrides
   }
   return render(<Sidebar {...props} />)
