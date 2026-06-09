@@ -35,8 +35,11 @@ const api: OrchestrixApi = {
   },
   pickFile: (opts) => ipcRenderer.invoke(IPC.dialogPickFile, opts ?? {}) as Promise<string | null>,
   suggestSpec: (cwd) => ipcRenderer.invoke(IPC.reviewSuggestSpec, cwd) as Promise<string | null>,
-  resolveReviewDir: (originTerminalId, round) =>
-    ipcRenderer.invoke(IPC.reviewResolveDir, { originTerminalId, round }) as Promise<{ reviewDir: string; reviewFile: string }>,
+  resolveReviewDir: (originTerminalId, phase, round) =>
+    ipcRenderer.invoke(IPC.reviewResolveDir, { originTerminalId, phase, round }) as Promise<{ reviewDir: string; reviewFile: string; intentPath: string; specPath: string }>,
+  resolveTranscript: (cwd, kind) =>
+    ipcRenderer.invoke(IPC.reviewResolveTranscript, { cwd, kind }) as Promise<string | null>,
+  readTextFile: (path) => ipcRenderer.invoke(IPC.fsRead, { path }) as Promise<string | null>,
   watchFile: (watchId, path) => ipcRenderer.send(IPC.fsWatch, { watchId, path }),
   unwatchFile: (watchId) => ipcRenderer.send(IPC.fsUnwatch, { watchId }),
   onFsChanged: (cb) => {

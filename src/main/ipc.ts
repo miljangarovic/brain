@@ -9,6 +9,8 @@ import type { Workspace } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { createReviewWatcher } from './reviewWatcher'
+import { resolveTranscript } from './transcript'
+import { promises as fsp } from 'fs'
 
 // Registers all IPC channels exactly once. PTY data/exit are forwarded to the
 // CURRENT window via getWin() (so window re-creation doesn't leave a stale ref).
@@ -83,8 +85,15 @@ export function registerIpc(opts: {
 
   ipcMain.handle(IPC.reviewSuggestSpec, (_e, cwd: string) => suggestSpec(cwd || os.homedir()))
 
-  ipcMain.handle(IPC.reviewResolveDir, (_e, p: { originTerminalId: string; round: number }) =>
-    resolveReviewPaths(userDataDir, p.originTerminalId, p.round))
+  ipcMain.handle(IPC.reviewResolveDir, (_e, p: { originTerminalId: string; phase: import('@shared/types').ReviewPhase; round: number }) =>
+    resolveReviewPaths(userDataDir, p.originTerminalId, p.phase, p.round))
+
+  ipcMain.handle(IPC.reviewResolveTranscript, (_e, p: { cwd: string; kind?: string }) =>
+    resolveTranscript({ cwd: p.cwd || os.homedir(), kind: p.kind }))
+
+  ipcMain.handle(IPC.fsRead, async (_e, p: { path: string }) => {
+    try { return await fsp.readFile(p.path, 'utf8') } catch { return null }
+  })
 
   const reviewWatcher = createReviewWatcher((watchId) => send(IPC.fsChanged, { watchId }))
   ipcMain.on(IPC.fsWatch, (_e, p: { watchId: string; path: string }) => reviewWatcher.watch(p.watchId, p.path))
