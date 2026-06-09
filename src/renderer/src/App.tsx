@@ -150,6 +150,8 @@ export default function App() {
       <Sidebar
         groups={state.workspace.groups}
         activeTerminalId={state.activeTerminalId}
+        activeFeatureId={state.activeFeatureId}
+        activeGroupId={state.activeGroupId}
         liveAgents={liveAgents}
         busy={busy}
         onSelectTerminal={(id) => apply((s) => (isHidden(s, id) ? showTerminal(s, id) : setActiveTerminal(s, id)))}

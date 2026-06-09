@@ -21,6 +21,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     groups,
     activeTerminalId: null as string | null,
     activeFeatureId: null as string | null,
+    activeGroupId: null as string | null,
     onSelectTerminal: noop,
     onToggleGroup: noop,
     onToggleFeature: noop,
@@ -68,6 +69,17 @@ describe('Sidebar (3-level)', () => {
     const second = renderSidebar({ activeFeatureId: 'f2' })
     expect(rowOf(second.container, 'f1')).not.toHaveAttribute('aria-current')
     expect(rowOf(second.container, 'f2')).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('marks the active project (the one shown in the right pane) with aria-current', () => {
+    const twoGroups: Group[] = [
+      { id: 'gA', name: 'A', cwd: '', collapsed: true, features: [] },
+      { id: 'gB', name: 'B', cwd: '', collapsed: true, features: [] }
+    ]
+    const rowOf = (c: HTMLElement, id: string) => c.querySelector(`[data-group-id="${id}"]`) as HTMLElement
+    const { container } = renderSidebar({ groups: twoGroups, activeGroupId: 'gB' })
+    expect(rowOf(container, 'gB')).toHaveAttribute('aria-current', 'true')
+    expect(rowOf(container, 'gA')).not.toHaveAttribute('aria-current')
   })
 
   it('selects a terminal on click and shows its kind icon', () => {

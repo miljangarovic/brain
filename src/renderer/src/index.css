@@ -26,6 +26,8 @@
   /* accents — the "vivid" One Dark family */
   --od-accent:        #61afef; /* blue */
   --od-accent-strong: #528bff;
+  --od-accent-soft:   color-mix(in srgb, var(--od-accent) 13%, transparent); /* active project/feature wash */
+  --od-accent-sel:    color-mix(in srgb, var(--od-accent) 20%, transparent); /* selected terminal row */
   --od-cyan:    #2bbac5;
   --od-green:   #89ca78;
   --od-yellow:  #e5c07b;
