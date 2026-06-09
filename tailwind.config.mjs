@@ -21,7 +21,9 @@ export default {
         },
         accent: {
           DEFAULT: 'var(--od-accent)',
-          strong: 'var(--od-accent-strong)'
+          strong: 'var(--od-accent-strong)',
+          soft: 'var(--od-accent-soft)',
+          sel: 'var(--od-accent-sel)'
         },
         danger: 'var(--od-red)',
         success: 'var(--od-green)',

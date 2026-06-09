@@ -49,6 +49,8 @@ const SIDEBAR_DEFAULT = 256
 export function Sidebar(props: {
   groups: Group[]
   activeTerminalId: string | null
+  activeFeatureId: string | null
+  activeGroupId: string | null
   liveAgents: Record<string, 'claude' | 'codex' | undefined>
   busy: Record<string, boolean>
   onSelectTerminal: (id: string) => void
@@ -75,7 +77,7 @@ export function Sidebar(props: {
   onPendingRenameConsumed?: () => void
 }) {
   const {
-    groups, activeTerminalId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
+    groups, activeTerminalId, activeFeatureId, activeGroupId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveGroup, onMoveFeature, onMoveTerminal,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed
@@ -195,23 +197,29 @@ export function Sidebar(props: {
           clearDrag()
         }}
       >
-        {groups.map((g, gi) => (
+        {groups.map((g, gi) => {
+          const groupActive = g.id === activeGroupId
+          return (
           <div key={g.id} className="select-none">
             <div
               data-group-id={g.id}
-              className={`relative group flex items-center gap-1 px-2 py-1 hover:bg-hover ${drag?.kind === 'group' && drag.id === g.id ? 'opacity-40' : ''} ${!isEditing('group', g.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              aria-current={groupActive ? 'true' : undefined}
+              className={`relative group flex items-center gap-1 px-2 py-1 transition-colors ${groupActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'group' && drag.id === g.id ? 'opacity-40' : ''} ${!isEditing('group', g.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
               draggable={!isEditing('group', g.id)}
               onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'group', id: g.id }; setDrag({ kind: 'group', id: g.id }) }}
               onDragEnd={clearDrag}
               onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, groupId: g.id }) }}
             >
+              {groupActive && (
+                <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
+              )}
               {dropAt?.kind === 'group' && dropAt.index === gi && (
                 <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
               )}
               {dropAt?.kind === 'group' && dropAt.index === groups.length && gi === groups.length - 1 && (
                 <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
               )}
-              <button aria-label={`Collapse/expand ${g.name}`} onClick={() => onToggleGroup(g.id)} className="w-4 text-fg-muted hover:text-fg">
+              <button aria-label={`Collapse/expand ${g.name}`} onClick={() => onToggleGroup(g.id)} className={`w-4 hover:text-fg ${groupActive ? 'text-accent' : 'text-fg-muted'}`}>
                 {g.collapsed ? '▸' : '▾'}
               </button>
               {isEditing('group', g.id) ? renameInput(`Rename project ${g.name}`) : (
@@ -244,30 +252,36 @@ export function Sidebar(props: {
                   clearDrag()
                 }}
               >
-                {g.features.map((f, i) => (
+                {g.features.map((f, i) => {
+                  const featureActive = f.id === activeFeatureId
+                  return (
                   <div key={f.id}>
                     <div
                       data-feature-id={f.id}
-                      className={`relative group flex items-center gap-1 px-2 py-1 hover:bg-hover ${drag?.kind === 'feature' && drag.id === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      aria-current={featureActive ? 'true' : undefined}
+                      className={`relative group flex items-center gap-1 px-2 py-1 transition-colors ${featureActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'feature' && drag.id === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
                       draggable={!isEditing('feature', f.id)}
                       onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'feature', id: f.id, groupId: g.id }; setDrag({ kind: 'feature', id: f.id, groupId: g.id }) }}
                       onDragEnd={clearDrag}
                     >
+                      {featureActive && (
+                        <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
+                      )}
                       {dropAt?.kind === 'feature' && dropAt.groupId === g.id && dropAt.index === i && (
                         <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
                       )}
                       {dropAt?.kind === 'feature' && dropAt.groupId === g.id && dropAt.index === g.features.length && i === g.features.length - 1 && (
                         <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
                       )}
-                      <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className="w-4 text-fg-muted hover:text-fg">
+                      <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className={`w-4 hover:text-fg ${featureActive ? 'text-accent' : 'text-fg-muted'}`}>
                         {f.collapsed ? '▸' : '▾'}
                       </button>
                       {isEditing('feature', f.id) ? renameInput(`Rename feature ${f.name}`) : (
-                        <span className="flex-1 truncate text-sm font-medium text-fg cursor-pointer"
+                        <span className={`flex-1 truncate text-sm font-medium cursor-pointer ${featureActive ? 'text-fg-bright' : 'text-fg'}`}
                           onClick={() => onNameClick(() => onToggleFeature(f.id))}
                           onDoubleClick={() => onNameDblClick(() => startRename('feature', f.id, f.name))}>{f.name}</span>
                       )}
-                      {f.terminals.some((t) => busy[t.id]) && <SpinnerIcon className="shrink-0 text-accent" />}
+                      {f.terminals.some((t) => busy[t.id] && liveAgents[t.id]) && <SpinnerIcon className="shrink-0 text-accent" />}
                       <AddMenuButton
                         label={`Add to ${f.name}`}
                         onAdd={(kind) => (kind === 'shell' ? onAddTerminal(f.id) : onLaunchAgent(f.id, kind))}
@@ -308,14 +322,14 @@ export function Sidebar(props: {
                               onDragStart={(e) => { e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'terminal', id: t.id, featureId: f.id }; setDrag({ kind: 'terminal', id: t.id, featureId: f.id }) }}
                               onDragEnd={clearDrag}
                               className={`relative group flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${drag?.kind === 'terminal' && drag.id === t.id ? 'opacity-40' : ''} ${
-                                active ? 'border-accent bg-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
+                                active ? 'border-accent bg-accent-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
                               {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === ti && (
                                 <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
                               )}
                               {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === f.terminals.length && ti === f.terminals.length - 1 && (
                                 <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
                               )}
-                              {busy[t.id]
+                              {busy[t.id] && liveAgents[t.id]
                                 ? <SpinnerIcon className="shrink-0 text-accent" />
                                 : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
                               <ReviewStatusDot status={reviewStatus[t.id]} />
@@ -343,7 +357,8 @@ export function Sidebar(props: {
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
                 <div className="px-2 pt-1 pb-0.5">
                   <input
                     aria-label={`New feature in ${g.name}`} placeholder="+ Feature"
@@ -356,7 +371,8 @@ export function Sidebar(props: {
               </div>
             )}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="p-2 border-t border-line">
