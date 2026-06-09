@@ -7,8 +7,9 @@ import {
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath
 } from './store'
+import { useAttention } from './attention/useAttention'
 import { migrateWorkspace } from './migrate'
 import { createId } from '@shared/id'
 import { AGENTS, detectAgent, type AgentKind } from './agents'
@@ -74,6 +75,11 @@ export default function App() {
   const review = useReview(state, apply, setStatus)
   useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
   useEffect(() => window.orchestrix.onPtyBusy(review.handleBusy), [review.handleBusy])
+
+  const attention = useAttention(state, apply)
+  useEffect(() => window.orchestrix.onPtyBusy(attention.handleBusy), [attention.handleBusy])
+  useEffect(() => window.orchestrix.onPtyExit(attention.handleExit), [attention.handleExit])
+  useEffect(() => window.orchestrix.onNotificationClick(attention.handleNotificationClick), [attention.handleNotificationClick])
 
   // Agent terminals present at first load are "restored" — their PTYs should
   // spawn with the agent's resume command so the previous session continues
@@ -182,6 +188,9 @@ export default function App() {
   // ALL terminals stay mounted so their shells keep running; hidden ones are just
   // omitted from the tab bar / grid (mounted but display:none).
   const terminals = allTerminals(state)
+  const attentionItems = attention.queue.map((q) => ({
+    terminalId: q.terminalId, state: q.state, lastLine: q.lastLine, path: terminalPath(state, q.terminalId),
+  }))
   const featureVisible = (activeFeature?.terminals ?? []).filter((t) => !state.hidden.includes(t.id))
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
   const featureTerminalIds = new Set(featureVisible.map((t) => t.id))
@@ -236,6 +245,13 @@ export default function App() {
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
         pendingRenameTerminalId={renameTerminalId}
         onPendingRenameConsumed={() => setRenameTerminalId(null)}
+        attention={attention.attention}
+        attentionItems={attentionItems}
+        attentionMuted={attention.muted}
+        onAttentionSelect={(id) => apply((s) => (isHidden(s, id) ? showTerminal(s, id) : setActiveTerminal(s, id)))}
+        onAttentionClear={attention.clear}
+        onAttentionClearAll={attention.clearAll}
+        onToggleAttentionMute={attention.toggleMute}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -261,6 +277,7 @@ export default function App() {
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
           onClose={(id) => apply((s) => hideTerminal(s, id))}
           reviewStatus={reviewStatus}
+          attention={attention.attention}
         />
 
         <div
