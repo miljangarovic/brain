@@ -21,32 +21,38 @@ export function FeatureHeader({
   onStopLoop: (reviewerId: string) => void
 }) {
   const rid = review.reviewerId
-  const btn = 'px-2 text-xs rounded bg-field text-accent hover:bg-hover transition'
-  const btnMuted = 'px-2 text-xs rounded bg-field text-fg-muted hover:text-fg transition'
+  // Prominent, filled review controls — they drive the loop, so they must read at a
+  // glance: accent for "go", rose for "stop". Muted ghost for the low-stakes accept.
+  const goBtn = 'px-3 py-1 text-xs font-semibold rounded-md bg-accent text-surface hover:bg-accent-strong transition shadow-sm shadow-black/25'
+  const stopBtn = 'px-3 py-1 text-xs font-semibold rounded-md bg-rose-500/90 text-white hover:bg-rose-500 transition shadow-sm shadow-rose-900/30'
+  const ghostBtn = 'px-2.5 py-1 text-xs rounded-md text-fg-muted hover:text-fg hover:bg-hover transition'
+  const iconBtn = (on: boolean) => `px-1.5 py-1 rounded-md transition-colors ${on ? 'text-accent bg-hover' : 'text-fg-muted hover:text-accent hover:bg-hover'}`
+  const showControls = !!rid && (review.needsDecision || review.active)
   return (
-    <div className="flex items-center gap-2 h-9 px-3 bg-panel border-b border-line">
-      <span className="truncate text-sm font-medium text-fg-bright">{featureName}</span>
-      <div className="ml-auto flex items-center gap-0.5 text-base leading-none">
+    <div className="flex items-center gap-2.5 h-9 px-3 bg-panel border-b border-line">
+      <span className="shrink-0 truncate max-w-[16rem] text-sm font-medium text-fg-bright">{featureName}</span>
+      <div className="flex items-center gap-1.5 leading-none">
         {rid && review.needsDecision && (
           <>
-            <button onClick={() => onMoreRounds(rid)} title="Run more rounds" className={btn}>Još rundi</button>
-            <button onClick={() => onAcceptPhase(rid)} title="Accept as approved (reviewer closes)" className={btnMuted}>Prihvati ovako</button>
-            <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={btnMuted}>Stop</button>
+            <button onClick={() => onMoreRounds(rid)} title="Run more review rounds" className={goBtn}>Nastavi</button>
+            <button onClick={() => onAcceptPhase(rid)} title="Accept as approved (reviewer closes)" className={ghostBtn}>Prihvati</button>
+            <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
           </>
         )}
         {rid && review.active && !review.needsDecision && (
-          <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={btnMuted}>Stani petlju</button>
+          <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
         )}
+        {showControls && <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />}
         <button
           aria-label={viewMode === 'grid' ? 'Tabs view' : 'Grid view'}
           aria-pressed={viewMode === 'grid'}
           title={viewMode === 'grid' ? 'Switch to tabs' : 'Switch to grid'}
           onClick={onToggleView}
-          className={`px-1.5 transition-colors ${viewMode === 'grid' ? 'text-accent' : 'text-fg-muted hover:text-accent'}`}
+          className={iconBtn(viewMode === 'grid')}
         >
           <GridIcon />
         </button>
-        <AddMenuButton onAdd={onAdd} className="px-1.5 text-sm text-fg-muted hover:text-accent transition-colors" />
+        <AddMenuButton onAdd={onAdd} className="px-1.5 py-1 rounded-md text-sm text-fg-muted hover:text-accent hover:bg-hover transition-colors" />
       </div>
     </div>
   )
