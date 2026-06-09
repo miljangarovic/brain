@@ -14,8 +14,20 @@ import { MONO_FONT } from '../theme'
 const ACTIVE_PANE_SHADOW =
   '0 0 0 1px var(--od-accent), 0 0 0 4px color-mix(in srgb, var(--od-accent) 16%, transparent), 0 12px 30px -16px rgba(0,0,0,0.75)'
 
+// Grid drag-and-drop wiring (set only for gridded panes). The pane *header* is the
+// drag handle so the terminal body below stays mouse-selectable; the whole pane is
+// the drop zone. Logic/state lives in App; this component only renders + forwards.
+export interface PaneDnd {
+  dragging: boolean                              // this pane is the one being dragged
+  isDropTarget: boolean                          // a drop here would land the dragged pane
+  onHandleDragStart: (e: React.DragEvent) => void
+  onDragEnd: (e: React.DragEvent) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: (e: React.DragEvent) => void
+}
+
 export function TerminalPane({
-  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate
+  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd
 }: {
   terminal: Terminal
   active: boolean
@@ -26,6 +38,7 @@ export function TerminalPane({
   liveAgent: 'claude' | 'codex' | undefined
   reviewStatus: ReviewStatus | undefined
   onActivate: () => void
+  dnd?: PaneDnd             // grid reorder handlers (present only for gridded panes)
 }) {
   const gridStyle = gridded
     ? {
@@ -36,14 +49,21 @@ export function TerminalPane({
   return (
     <div
       onMouseDown={gridded ? onActivate : undefined}
+      onDragOver={dnd?.onDragOver}
+      onDrop={dnd?.onDrop}
       className={gridded
         ? `relative flex flex-col min-h-0 min-w-0 overflow-hidden rounded-lg bg-surface border transition-colors duration-150 ${
-            active ? 'border-accent' : 'border-divider hover:border-fg-muted'}`
+            active ? 'border-accent' : 'border-divider hover:border-fg-muted'} ${dnd?.dragging ? 'opacity-40' : ''}`
         : 'absolute inset-0'}
       style={gridStyle}
     >
       {gridded && (
-        <div className={`flex items-center gap-2 h-7 shrink-0 px-2.5 border-b border-line text-xs select-none transition-colors ${
+        <div
+          draggable={!!dnd}
+          onDragStart={dnd?.onHandleDragStart}
+          onDragEnd={dnd?.onDragEnd}
+          className={`flex items-center gap-2 h-7 shrink-0 px-2.5 border-b border-line text-xs select-none transition-colors ${
+          dnd ? 'cursor-grab active:cursor-grabbing' : ''} ${
           active ? 'bg-elevated text-fg-bright' : 'bg-panel text-fg-muted'}`}>
           {busy
             ? <SpinnerIcon className="shrink-0 text-accent" />
@@ -59,6 +79,12 @@ export function TerminalPane({
       <div className={gridded ? 'relative flex-1 min-h-0' : 'absolute inset-0'}>
         <TerminalView terminal={terminal} active={active} />
       </div>
+      {gridded && dnd?.isDropTarget && (
+        <div
+          className="pointer-events-none absolute inset-0 rounded-lg"
+          style={{ boxShadow: 'inset 0 0 0 2px var(--od-accent)', background: 'color-mix(in srgb, var(--od-accent) 12%, transparent)' }}
+        />
+      )}
     </div>
   )
 }

@@ -47,4 +47,34 @@ describe('TerminalPane', () => {
     expect(screen.queryByText('api')).not.toBeInTheDocument()
     expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
   })
+
+  it('makes the header a drag handle and reorders via drag/drop when dnd is set', () => {
+    const dnd = {
+      dragging: false,
+      isDropTarget: false,
+      onHandleDragStart: vi.fn(),
+      onDragEnd: vi.fn(),
+      onDragOver: vi.fn(),
+      onDrop: vi.fn(),
+    }
+    const { container } = render(<TerminalPane {...base} gridded dnd={dnd} />)
+
+    // Only the header is the drag handle — the body stays selectable.
+    const handle = container.querySelector('[draggable="true"]')!
+    expect(handle).toBe(screen.getByText('api').parentElement)
+
+    fireEvent.dragStart(handle)
+    expect(dnd.onHandleDragStart).toHaveBeenCalled()
+
+    // The whole pane is the drop zone.
+    fireEvent.dragOver(screen.getByTestId('terminal-view'))
+    fireEvent.drop(screen.getByTestId('terminal-view'))
+    expect(dnd.onDragOver).toHaveBeenCalled()
+    expect(dnd.onDrop).toHaveBeenCalled()
+  })
+
+  it('is not draggable when no dnd is provided', () => {
+    const { container } = render(<TerminalPane {...base} gridded />)
+    expect(container.querySelector('[draggable="true"]')).toBeNull()
+  })
 })

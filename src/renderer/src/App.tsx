@@ -36,6 +36,16 @@ export default function App() {
     apply((s) => addTerminal(s, featureId, { name: 'shell', id }))
     setRenameTerminalId(id)
   }
+  // Drag-and-drop reorder of terminals inside the open grid. The pane header is the
+  // drag handle; dropping a pane onto another moves it into that pane's slot. The
+  // dragged id lives in a ref so dragover/drop read it synchronously (a stale
+  // closure must never skip preventDefault, or the drop is silently rejected); the
+  // two state ids only drive visuals (dim the dragged pane, ring the drop target).
+  const gridDragRef = useRef<string | null>(null)
+  const [gridDragId, setGridDragId] = useState<string | null>(null)
+  const [gridDropId, setGridDropId] = useState<string | null>(null)
+  const clearGridDrag = () => { gridDragRef.current = null; setGridDragId(null); setGridDropId(null) }
+
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
     return window.orchestrix.onPtyProc((id, process) => {
@@ -232,18 +242,45 @@ export default function App() {
           {terminals.map((t) => {
             const inFeature = featureTerminalIds.has(t.id)
             const isActive = t.id === state.activeTerminalId
+            const griddedHere = gridMode && inFeature
+            const dnd = griddedHere ? {
+              dragging: gridDragId === t.id,
+              isDropTarget: gridDropId === t.id && gridDragId !== t.id,
+              onHandleDragStart: (e: React.DragEvent) => {
+                if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+                gridDragRef.current = t.id
+                setGridDragId(t.id)
+              },
+              onDragEnd: () => clearGridDrag(),
+              onDragOver: (e: React.DragEvent) => {
+                const d = gridDragRef.current
+                if (!d || d === t.id) return
+                e.preventDefault()
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+                if (gridDropId !== t.id) setGridDropId(t.id)
+              },
+              onDrop: (e: React.DragEvent) => {
+                const d = gridDragRef.current
+                if (!d || d === t.id) return
+                e.preventDefault()
+                const toIndex = activeFeature?.terminals.findIndex((x) => x.id === t.id) ?? -1
+                if (toIndex !== -1) apply((s) => moveTerminal(s, d, toIndex))
+                clearGridDrag()
+              }
+            } : undefined
             return (
               <TerminalPane
                 key={t.id}
                 terminal={t}
                 active={isActive}
-                gridded={gridMode && inFeature}
-                gridRowSpan={gridMode && inFeature && t.id === lastFeatureTerminalId ? lastSpan : undefined}
+                gridded={griddedHere}
+                gridRowSpan={griddedHere && t.id === lastFeatureTerminalId ? lastSpan : undefined}
                 visibleInTabs={inFeature && !gridMode && isActive}
                 busy={!!busy[t.id]}
                 liveAgent={liveAgents[t.id]}
                 reviewStatus={reviewStatus[t.id]}
                 onActivate={() => apply((s) => setActiveTerminal(s, t.id))}
+                dnd={dnd}
               />
             )
           })}
