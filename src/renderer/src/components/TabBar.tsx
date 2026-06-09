@@ -4,9 +4,11 @@ import type { Terminal, ReviewStatus } from '@shared/types'
 import { TerminalKindIcon, SpinnerIcon } from './icons'
 import { ReviewStatusDot } from './ReviewStatusDot'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { AttentionDot } from './AttentionDot'
+import type { AttentionState } from '../attention/detect'
 
 export function TabBar({
-  terminals, activeId, liveAgents, onSelect, onClose, reviewStatus, busy
+  terminals, activeId, liveAgents, onSelect, onClose, reviewStatus, busy, attention
 }: {
   terminals: Terminal[]
   activeId: string | null
@@ -15,6 +17,7 @@ export function TabBar({
   onClose: (id: string) => void
   reviewStatus: Record<string, ReviewStatus | undefined>
   busy: Record<string, boolean>
+  attention: Record<string, AttentionState | undefined>
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
 
@@ -38,6 +41,7 @@ export function TabBar({
               ? <SpinnerIcon className="shrink-0 text-accent" />
               : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
             <ReviewStatusDot status={reviewStatus[t.id]} />
+            <AttentionDot state={attention[t.id]} />
             <span>{t.name}</span>
             <button
               aria-label={`Close ${t.name}`}
