@@ -1,9 +1,9 @@
-# Terminaltor — Dizajn (v1)
+# OrchestriX — Dizajn (v1)
 
 **Datum:** 2026-06-08
 **Status:** Odobreno (brainstorming faza)
 
-Terminaltor je desktop aplikacija za Linux koja služi kao UI wrapper nad
+OrchestriX je desktop aplikacija za Linux koja služi kao UI wrapper nad
 terminalom. Omogućava da se lako otvore imenovani terminali sa punom
 funkcionalnošću (svi nativni komandni programi), te da se više terminala grupiše
 u jednu cjelinu. Glavni motiv grupisanja je organizacija AI agenata po feature-ima
@@ -47,7 +47,7 @@ Terminal  { id, name, cwd, startupCommand?, shell? }   // config (perzistira se)
             + runtime: živi PTY + xterm instanca (NE perzistira se)
 ```
 
-Perzistencija: `~/.config/Terminaltor/workspace.json` (debounced save).
+Perzistencija: `~/.config/OrchestriX/workspace.json` (debounced save).
 Na startu: pročita JSON → rekreira grupe/terminale → spawnuje **svježe** shell-ove
 u sačuvanom `cwd` → pokrene `startupCommand` ako postoji. Scrollback se NE čuva u v1.
 

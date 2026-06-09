@@ -1,4 +1,4 @@
-# Terminaltor V6 — Feature header + objedinjeni „+" meni (Design)
+# OrchestriX V6 — Feature header + objedinjeni „+" meni (Design)
 
 **Datum:** 2026-06-08
 **Status:** Odobreno (brainstorming faza)

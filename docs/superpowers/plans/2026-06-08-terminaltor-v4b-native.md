@@ -1,4 +1,4 @@
-# Terminaltor V4b — Native Polish Implementation Plan
+# OrchestriX V4b — Native Polish Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -114,7 +114,7 @@ Add three entries to the `IPC` object (before the closing `}`):
   ptyProc: 'pty:proc'
 ```
 
-- [ ] **Step 2: Add methods to `TerminaltorApi` in `src/shared/api.ts`**
+- [ ] **Step 2: Add methods to `OrchestrixApi` in `src/shared/api.ts`**
 
 Add to the interface:
 
@@ -378,7 +378,7 @@ Add state + subscription (after the `const [loaded, setLoaded] = useState(false)
 ```tsx
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
-    return window.terminaltor.onPtyProc((id, process) => {
+    return window.orchestrix.onPtyProc((id, process) => {
       setLiveAgents((m) => ({ ...m, [id]: detectAgent(process) ?? undefined }))
     })
   }, [])
@@ -413,7 +413,7 @@ Append to `src/renderer/src/components/NewGroupDialog.test.tsx`:
 
 ```tsx
   it('fills cwd from the native folder picker', async () => {
-    ;(window as unknown as { terminaltor: { pickDirectory: () => Promise<string | null> } }).terminaltor = {
+    ;(window as unknown as { orchestrix: { pickDirectory: () => Promise<string | null> } }).orchestrix = {
       pickDirectory: vi.fn().mockResolvedValue('/picked/dir')
     }
     const onCreate = vi.fn()
@@ -436,7 +436,7 @@ Add a browse handler inside the component (after `submit`):
 
 ```tsx
   const browse = async () => {
-    const dir = await window.terminaltor.pickDirectory()
+    const dir = await window.orchestrix.pickDirectory()
     if (dir) setCwd(dir)
   }
 ```
@@ -617,7 +617,7 @@ Add to the `<Sidebar ... />` props:
 ```tsx
         onOpenInFiles={(gid) => {
           const g = state.workspace.groups.find((x) => x.id === gid)
-          window.terminaltor.openPath(g?.cwd ?? '')
+          window.orchestrix.openPath(g?.cwd ?? '')
         }}
 ```
 
@@ -655,7 +655,7 @@ git commit -m "feat: right-click group menu (Open in Files) + docs"
 
 **Spec coverage (V4b):** Browse folder picker → Tasks 2/3 (pickDirectory IPC) + 6 (button); Open in Files → Tasks 2/3 (openPath IPC) + 7 (context menu + App wiring); live agent icon → Task 1 (detectAgent) + 2/4 (onPtyProc + poller) + 5 (renderer liveAgents + icon resolution).
 
-**Type consistency:** `detectAgent` returns `AgentKind | null` (Task 1), used in App (Task 5). New IPC channels (Task 2) consumed by main handlers (Task 3) + poller (Task 4); `pickDirectory`/`openPath`/`onPtyProc` on `TerminaltorApi` (Task 2) implemented in preload (Task 2) and called in NewGroupDialog (Task 6) / App (Tasks 5,7). `PtyHandle.processName` (Task 4) implemented by nodePtySpawner + fake; `ptyManager.snapshotProcesses` feeds the poller. `liveAgents: Record<string,'claude'|'codex'|undefined>` prop shape identical in TabBar, Sidebar, and App.
+**Type consistency:** `detectAgent` returns `AgentKind | null` (Task 1), used in App (Task 5). New IPC channels (Task 2) consumed by main handlers (Task 3) + poller (Task 4); `pickDirectory`/`openPath`/`onPtyProc` on `OrchestrixApi` (Task 2) implemented in preload (Task 2) and called in NewGroupDialog (Task 6) / App (Tasks 5,7). `PtyHandle.processName` (Task 4) implemented by nodePtySpawner + fake; `ptyManager.snapshotProcesses` feeds the poller. `liveAgents: Record<string,'claude'|'codex'|undefined>` prop shape identical in TabBar, Sidebar, and App.
 
 **Green between tasks:** every task is additive; `npm run typecheck` stays green throughout (verify per task). Task 4 makes `PtyHandle.processName` required — the fake (test) and nodePtySpawner are both updated in the same task.
 

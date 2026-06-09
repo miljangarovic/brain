@@ -1,4 +1,4 @@
-# Terminaltor v1 Implementation Plan
+# OrchestriX v1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,7 +13,7 @@
 ## File Structure
 
 ```
-terminaltor/
+orchestrix/
 ├── package.json
 ├── electron.vite.config.ts          # electron-vite (main/preload/renderer)
 ├── tsconfig.json
@@ -27,7 +27,7 @@ terminaltor/
 │   │   ├── id.ts                     # createId()
 │   │   ├── pty.ts                    # PtyHandle, PtySpawner, PtyCreateOptions
 │   │   ├── ipc.ts                    # IPC channel name constants
-│   │   └── api.ts                    # TerminaltorApi interface (preload surface)
+│   │   └── api.ts                    # OrchestrixApi interface (preload surface)
 │   ├── main/
 │   │   ├── index.ts                  # app/window lifecycle
 │   │   ├── ptyManager.ts             # PtyManager (DI spawner) — testable logic
@@ -35,7 +35,7 @@ terminaltor/
 │   │   ├── persistence.ts            # load/write/debounced-save workspace JSON
 │   │   └── ipc.ts                    # registerIpc — wires channels
 │   ├── preload/
-│   │   └── index.ts                  # contextBridge → window.terminaltor
+│   │   └── index.ts                  # contextBridge → window.orchestrix
 │   └── renderer/
 │       ├── index.html
 │       └── src/
@@ -44,7 +44,7 @@ terminaltor/
 │           ├── store.ts              # pure AppState reducers + selectors
 │           ├── useStore.ts           # React hook around reducers
 │           ├── index.css             # tailwind + full-height
-│           ├── global.d.ts           # window.terminaltor typing
+│           ├── global.d.ts           # window.orchestrix typing
 │           └── components/
 │               ├── Sidebar.tsx
 │               ├── TabBar.tsx
@@ -68,7 +68,7 @@ terminaltor/
 
 ```json
 {
-  "name": "terminaltor",
+  "name": "orchestrix",
   "version": "0.1.0",
   "description": "Grupisani imenovani terminali za Linux",
   "main": "./out/main/index.js",
@@ -199,7 +199,7 @@ export default { plugins: { tailwindcss: {}, autoprefixer: {} } }
 <!-- src/renderer/index.html -->
 <!doctype html>
 <html lang="sr">
-  <head><meta charset="UTF-8" /><title>Terminaltor</title></head>
+  <head><meta charset="UTF-8" /><title>OrchestriX</title></head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
@@ -221,7 +221,7 @@ createRoot(document.getElementById('root')!).render(<App />)
 ```tsx
 // src/renderer/src/App.tsx (temporary placeholder, replaced in Task 13)
 export default function App() {
-  return <div className="p-4 text-gray-200 bg-gray-900 h-screen">Terminaltor — scaffolding OK</div>
+  return <div className="p-4 text-gray-200 bg-gray-900 h-screen">OrchestriX — scaffolding OK</div>
 }
 ```
 
@@ -270,7 +270,7 @@ Expected: Vitest runs and reports "No test files found" (exit 0) — confirms co
 - [ ] **Step 10: Smoke-verify the app boots (manual)**
 
 Run: `npm run dev`
-Expected: an Electron window opens showing "Terminaltor — scaffolding OK". Close it.
+Expected: an Electron window opens showing "OrchestriX — scaffolding OK". Close it.
 
 - [ ] **Step 11: Commit**
 
@@ -408,7 +408,7 @@ export const IPC = {
 import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
 
-export interface TerminaltorApi {
+export interface OrchestrixApi {
   loadWorkspace(): Promise<Workspace>
   saveWorkspace(ws: Workspace): void
   createPty(opts: PtyCreateOptions): void
@@ -669,7 +669,7 @@ import { tmpdir } from 'os'
 import { loadWorkspace, writeWorkspace, createDebouncedSaver } from './persistence'
 import { createWorkspace } from '@shared/types'
 
-const tmpFile = () => join(tmpdir(), `terminaltor-test-${Math.random().toString(36).slice(2)}.json`)
+const tmpFile = () => join(tmpdir(), `orchestrix-test-${Math.random().toString(36).slice(2)}.json`)
 
 describe('persistence', () => {
   it('write then load round-trips a workspace', async () => {
@@ -748,7 +748,7 @@ export function createDebouncedSaver(path: string, delayMs = 300) {
     try {
       await writeWorkspace(path, ws)
     } catch (err) {
-      console.error('[terminaltor] failed to save workspace:', err)
+      console.error('[orchestrix] failed to save workspace:', err)
     }
   }
 
@@ -994,11 +994,11 @@ git commit -m "feat: real node-pty spawner"
 // src/preload/index.ts
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
-import type { TerminaltorApi } from '../shared/api'
+import type { OrchestrixApi } from '../shared/api'
 import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
 
-const api: TerminaltorApi = {
+const api: OrchestrixApi = {
   loadWorkspace: () => ipcRenderer.invoke(IPC.workspaceLoad) as Promise<Workspace>,
   saveWorkspace: (ws: Workspace) => ipcRenderer.send(IPC.workspaceSave, ws),
   createPty: (opts: PtyCreateOptions) => ipcRenderer.send(IPC.ptyCreate, opts),
@@ -1017,18 +1017,18 @@ const api: TerminaltorApi = {
   }
 }
 
-contextBridge.exposeInMainWorld('terminaltor', api)
+contextBridge.exposeInMainWorld('orchestrix', api)
 ```
 
 - [ ] **Step 2: Implement renderer global typing**
 
 ```ts
 // src/renderer/src/global.d.ts
-import type { TerminaltorApi } from '@shared/api'
+import type { OrchestrixApi } from '@shared/api'
 
 declare global {
   interface Window {
-    terminaltor: TerminaltorApi
+    orchestrix: OrchestrixApi
   }
 }
 
@@ -1106,7 +1106,7 @@ function createWindow(): void {
     height: 820,
     show: false,
     backgroundColor: '#0d1117',
-    title: 'Terminaltor',
+    title: 'OrchestriX',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -1206,7 +1206,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     fitRef.current = fit
     try { fit.fit() } catch { /* host may be hidden */ }
 
-    window.terminaltor.createPty({
+    window.orchestrix.createPty({
       id: terminal.id,
       cwd: terminal.cwd,
       shell: terminal.shell ?? '',
@@ -1215,11 +1215,11 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
       startupCommand: terminal.startupCommand
     })
 
-    const offData = window.terminaltor.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
-    const offExit = window.terminaltor.onPtyExit((id) => {
+    const offData = window.orchestrix.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
+    const offExit = window.orchestrix.onPtyExit((id) => {
       if (id === terminal.id) term.write('\r\n\x1b[33m[proces završen]\x1b[0m\r\n')
     })
-    const inputDisposable = term.onData((data) => window.terminaltor.writePty(terminal.id, data))
+    const inputDisposable = term.onData((data) => window.orchestrix.writePty(terminal.id, data))
 
     // Ctrl+Shift+C / Ctrl+Shift+V copy-paste
     term.attachCustomKeyEventHandler((e) => {
@@ -1230,7 +1230,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
         return false
       }
       if (e.code === 'KeyV') {
-        void navigator.clipboard.readText().then((text) => window.terminaltor.writePty(terminal.id, text))
+        void navigator.clipboard.readText().then((text) => window.orchestrix.writePty(terminal.id, text))
         return false
       }
       return true
@@ -1239,7 +1239,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     const ro = new ResizeObserver(() => {
       try {
         fit.fit()
-        window.terminaltor.resizePty(terminal.id, term.cols, term.rows)
+        window.orchestrix.resizePty(terminal.id, term.cols, term.rows)
       } catch { /* hidden */ }
     })
     ro.observe(host)
@@ -1250,7 +1250,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
       inputDisposable.dispose()
       ro.disconnect()
       term.dispose()
-      window.terminaltor.killPty(terminal.id)
+      window.orchestrix.killPty(terminal.id)
     }
     // Mount-once: PTY lifecycle is tied to this component's lifetime, not to prop changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1264,7 +1264,7 @@ export function TerminalView({ terminal, active }: { terminal: TerminalModel; ac
     if (!term || !fit) return
     try {
       fit.fit()
-      window.terminaltor.resizePty(terminal.id, term.cols, term.rows)
+      window.orchestrix.resizePty(terminal.id, term.cols, term.rows)
       term.focus()
     } catch { /* ignore */ }
   }, [active, terminal.id])
@@ -1511,7 +1511,7 @@ export function Sidebar({
 
   return (
     <div className="w-60 shrink-0 h-full flex flex-col bg-gray-900 border-r border-gray-700 text-gray-300">
-      <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Terminaltor</div>
+      <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">OrchestriX</div>
 
       <div className="flex-1 overflow-y-auto">
         {groups.map((g) => (
@@ -1768,12 +1768,12 @@ export default function App() {
 
   // Load persisted workspace once on mount.
   useEffect(() => {
-    window.terminaltor.loadWorkspace().then((ws) => setState(createInitialState(ws)))
+    window.orchestrix.loadWorkspace().then((ws) => setState(createInitialState(ws)))
   }, [setState])
 
   // Persist whenever the workspace changes (main debounces writes).
   useEffect(() => {
-    window.terminaltor.saveWorkspace(state.workspace)
+    window.orchestrix.saveWorkspace(state.workspace)
   }, [state.workspace])
 
   const activeGroup = getActiveGroup(state)
@@ -1938,7 +1938,7 @@ git commit -m "feat: keyboard shortcuts for tabs and terminals"
 - [ ] **Step 1: Write `README.md`**
 
 ```markdown
-# Terminaltor
+# OrchestriX
 
 Desktop wrapper nad terminalom za Linux: imenovani terminali sa punim PTY-jem,
 grupisani u cjeline (sidebar stablo + tabovi) — za organizaciju AI agenata po feature-ima.
@@ -1962,7 +1962,7 @@ npm test          # unit testovi
 ## Perzistencija
 
 Struktura (grupe + terminali + cwd + startup komanda) čuva se u
-`~/.config/Terminaltor/workspace.json` i obnavlja se na pokretanju sa svježim shell-ovima.
+`~/.config/OrchestriX/workspace.json` i obnavlja se na pokretanju sa svježim shell-ovima.
 ```
 
 - [ ] **Step 2: Run the full test suite**
@@ -1994,7 +1994,7 @@ git commit -m "docs: add README and finalize v1"
 
 **Out-of-scope (correctly deferred to V2+):** split panes, drag-and-drop, group templates, scrollback persistence, packaging, settings UI, in-terminal search.
 
-**Type consistency:** `TerminaltorApi` (shared/api.ts) is implemented verbatim in preload and consumed in TerminalView/App; `PtyCreateOptions`/`PtySpawner`/`PtyHandle` consistent across ptyManager, nodePtySpawner, preload; store reducer/selector names match their usages in App and tests; IPC channel constants single-sourced in shared/ipc.ts.
+**Type consistency:** `OrchestrixApi` (shared/api.ts) is implemented verbatim in preload and consumed in TerminalView/App; `PtyCreateOptions`/`PtySpawner`/`PtyHandle` consistent across ptyManager, nodePtySpawner, preload; store reducer/selector names match their usages in App and tests; IPC channel constants single-sourced in shared/ipc.ts.
 
 **Known intentional choices:** no `React.StrictMode` (imperative PTY lifecycle); all terminals stay mounted (hidden) so shells keep running; default cwd/shell resolved in `nodePtySpawner` (main) since the renderer has no Node env.
 ```

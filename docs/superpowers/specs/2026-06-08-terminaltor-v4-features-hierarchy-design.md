@@ -1,4 +1,4 @@
-# Terminaltor V4 — Features Hierarchy (Design)
+# OrchestriX V4 — Features Hierarchy (Design)
 
 **Datum:** 2026-06-08
 **Status:** Odobreno (brainstorming faza)

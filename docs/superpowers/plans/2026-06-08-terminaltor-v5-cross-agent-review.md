@@ -659,7 +659,7 @@ U objekat `IPC` dodaj (poslije `ptyProc`):
 
 - [ ] **Step 2: Dodaj metode u `src/shared/api.ts`**
 
-U `interface TerminaltorApi`, poslije `onPtyProc`:
+U `interface OrchestrixApi`, poslije `onPtyProc`:
 
 ```ts
   pickFile(opts?: { defaultPath?: string }): Promise<string | null>
@@ -960,7 +960,7 @@ export function useReview(
 
   const armWatch = useCallback((watchId: string, path: string, target: WatchTarget) => {
     targets.current.set(watchId, target)
-    window.terminaltor.watchFile(watchId, path)
+    window.orchestrix.watchFile(watchId, path)
   }, [])
 
   // Called by App on every fs:changed event.
@@ -968,7 +968,7 @@ export function useReview(
     const t = targets.current.get(watchId)
     if (!t) return
     targets.current.delete(watchId)
-    window.terminaltor.unwatchFile(watchId)
+    window.orchestrix.unwatchFile(watchId)
     setStatus(t.terminalId, t.status)
   }, [setStatus])
 
@@ -976,7 +976,7 @@ export function useReview(
     const featureId = featureIdOfTerminal(state, a.originTerminalId)
     if (!featureId) return
     const round = 1
-    const { reviewDir, reviewFile } = await window.terminaltor.resolveReviewDir(a.originTerminalId, round)
+    const { reviewDir, reviewFile } = await window.orchestrix.resolveReviewDir(a.originTerminalId, round)
     const prompt = reviewerPrompt({ kind: a.kind, specPath: a.specPath, reviewFile, intent: a.intent })
     const startupCommand = buildReviewerCommand(AGENTS[a.reviewer].command, prompt)
 
@@ -1002,7 +1002,7 @@ export function useReview(
     if (!link) return
     const reviewFile = `${link.reviewDir}/review-${link.round}.md`
     const text = relayToOriginPrompt({ kind: link.reviewKind, reviewFile, specPath: link.specPath })
-    window.terminaltor.writePty(link.originTerminalId, text + '\r')
+    window.orchestrix.writePty(link.originTerminalId, text + '\r')
     setStatus(reviewerId, undefined)
     setStatus(link.originTerminalId, 'applying')
     // Auto status for 'spec' only (single file to watch). 'impl' → manual (Task 13).
@@ -1017,9 +1017,9 @@ export function useReview(
     const link = reviewer?.review
     if (!reviewer || !link) return
     const round = link.round + 1
-    const { reviewFile } = await window.terminaltor.resolveReviewDir(originId, round)
+    const { reviewFile } = await window.orchestrix.resolveReviewDir(originId, round)
     const text = reReviewPrompt({ kind: link.reviewKind, specPath: link.specPath, reviewFile })
-    window.terminaltor.writePty(reviewer.id, text + '\r')
+    window.orchestrix.writePty(reviewer.id, text + '\r')
     apply((s) => setReviewRound(s, reviewer.id, round))
     setStatus(originId, undefined)
     setStatus(reviewer.id, 'reviewing')
@@ -1065,7 +1065,7 @@ import { ReviewDialog } from './ReviewDialog'
 
 beforeEach(() => {
   // @ts-expect-error test stub
-  window.terminaltor = {
+  window.orchestrix = {
     suggestSpec: vi.fn().mockResolvedValue('/p/docs/spec.md'),
     pickFile: vi.fn().mockResolvedValue('/p/other.md')
   }
@@ -1133,12 +1133,12 @@ export function ReviewDialog({
 
   useEffect(() => {
     let cancelled = false
-    window.terminaltor.suggestSpec(cwd).then((p) => { if (!cancelled && p) setSpecPath(p) })
+    window.orchestrix.suggestSpec(cwd).then((p) => { if (!cancelled && p) setSpecPath(p) })
     return () => { cancelled = true }
   }, [cwd])
 
   const browse = async () => {
-    const p = await window.terminaltor.pickFile({ defaultPath: specPath || cwd })
+    const p = await window.orchestrix.pickFile({ defaultPath: specPath || cwd })
     if (p) setSpecPath(p)
   }
 
@@ -1465,7 +1465,7 @@ b) Unutar `App()`, uz ostale `useState`, dodaj:
 c) Pretplati se na `fs:changed` (uz postojeći `onPtyProc` useEffect, novi effect):
 
 ```tsx
-  useEffect(() => window.terminaltor.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
+  useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
 ```
 
 - [ ] **Step 2: Izvedi relay-flagove za aktivni terminal**

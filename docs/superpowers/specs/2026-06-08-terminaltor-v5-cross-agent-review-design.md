@@ -1,4 +1,4 @@
-# Terminaltor V5 — Cross-agent Review (Design)
+# OrchestriX V5 — Cross-agent Review (Design)
 
 **Datum:** 2026-06-08
 **Status:** Odobreno (brainstorming faza)
@@ -13,7 +13,7 @@ fire-and-forget okine review i vrati se na rezultat.
 
 ## 0. Polazna realnost (zašto baš ovako)
 
-Terminal u Terminaltoru je sirovi PTY koji xterm renderuje. Kad u njemu radi
+Terminal u OrchestriXu je sirovi PTY koji xterm renderuje. Kad u njemu radi
 `claude`/`codex`, to su TUI (Ink) aplikacije koje stalno precrtavaju ekran. Zato:
 
 - **Scrape xterm buffera / sirovog PTY streama je nepouzdan** za TUI — daješ
@@ -109,7 +109,7 @@ Review fajlovi **ne smiju u git**. Žive u app-data diru (kao `workspace.json`):
 <userData>/reviews/<originTerminalId>/review-<N>.md
 ```
 
-- `userData` = `app.getPath('userData')` (npr. `~/.config/Terminaltor`).
+- `userData` = `app.getPath('userData')` (npr. `~/.config/OrchestriX`).
 - Ključ je **originTerminalId** (A) — sve runde jednog review-a su na okupu.
 - Dir se kreira lijeno (`mkdir -p`) pri startu review-a.
 
@@ -138,7 +138,7 @@ Svi koriste **apsolutne** putanje (B i A mogu biti van cwd-a — vidi caveat doz
 
 ## 6. Relay (injekcija u stdin)
 
-Relay = `window.terminaltor.writePty(targetId, text)`. Pošto su A/B interaktivni
+Relay = `window.orchestrix.writePty(targetId, text)`. Pošto su A/B interaktivni
 claude/codex:
 
 - Višelinijski prompt: linije spojene sa `\n` (LF = nova linija, agent ne
@@ -261,7 +261,7 @@ lijepi store-mutacije + IPC.
 
 - **Dozvole:** review fajlovi su van cwd-a → A i B mogu jednom tražiti dozvolu za
   čitanje/pisanje van projekta. Podnošljivo (jednom po terminalu). Alternativa ako
-  smeta: gitignored `.terminaltor/` *unutar* projekta (van obima V5).
+  smeta: gitignored `.orchestrix/` *unutar* projekta (van obima V5).
 - **Relay timing:** inject pretpostavlja idle meta-terminal; UI ga nudi tek u
   „gotov" stanju, ali nije 100% garancija.
 - **`impl` „A done":** nema jednog fajla → ručni fallback / cwd-quiet heuristika.

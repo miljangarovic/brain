@@ -1,4 +1,4 @@
-# Terminaltor V3 — Split Grid + Packaging (Design)
+# OrchestriX V3 — Split Grid + Packaging (Design)
 
 **Datum:** 2026-06-08
 **Status:** Odobreno (brainstorming faza)
@@ -84,7 +84,7 @@ Ručni binarni split (tmux), drag-resize ivica, izbor podskupa panela.
 
 ### Alat i konfiguracija
 - `electron-builder` (devDep). Config u `electron-builder.yml`.
-- `appId: com.terminaltor.app`, `productName: Terminaltor`, kategorija `Development`.
+- `appId: com.orchestrix.app`, `productName: OrchestriX`, kategorija `Development`.
 - `directories.output: release`, `directories.buildResources: build`.
 - `files`: `out/**` (electron-vite output) + `package.json`.
 - Linux targeti: `AppImage`, `deb`; `maintainer`, `synopsis`.

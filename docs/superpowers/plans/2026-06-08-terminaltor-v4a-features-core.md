@@ -1,4 +1,4 @@
-# Terminaltor V4a — Features Hierarchy Core Implementation Plan
+# OrchestriX V4a — Features Hierarchy Core Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -750,7 +750,7 @@ export function Sidebar(props: {
     <div className="w-64 shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line">
         <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_var(--od-accent)]" />
-        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-fg-muted">Terminaltor</span>
+        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-fg-muted">OrchestriX</span>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1">
@@ -1012,7 +1012,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    window.terminaltor.loadWorkspace().then((ws) => {
+    window.orchestrix.loadWorkspace().then((ws) => {
       setState(createInitialState(migrateWorkspace(ws)))
       setLoaded(true)
     })
@@ -1020,7 +1020,7 @@ export default function App() {
 
   useEffect(() => {
     if (!loaded) return
-    window.terminaltor.saveWorkspace(state.workspace)
+    window.orchestrix.saveWorkspace(state.workspace)
   }, [state.workspace, loaded])
 
   const activeGroup = getActiveGroup(state)
@@ -1103,7 +1103,7 @@ export default function App() {
         >
           {terminals.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
-              <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
+              <span className="text-2xl font-semibold tracking-tight text-fg">OrchestriX</span>
               <span className="text-sm">{activeGroup ? 'Dodaj terminal u feature.' : 'Napravi grupu da počneš.'}</span>
             </div>
           )}

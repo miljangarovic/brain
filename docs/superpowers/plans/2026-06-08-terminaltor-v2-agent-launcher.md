@@ -1,4 +1,4 @@
-# Terminaltor V2 — Agent Launcher + Icons Implementation Plan
+# OrchestriX V2 — Agent Launcher + Icons Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -606,7 +606,7 @@ export function Sidebar({
     <div className="w-60 shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line">
         <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_var(--od-accent)]" />
-        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-fg-muted">Terminaltor</span>
+        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-fg-muted">OrchestriX</span>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1">

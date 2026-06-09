@@ -391,7 +391,7 @@ git commit -m "feat(ui): show busy spinner on sidebar terminal rows"
 ```ts
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   useEffect(() => {
-    return window.terminaltor.onPtyBusy((id, b) => setBusy((m) => ({ ...m, [id]: b })))
+    return window.orchestrix.onPtyBusy((id, b) => setBusy((m) => ({ ...m, [id]: b })))
   }, [])
 ```
 

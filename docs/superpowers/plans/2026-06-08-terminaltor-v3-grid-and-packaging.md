@@ -1,4 +1,4 @@
-# Terminaltor V3 — Split Grid + Packaging Implementation Plan
+# OrchestriX V3 — Split Grid + Packaging Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -461,7 +461,7 @@ Replace this current block:
         <div className="relative flex-1 bg-surface">
           {terminals.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
-              <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
+              <span className="text-2xl font-semibold tracking-tight text-fg">OrchestriX</span>
               <span className="text-sm">Napravi grupu pa terminal da počneš.</span>
             </div>
           )}
@@ -495,7 +495,7 @@ with:
             >
               {terminals.length === 0 && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
-                  <span className="text-2xl font-semibold tracking-tight text-fg">Terminaltor</span>
+                  <span className="text-2xl font-semibold tracking-tight text-fg">OrchestriX</span>
                   <span className="text-sm">Napravi grupu pa terminal da počneš.</span>
                 </div>
               )}
@@ -567,8 +567,8 @@ git commit -m "feat: per-group grid layout + Ctrl+Shift+G toggle"
 - [ ] **Step 1: Create `electron-builder.yml`**
 
 ```yaml
-appId: com.terminaltor.app
-productName: Terminaltor
+appId: com.orchestrix.app
+productName: OrchestriX
 directories:
   output: release
   buildResources: build
@@ -700,8 +700,8 @@ Expected: node-pty rebuilds for Electron (already done earlier, but re-confirm b
 
 Run: `npm run package`
 Expected: `electron-vite build` then `electron-builder` produce, under `release/`:
-- `Terminaltor-0.1.0.AppImage` (name may vary by version)
-- `terminaltor_0.1.0_amd64.deb`
+- `OrchestriX-0.1.0.AppImage` (name may vary by version)
+- `orchestrix_0.1.0_amd64.deb`
 
 - [ ] **Step 3: Verify the artifacts exist**
 
