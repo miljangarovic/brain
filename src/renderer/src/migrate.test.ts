@@ -33,4 +33,20 @@ describe('migrateWorkspace', () => {
     expect(migrateWorkspace({})).toEqual({ groups: [] })
     expect(migrateWorkspace({ groups: 'nope' })).toEqual({ groups: [] })
   })
+
+  it('strips legacy (reviewKind-shaped) review links but keeps new ones', () => {
+    const ws = migrateWorkspace({
+      groups: [{
+        id: 'g', name: 'G', collapsed: false, cwd: '', features: [{
+          id: 'f', name: 'general', collapsed: false, terminals: [
+            { id: 'a', name: 'A', cwd: '', review: { originTerminalId: 'x', reviewKind: 'spec', reviewDir: '/r', round: 1 } },
+            { id: 'b', name: 'B', cwd: '', review: { originTerminalId: 'x', phase: 'spec', round: 1, maxRounds: 5, reviewDir: '/r' } }
+          ]
+        }]
+      }]
+    })
+    const terms = ws.groups[0].features[0].terminals
+    expect(terms.find((t) => t.id === 'a')?.review).toBeUndefined()
+    expect(terms.find((t) => t.id === 'b')?.review?.phase).toBe('spec')
+  })
 })
