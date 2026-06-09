@@ -7,6 +7,7 @@ import { AGENTS, type AgentKind } from '../agents'
 import { buildReviewerCommand, reviewerStartupPrompt, reviewerInjectPrompt, relayToOriginPrompt } from './prompt'
 import { parseVerdict } from './verdict'
 import { afterApply } from './phases'
+import { submitToPty } from './submit'
 
 export interface StartReviewArgs {
   originTerminalId: string
@@ -40,7 +41,7 @@ export function useReview(
       phase, round, reviewFile,
       transcriptPath: link.transcriptPath, intentPath: link.intentPath, specPath: link.specPath
     })
-    window.orchestrix.writePty(reviewerId, prompt + '\r')
+    submitToPty(reviewerId, prompt)
     setStatus(reviewerId, 'reviewing')
     setStatus(link.originTerminalId, 'under-review')
     armReviewWatch(reviewerId, reviewFile, phase, round)
@@ -105,7 +106,7 @@ export function useReview(
     }
     // NEEDS-WORK → auto-relay to the origin and wait for it to finish applying.
     const relay = relayToOriginPrompt({ phase: link.phase, reviewFile: w.reviewFile, intentPath: link.intentPath, specPath: link.specPath })
-    window.orchestrix.writePty(link.originTerminalId, relay + '\r')
+    submitToPty(link.originTerminalId, relay)
     setStatus(reviewer.id, undefined)
     setStatus(link.originTerminalId, 'applying')
     awaiting.current.set(link.originTerminalId, 'pending')
