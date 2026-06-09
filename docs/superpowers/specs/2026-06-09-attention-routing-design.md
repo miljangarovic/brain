@@ -198,6 +198,12 @@ terminale — bez duplih signala.
    „slegnu" (resume redraw → idle) i bez ovoga bi izbacili roj notifikacija.
    Tokom grace prozora `idle`/`exit` događaji se ignorišu (bez stanja, bez zvuka,
    bez notifikacije). Sprečava notification-storm na svakom pokretanju.
+9. **„Touched" gating:** idle-izvedeni signali (`waiting-input`/`done`) okidaju
+   samo za terminale u kojima je korisnik stvarno radio ove sesije (kucao/pejstovao
+   — `term.onData`). Restaurirani agenti koje korisnik nije dirao nikad ne alarmiraju
+   (ni dot ni notifikacija) dok ne počne da radi u njima. `error` (exit) NIJE
+   gate-ovan — pad je vredan znati i za nedirnut terminal. Ovo je primarna zaštita
+   od „za svaki terminal "{ime} je gotov"" spama pri otvaranju radnog prostora.
 
 Prozor-fokus se prati u rendereru (`window` `focus`/`blur` + `document.hasFocus()`)
 — nije potreban novi IPC za fokus. „Aktivni terminal" je već u `App` stanju.

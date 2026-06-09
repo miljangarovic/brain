@@ -1,8 +1,9 @@
 // src/renderer/src/attention/useAttention.ts
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppState } from '../store'
-import { getTerminalById, allTerminals, isUnderReview, setActiveTerminal } from '../store'
+import { getTerminalById, allTerminals, isUnderReview, isHidden, setActiveTerminal, showTerminal } from '../store'
 import { readTail } from './tailRegistry'
+import { isTouched } from './touched'
 import { classifyIdle, type AttentionState } from './detect'
 import { decideOnIdle, decideOnExit } from './decide'
 import { upsertItem, removeItem, lastLineOf, type AttentionItem } from './queue'
@@ -71,6 +72,9 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
   const handleBusy = useCallback((id: string, busy: boolean) => {
     if (busy) { clearInternal(id); return } // resumed → previous attention is stale
     if (Date.now() - startedAt.current < STARTUP_GRACE_MS) return
+    // Idle-derived signals fire only for terminals you've actually worked in this
+    // session — a restored agent that merely settles never alerts (no spam on open).
+    if (!isTouched(id)) return
     const { term, ctx } = ctxFor(id)
     if (!term) return
     const tail = readTail(id)
@@ -87,7 +91,8 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
   }, [fire])
 
   const handleNotificationClick = useCallback((key: string) => {
-    apply((s) => setActiveTerminal(s, key))
+    // Un-hide a hidden terminal so it actually shows when you click its alert.
+    apply((s) => (isHidden(s, key) ? showTerminal(s, key) : setActiveTerminal(s, key)))
     clearInternal(key)
   }, [apply, clearInternal])
 

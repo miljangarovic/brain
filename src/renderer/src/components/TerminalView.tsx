@@ -7,6 +7,8 @@ import type { Terminal as TerminalModel } from '@shared/types'
 import { agentStartupCommand } from '../agents'
 import { getXtermTheme, MONO_FONT } from '../theme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { registerTail, unregisterTail, readXtermTail } from '../attention/tailRegistry'
+import { markTouched } from '../attention/touched'
 
 // `resume` is set only for agent terminals restored after an app restart: their
 // PTY spawns resuming the terminal's own prior conversation (by session id when
@@ -59,6 +61,10 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     fitRef.current = fit
     try { fit.fit() } catch { /* host may be hidden */ }
 
+    // Let attention routing read this terminal's recent output (to tell a
+    // permission prompt from a finished turn) when it goes idle.
+    registerTail(terminal.id, () => readXtermTail(term, 20))
+
     window.orchestrix.createPty({
       id: terminal.id,
       cwd: terminal.cwd,
@@ -72,7 +78,10 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     const offExit = window.orchestrix.onPtyExit((id) => {
       if (id === terminal.id) term.write('\r\n\x1b[33m[process exited]\x1b[0m\r\n')
     })
-    const inputDisposable = term.onData((data) => window.orchestrix.writePty(terminal.id, data))
+    // User keystrokes/paste mark this terminal "engaged" — attention's idle
+    // signals only fire for terminals you've actually worked in (term.onData is
+    // user input only; programmatic writes go through writePty, not this).
+    const inputDisposable = term.onData((data) => { markTouched(terminal.id); window.orchestrix.writePty(terminal.id, data) })
 
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
@@ -124,6 +133,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
       offExit()
       inputDisposable.dispose()
       ro.disconnect()
+      unregisterTail(terminal.id)
       term.dispose()
     }
     // Mount-once: the PTY lives as long as the terminal exists in the workspace,
