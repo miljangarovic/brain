@@ -194,6 +194,10 @@ terminale — bez duplih signala.
 6. **Čist exit (kod 0) = tiho.** Samo ne-nula kod → `error`.
 7. Prag „idle" = isti `busy→idle` signal koji već pokreće spinner (~1.5s), pa je
    konzistentno s onim što korisnik vidi; kratke pauze ne okidaju.
+8. **Startup grace (~4s):** odmah po pokretanju app-a, restaurirani agenti se
+   „slegnu" (resume redraw → idle) i bez ovoga bi izbacili roj notifikacija.
+   Tokom grace prozora `idle`/`exit` događaji se ignorišu (bez stanja, bez zvuka,
+   bez notifikacije). Sprečava notification-storm na svakom pokretanju.
 
 Prozor-fokus se prati u rendereru (`window` `focus`/`blur` + `document.hasFocus()`)
 — nije potreban novi IPC za fokus. „Aktivni terminal" je već u `App` stanju.
