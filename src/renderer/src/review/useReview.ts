@@ -1,12 +1,12 @@
 import { useRef, useCallback } from 'react'
 import type { AppState } from '../store'
-import { addTerminal, patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById } from '../store'
+import { addTerminal, removeTerminal, patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById } from '../store'
 import type { ReviewPhase, ReviewStatus, ReviewLink } from '@shared/types'
 import { createId } from '@shared/id'
 import { AGENTS, type AgentKind } from '../agents'
 import { buildReviewerCommand, reviewerStartupPrompt, reviewerInjectPrompt, relayToOriginPrompt } from './prompt'
 import { parseVerdict } from './verdict'
-import { nextPhase, afterApply } from './phases'
+import { afterApply } from './phases'
 
 export interface StartReviewArgs {
   originTerminalId: string
@@ -45,6 +45,19 @@ export function useReview(
     setStatus(link.originTerminalId, 'under-review')
     armReviewWatch(reviewerId, reviewFile, phase, round)
   }, [setStatus, armReviewWatch])
+
+  // A phase passed review: remove the (now finished) reviewer terminal — App's PTY
+  // reaper kills its PTY — clean up its watches/arming, and mark the origin green
+  // ('approved'), which holds until the origin's next request.
+  const finalizeApproved = useCallback((reviewerId: string, originId: string) => {
+    awaiting.current.delete(originId)
+    for (const [watchId, w] of [...watching.current]) {
+      if (w.reviewerId === reviewerId) { window.orchestrix.unwatchFile(watchId); watching.current.delete(watchId) }
+    }
+    apply((s) => removeTerminal(s, reviewerId))
+    setStatus(reviewerId, undefined)
+    setStatus(originId, 'approved')
+  }, [apply, setStatus])
 
   // 1. Start a brand-new review: spawn the reviewer terminal bound to the origin.
   const startReview = useCallback(async (a: StartReviewArgs) => {
@@ -87,8 +100,7 @@ export function useReview(
     if (!reviewer || !link) return
     const text = (await window.orchestrix.readTextFile(w.reviewFile)) ?? ''
     if (parseVerdict(text) === 'approved') {
-      setStatus(reviewer.id, 'phase-approved')        // ⛔ gate — wait for the user
-      setStatus(link.originTerminalId, undefined)     // clear the origin indicator at the gate
+      finalizeApproved(reviewer.id, link.originTerminalId) // reviewer closes; origin goes green
       return
     }
     // NEEDS-WORK → auto-relay to the origin and wait for it to finish applying.
@@ -97,7 +109,7 @@ export function useReview(
     setStatus(reviewer.id, undefined)
     setStatus(link.originTerminalId, 'applying')
     awaiting.current.set(link.originTerminalId, 'pending')
-  }, [state, setStatus])
+  }, [state, setStatus, finalizeApproved])
 
   // 3. Origin busy→idle while applying → next round (or stop at the cap).
   const handleBusy = useCallback(async (id: string, busy: boolean) => {
@@ -120,24 +132,7 @@ export function useReview(
     requestReview(link, reviewer.id, link.phase, decision.round, paths.reviewFile)
   }, [state, apply, setStatus, requestReview])
 
-  // 4. User gate: approve the phase → advance to the next (or finish the pipeline).
-  const advancePhase = useCallback(async (reviewerId: string) => {
-    const reviewer = getTerminalById(state, reviewerId)
-    const link = reviewer?.review
-    if (!reviewer || !link) return
-    const np = nextPhase(link.phase)
-    if (!np) {                                  // impl approved → done
-      setStatus(reviewer.id, undefined)
-      setStatus(link.originTerminalId, undefined)
-      return
-    }
-    const round = 1
-    const paths = await window.orchestrix.resolveReviewDir(link.originTerminalId, np, round)
-    apply((s) => patchReviewLink(s, reviewer.id, { phase: np, round }))
-    requestReview(link, reviewer.id, np, round, paths.reviewFile)
-  }, [state, apply, setStatus, requestReview])
-
-  // 5a. needs-decision: raise the cap and run more rounds.
+  // 4a. needs-decision: raise the cap and run more rounds.
   const moreRounds = useCallback(async (reviewerId: string) => {
     const reviewer = getTerminalById(state, reviewerId)
     const link = reviewer?.review
@@ -149,15 +144,14 @@ export function useReview(
     requestReview({ ...link, maxRounds }, reviewer.id, link.phase, round, paths.reviewFile)
   }, [state, apply, requestReview])
 
-  // 5b. needs-decision: accept the current state and move to the user gate.
+  // 4b. needs-decision: accept the current state as approved (reviewer closes, origin green).
   const acceptPhase = useCallback((reviewerId: string) => {
     const reviewer = getTerminalById(state, reviewerId)
     if (!reviewer?.review) return
-    setStatus(reviewer.id, 'phase-approved')
-    setStatus(reviewer.review.originTerminalId, undefined)
-  }, [state, setStatus])
+    finalizeApproved(reviewer.id, reviewer.review.originTerminalId)
+  }, [state, finalizeApproved])
 
-  // 6. Stop the loop entirely (manual escape).
+  // 5. Stop the loop entirely (manual escape): remove the reviewer, clear the origin (no green).
   const stopLoop = useCallback((reviewerId: string) => {
     const reviewer = getTerminalById(state, reviewerId)
     const link = reviewer?.review
@@ -166,9 +160,10 @@ export function useReview(
     for (const [watchId, w] of [...watching.current]) {
       if (w.reviewerId === reviewer.id) { window.orchestrix.unwatchFile(watchId); watching.current.delete(watchId) }
     }
+    apply((s) => removeTerminal(s, reviewer.id))
     setStatus(reviewer.id, undefined)
     setStatus(link.originTerminalId, undefined)
-  }, [state, setStatus])
+  }, [state, apply, setStatus])
 
-  return { startReview, handleFsChanged, handleBusy, advancePhase, moreRounds, acceptPhase, stopLoop }
+  return { startReview, handleFsChanged, handleBusy, moreRounds, acceptPhase, stopLoop }
 }

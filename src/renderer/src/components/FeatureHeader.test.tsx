@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { FeatureHeader } from './FeatureHeader'
 
-const noReview = { reviewerId: null, canApprove: false, isLast: false, needsDecision: false, active: false }
+const noReview = { reviewerId: null, needsDecision: false, active: false }
 const base = {
   featureName: 'auth', viewMode: 'tabs' as const, onToggleView: vi.fn(), onAdd: vi.fn(),
-  onApprovePhase: vi.fn(), onMoreRounds: vi.fn(), onAcceptPhase: vi.fn(), onStopLoop: vi.fn()
+  onMoreRounds: vi.fn(), onAcceptPhase: vi.fn(), onStopLoop: vi.fn()
 }
 
 describe('FeatureHeader', () => {
@@ -27,18 +27,6 @@ describe('FeatureHeader', () => {
     render(<FeatureHeader {...base} onStopLoop={onStopLoop} review={{ ...noReview, reviewerId: 'b', active: true }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Stani petlju' }))
     expect(onStopLoop).toHaveBeenCalledWith('b')
-  })
-
-  it('shows the phase gate and calls onApprovePhase', () => {
-    const onApprovePhase = vi.fn()
-    render(<FeatureHeader {...base} onApprovePhase={onApprovePhase} review={{ ...noReview, reviewerId: 'b', canApprove: true }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Odobri → sljedeća faza' }))
-    expect(onApprovePhase).toHaveBeenCalledWith('b')
-  })
-
-  it('labels the last-phase gate "Završi"', () => {
-    render(<FeatureHeader {...base} review={{ ...noReview, reviewerId: 'b', canApprove: true, isLast: true }} />)
-    expect(screen.getByRole('button', { name: 'Završi' })).toBeInTheDocument()
   })
 
   it('shows the three decision buttons on needs-decision', () => {

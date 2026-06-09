@@ -17,8 +17,8 @@ export type ReviewStatus =
   | 'reviewing'        // B is writing its critique
   | 'applying'         // A is applying the feedback
   | 'under-review'     // A: loop active, awaiting/working — the origin indicator
-  | 'phase-approved'   // B: phase APPROVED, waiting at the user gate
   | 'needs-decision'   // B: maxRounds reached, waiting for the user
+  | 'approved'         // A: phase passed review (reviewer closed) — green until the next request
 
 export interface Terminal {
   id: string
