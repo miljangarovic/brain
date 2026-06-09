@@ -1,63 +1,67 @@
 import { describe, it, expect } from 'vitest'
 import {
   shellSingleQuote, buildReviewerCommand,
-  reviewerPrompt, relayToOriginPrompt, reReviewPrompt
+  reviewerStartupPrompt, reviewerInjectPrompt, relayToOriginPrompt
 } from './prompt'
 
 describe('shellSingleQuote', () => {
-  it('wraps in single quotes', () => {
-    expect(shellSingleQuote('abc')).toBe(`'abc'`)
-  })
-  it('escapes embedded single quotes', () => {
-    expect(shellSingleQuote("a'b")).toBe(`'a'\\''b'`)
-  })
+  it('wraps in single quotes', () => expect(shellSingleQuote('abc')).toBe(`'abc'`))
+  it('escapes embedded single quotes', () => expect(shellSingleQuote("a'b")).toBe(`'a'\\''b'`))
 })
 
 describe('buildReviewerCommand', () => {
-  it('joins agent command with quoted prompt', () => {
-    expect(buildReviewerCommand('claude', 'hi')).toBe(`claude 'hi'`)
+  it('joins agent command with quoted prompt', () =>
+    expect(buildReviewerCommand('claude', 'hi')).toBe(`claude 'hi'`))
+})
+
+describe('reviewerStartupPrompt', () => {
+  it('intent: references the transcript + review file + VERDICT contract', () => {
+    const p = reviewerStartupPrompt({ phase: 'intent', round: 1, reviewFile: '/r/review-intent-1.md', transcriptPath: '/t/s.jsonl' })
+    expect(p).toContain('/t/s.jsonl')
+    expect(p).toContain('/r/review-intent-1.md')
+    expect(p).toContain('VERDICT: APPROVED')
+    expect(p).toContain('VERDICT: NEEDS-WORK')
+  })
+  it('spec: references the spec path and the intent path', () => {
+    const p = reviewerStartupPrompt({ phase: 'spec', round: 1, reviewFile: '/r/review-spec-1.md', specPath: '/a/spec.md', intentPath: '/r/intent.md' })
+    expect(p).toContain('/a/spec.md')
+    expect(p).toContain('/r/intent.md')
+  })
+  it('impl: references git diff, intent and spec', () => {
+    const p = reviewerStartupPrompt({ phase: 'impl', round: 1, reviewFile: '/r/review-impl-1.md', specPath: '/a/spec.md', intentPath: '/r/intent.md' })
+    expect(p).toContain('git diff')
+    expect(p).toContain('/a/spec.md')
+    expect(p).toContain('/r/intent.md')
+  })
+  it('round > 1 adds a re-review preamble', () => {
+    const p = reviewerStartupPrompt({ phase: 'spec', round: 2, reviewFile: '/r/review-spec-2.md', specPath: '/a/spec.md', intentPath: '/r/intent.md' })
+    expect(p.toLowerCase()).toContain('revised')
   })
 })
 
-describe('reviewerPrompt', () => {
-  it('spec: references spec path, review file and intent', () => {
-    const p = reviewerPrompt({ kind: 'spec', specPath: '/a/spec.md', reviewFile: '/r/review-1.md', intent: 'auth flow' })
-    expect(p).toContain('/a/spec.md')
-    expect(p).toContain('/r/review-1.md')
-    expect(p).toContain('auth flow')
-    expect(p).toContain('WRITE')
-  })
-  it('spec without intent uses fallback wording', () => {
-    const p = reviewerPrompt({ kind: 'spec', specPath: '/a/spec.md', reviewFile: '/r/review-1.md' })
-    expect(p).toContain('infer it from')
-  })
-  it('impl: references git diff and review file, not a spec path', () => {
-    const p = reviewerPrompt({ kind: 'impl', reviewFile: '/r/review-1.md' })
-    expect(p).toContain('git diff')
-    expect(p).toContain('/r/review-1.md')
+describe('reviewerInjectPrompt', () => {
+  it('is a single line (safe to write into an agent PTY)', () => {
+    const p = reviewerInjectPrompt({ phase: 'spec', round: 2, reviewFile: '/r/review-spec-2.md', specPath: '/a/spec.md', intentPath: '/r/intent.md' })
+    expect(p).not.toContain('\n')
+    expect(p).toContain('/r/review-spec-2.md')
   })
 })
 
 describe('relayToOriginPrompt', () => {
-  it('spec: single line pointing at review file + spec path', () => {
-    const p = relayToOriginPrompt({ kind: 'spec', reviewFile: '/r/review-1.md', specPath: '/a/spec.md' })
-    expect(p).toContain('/r/review-1.md')
+  it('intent: points at the critique and the intent document, single line', () => {
+    const p = relayToOriginPrompt({ phase: 'intent', reviewFile: '/r/review-intent-1.md', intentPath: '/r/intent.md' })
+    expect(p).toContain('/r/review-intent-1.md')
+    expect(p).toContain('/r/intent.md')
+    expect(p).not.toContain('\n')
+  })
+  it('spec: points at the spec path, single line', () => {
+    const p = relayToOriginPrompt({ phase: 'spec', reviewFile: '/r/review-spec-1.md', specPath: '/a/spec.md' })
     expect(p).toContain('/a/spec.md')
     expect(p).not.toContain('\n')
   })
-  it('impl: single line, mentions not to commit', () => {
-    const p = relayToOriginPrompt({ kind: 'impl', reviewFile: '/r/review-1.md' })
-    expect(p).toContain('/r/review-1.md')
+  it('impl: mentions not to commit, single line', () => {
+    const p = relayToOriginPrompt({ phase: 'impl', reviewFile: '/r/review-impl-1.md' })
     expect(p).toContain('commit')
-    expect(p).not.toContain('\n')
-  })
-})
-
-describe('reReviewPrompt', () => {
-  it('spec: single line, new review file', () => {
-    const p = reReviewPrompt({ kind: 'spec', specPath: '/a/spec.md', reviewFile: '/r/review-2.md' })
-    expect(p).toContain('/r/review-2.md')
-    expect(p).toContain('/a/spec.md')
     expect(p).not.toContain('\n')
   })
 })
