@@ -21,8 +21,8 @@ describe('reviewDirFor / reviewFilePath', () => {
   it('keys the dir by origin id under reviews/', () => {
     expect(reviewDirFor('/data', 'abc')).toBe(join('/data', 'reviews', 'abc'))
   })
-  it('names review files review-N.md', () => {
-    expect(reviewFilePath('/data/reviews/abc', 2)).toBe(join('/data/reviews/abc', 'review-2.md'))
+  it('names review files review-<phase>-<round>.md', () => {
+    expect(reviewFilePath('/data/reviews/abc', 'spec', 2)).toBe(join('/data/reviews/abc', 'review-spec-2.md'))
   })
 })
 
@@ -56,11 +56,13 @@ describe('suggestSpec', () => {
 })
 
 describe('resolveReviewPaths', () => {
-  it('mkdir -p the review dir and returns both paths', async () => {
+  it('mkdir -p the review dir and returns review/intent/spec paths', async () => {
     const base = await mktmp()
-    const { reviewDir, reviewFile } = await resolveReviewPaths(base, 'tid', 1)
+    const { reviewDir, reviewFile, intentPath, specPath } = await resolveReviewPaths(base, 'tid', 'intent', 1)
     expect(reviewDir).toBe(join(base, 'reviews', 'tid'))
-    expect(reviewFile).toBe(join(base, 'reviews', 'tid', 'review-1.md'))
+    expect(reviewFile).toBe(join(base, 'reviews', 'tid', 'review-intent-1.md'))
+    expect(intentPath).toBe(join(base, 'reviews', 'tid', 'intent.md'))
+    expect(specPath).toBe(join(base, 'reviews', 'tid', 'spec.md'))
     const stat = await fs.stat(reviewDir)
     expect(stat.isDirectory()).toBe(true)
     await fs.rm(base, { recursive: true, force: true })
