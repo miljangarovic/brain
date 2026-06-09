@@ -10,10 +10,13 @@ let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager(nodePtySpawner)
 
 function createWindow(): void {
-  // Dev (Linux/Windows) taskbar icon. A packaged build uses the icon embedded
-  // by electron-builder, and `assets/` is not bundled — so existsSync makes this
-  // a no-op in production and it only kicks in while developing.
-  const iconPath = join(app.getAppPath(), 'assets', 'branding', 'png', 'orchestrix-256.png')
+  // Window / taskbar icon. On Linux the running window's icon comes from this
+  // BrowserWindow `icon` (NOT from the .desktop entry), so it must be available
+  // in production too. We ship it via electron-builder `extraResources` (lands
+  // in `process.resourcesPath`); in dev we read it straight from the repo.
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'icon.png')
+    : join(app.getAppPath(), 'assets', 'branding', 'png', 'orchestrix-256.png')
   const icon = existsSync(iconPath) ? iconPath : undefined
 
   const win = new BrowserWindow({

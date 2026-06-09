@@ -57,6 +57,12 @@
     "asarUnpack": [
       "**/node_modules/node-pty/**"
     ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
@@ -67,7 +73,7 @@
       "target": ["nsis"]
     },
     "linux": {
-      "icon": "build/icon.png",
+      "icon": "build/icons",
       "category": "Utility",
       "target": ["AppImage", "deb"],
       "syncDesktopName": true
