@@ -54,6 +54,12 @@ const api: OrchestrixApi = {
     return () => ipcRenderer.removeListener(IPC.fsChanged, listener)
   },
   captureAgentSession: (opts) => ipcRenderer.invoke(IPC.agentCaptureSession, opts) as Promise<string | null>,
+  showNotification: (opts) => ipcRenderer.send(IPC.notifyShow, opts),
+  onNotificationClick: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: { key: string }) => cb(p.key)
+    ipcRenderer.on(IPC.notificationClick, listener)
+    return () => ipcRenderer.removeListener(IPC.notificationClick, listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('orchestrix', api)

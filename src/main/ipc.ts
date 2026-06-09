@@ -1,5 +1,5 @@
 // src/main/ipc.ts
-import { ipcMain, BrowserWindow, dialog, shell } from 'electron'
+import { ipcMain, BrowserWindow, dialog, shell, Notification } from 'electron'
 import * as os from 'os'
 import { IPC } from '@shared/ipc'
 import { PtyManager } from './ptyManager'
@@ -9,6 +9,7 @@ import type { Workspace, ReviewPhase } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { createReviewWatcher } from './reviewWatcher'
+import { createNotifier } from './notifications'
 import { resolveTranscript } from './transcript'
 import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
@@ -103,6 +104,22 @@ export function registerIpc(opts: {
   const reviewWatcher = createReviewWatcher((watchId) => send(IPC.fsChanged, { watchId }))
   ipcMain.on(IPC.fsWatch, (_e, p: { watchId: string; path: string }) => reviewWatcher.watch(p.watchId, p.path))
   ipcMain.on(IPC.fsUnwatch, (_e, p: { watchId: string }) => reviewWatcher.unwatch(p.watchId))
+
+  // Native OS notification when an agent needs the user. Click focuses the window
+  // and tells the renderer which terminal to jump to (key === terminalId).
+  const notifier = createNotifier({
+    isSupported: () => Notification.isSupported(),
+    create: ({ title, body }) => new Notification({ title, body }),
+    onClick: (key) => {
+      const win = getWin()
+      if (win && !win.isDestroyed()) {
+        if (win.isMinimized()) win.restore()
+        win.focus()
+      }
+      send(IPC.notificationClick, { key })
+    }
+  })
+  ipcMain.on(IPC.notifyShow, (_e, p: { key: string; title: string; body: string }) => notifier.show(p))
 
   // Detect the session id a freshly launched codex terminal writes, so a later
   // restart resumes exactly that conversation. `claimed` lives for the app run so
