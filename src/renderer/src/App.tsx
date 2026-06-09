@@ -14,6 +14,7 @@ import { createId } from '@shared/id'
 import { AGENTS, detectAgent, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
+import { nextPhase } from './review/phases'
 import { gridLayout } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
@@ -68,6 +69,7 @@ export default function App() {
   )
   const review = useReview(state, apply, setStatus)
   useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
+  useEffect(() => window.orchestrix.onPtyBusy(review.handleBusy), [review.handleBusy])
 
   useEffect(() => {
     window.orchestrix.loadWorkspace().then((ws) => {
@@ -98,13 +100,17 @@ export default function App() {
   const activeFeature = getActiveFeature(state)
 
   const activeTerminal = getActiveTerminal(state)
-  const activeStatus = activeTerminal ? reviewStatus[activeTerminal.id] : undefined
-  const activeIsReviewer = !!activeTerminal?.review
-  const activeIsOrigin = activeTerminal ? findReviewerFor(state, activeTerminal.id) !== null : false
-  const relayFlags = {
-    canReturn: activeIsReviewer && activeStatus === 'review-ready',
-    canReReview: activeIsOrigin && activeStatus === 'iteration-done',
-    canMarkApplied: activeIsOrigin && activeStatus === 'applying'
+  // The pipeline controls live on the feature's reviewer terminal (the one with a
+  // review link); both origin and reviewer share the feature, so derive from it.
+  const featureReviewer = activeFeature?.terminals.find((t) => !!t.review) ?? null
+  const reviewerStatus = featureReviewer ? reviewStatus[featureReviewer.id] : undefined
+  const originStatus = featureReviewer?.review ? reviewStatus[featureReviewer.review.originTerminalId] : undefined
+  const reviewControl = {
+    reviewerId: featureReviewer?.id ?? null,
+    canApprove: reviewerStatus === 'phase-approved',
+    isLast: featureReviewer?.review ? nextPhase(featureReviewer.review.phase) === null : false,
+    needsDecision: reviewerStatus === 'needs-decision',
+    active: reviewerStatus === 'reviewing' || originStatus === 'applying'
   }
   const startReview = (args: ReviewStartArgs) => {
     if (!reviewReq) return
@@ -212,10 +218,11 @@ export default function App() {
             onAdd={(kind) => (kind === 'shell'
               ? addShellTerminal(activeFeature.id)
               : launchAgent(activeFeature.id, kind))}
-            relay={relayFlags}
-            onReturnToOrigin={() => { if (activeTerminal) void review.relayToOrigin(activeTerminal.id) }}
-            onReReview={() => { if (activeTerminal) void review.reReview(activeTerminal.id) }}
-            onMarkApplied={() => { if (activeTerminal) review.markApplied(activeTerminal.id) }}
+            review={reviewControl}
+            onApprovePhase={(rid) => void review.advancePhase(rid)}
+            onMoreRounds={(rid) => void review.moreRounds(rid)}
+            onAcceptPhase={(rid) => review.acceptPhase(rid)}
+            onStopLoop={(rid) => review.stopLoop(rid)}
           />
         )}
         <TabBar
