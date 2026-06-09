@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, GridIcon, TrashIcon, ReviewIcon, SpinnerIcon } from './icons'
+import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
@@ -347,14 +347,9 @@ export function Sidebar(props: {
                                   </span>
                                 )}
                               {!isEditing('terminal', t.id) && (
-                                <>
-                                  <button aria-label={`Review terminal ${t.name}`} title="Review"
-                                    onClick={(e) => { e.stopPropagation(); onReviewTerminal(t.id) }}
-                                    className={`${hoverBtn} text-base leading-none hover:text-accent`}><ReviewIcon /></button>
-                                  <button aria-label={`Delete terminal ${t.name}`} title="Delete terminal"
-                                    onClick={(e) => { e.stopPropagation(); onDeleteTerminal(t.id) }}
-                                    className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
-                                </>
+                                <button aria-label={`Delete terminal ${t.name}`} title="Delete terminal"
+                                  onClick={(e) => { e.stopPropagation(); onDeleteTerminal(t.id) }}
+                                  className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
                               )}
                             </div>
                           )
@@ -400,8 +395,8 @@ export function Sidebar(props: {
 
       {termMenu && (
         <ContextMenu x={termMenu.x} y={termMenu.y} onClose={() => setTermMenu(null)} items={[
-          { label: 'Review ▸ Claude', onSelect: () => onReviewTerminal(termMenu.terminalId, 'claude') },
-          { label: 'Review ▸ Codex', onSelect: () => onReviewTerminal(termMenu.terminalId, 'codex') }
+          { label: 'Review', onSelect: () => onReviewTerminal(termMenu.terminalId, 'codex') },
+          { label: 'Delete', onSelect: () => onDeleteTerminal(termMenu.terminalId) }
         ]} />
       )}
 

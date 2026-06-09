@@ -207,6 +207,22 @@ describe('Sidebar (3-level)', () => {
     expect(onDeleteTerminal).toHaveBeenCalledWith('t1')
   })
 
+  it('right-click on a terminal opens the review modal with Codex preselected', async () => {
+    const onReviewTerminal = vi.fn()
+    renderSidebar({ onReviewTerminal })
+    fireEvent.contextMenu(screen.getByText('claude'))
+    await userEvent.click(screen.getByText('Review'))
+    expect(onReviewTerminal).toHaveBeenCalledWith('t1', 'codex')
+  })
+
+  it('right-click on a terminal offers Delete', async () => {
+    const onDeleteTerminal = vi.fn()
+    renderSidebar({ onDeleteTerminal })
+    fireEvent.contextMenu(screen.getByText('claude'))
+    await userEvent.click(screen.getByText('Delete'))
+    expect(onDeleteTerminal).toHaveBeenCalledWith('t1')
+  })
+
   it('single click on a group name collapses it (after the click delay)', () => {
     vi.useFakeTimers()
     try {

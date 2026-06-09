@@ -1,13 +1,12 @@
 // src/renderer/src/components/TabBar.tsx
 import { useState } from 'react'
 import type { Terminal, ReviewStatus } from '@shared/types'
-import type { AgentKind } from '../agents'
-import { TerminalKindIcon, ReviewIcon, SpinnerIcon } from './icons'
+import { TerminalKindIcon, SpinnerIcon } from './icons'
 import { ReviewStatusDot } from './ReviewStatusDot'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
 export function TabBar({
-  terminals, activeId, liveAgents, onSelect, onClose, reviewStatus, onReviewTerminal, busy
+  terminals, activeId, liveAgents, onSelect, onClose, reviewStatus, busy
 }: {
   terminals: Terminal[]
   activeId: string | null
@@ -15,7 +14,6 @@ export function TabBar({
   onSelect: (id: string) => void
   onClose: (id: string) => void
   reviewStatus: Record<string, ReviewStatus | undefined>
-  onReviewTerminal: (id: string, reviewer?: AgentKind) => void
   busy: Record<string, boolean>
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
@@ -41,14 +39,6 @@ export function TabBar({
               : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
             <ReviewStatusDot status={reviewStatus[t.id]} />
             <span>{t.name}</span>
-            <button
-              aria-label={`Review ${t.name}`}
-              title="Review"
-              onClick={(e) => { e.stopPropagation(); onReviewTerminal(t.id) }}
-              className="opacity-0 group-hover:opacity-100 text-fg-muted hover:text-accent transition"
-            >
-              <ReviewIcon />
-            </button>
             <button
               aria-label={`Close ${t.name}`}
               title={`Hide (the terminal keeps running; reopen it from the sidebar)`}

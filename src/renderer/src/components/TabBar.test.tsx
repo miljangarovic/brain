@@ -15,7 +15,6 @@ function noop() {}
 // existing assertions stay focused on the behavior under test.
 const reviewProps = {
   reviewStatus: {},
-  onReviewTerminal: noop,
   busy: {},
 }
 

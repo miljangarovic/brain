@@ -237,7 +237,6 @@ export default function App() {
           onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
           onClose={(id) => apply((s) => hideTerminal(s, id))}
           reviewStatus={reviewStatus}
-          onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
         />
 
         <div

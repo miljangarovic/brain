@@ -87,14 +87,3 @@ export function SpinnerIcon({ className }: IconProps) {
     </svg>
   )
 }
-
-export function ReviewIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" width="1em" height="1em" className={className}
-      data-testid="icon-review" aria-hidden="true" focusable="false"
-      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="6.5" />
-      <path d="M16 16 L21 21" />
-    </svg>
-  )
-}
