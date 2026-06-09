@@ -59,6 +59,25 @@ describe('store reducers', () => {
     expect(firstFeature(s).viewMode).toBe('tabs')
   })
 
+  it('toggleFeatureViewMode focuses the first terminal when the grid is closed', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 't1' })
+    const firstId = firstFeature(s).terminals[0].id
+    s = addTerminal(s, fid, { name: 't2' })
+    const secondId = firstFeature(s).terminals[1].id
+
+    // Open the grid, then make the second terminal active inside it.
+    s = toggleFeatureViewMode(s, fid)
+    s = setActiveTerminal(s, secondId)
+    expect(s.activeTerminalId).toBe(secondId)
+
+    // Closing the grid collapses to a single tab — the first terminal.
+    s = toggleFeatureViewMode(s, fid)
+    expect(firstFeature(s).viewMode).toBe('tabs')
+    expect(s.activeTerminalId).toBe(firstId)
+  })
+
   it('addTerminal puts the terminal in the feature and inherits the group cwd', () => {
     let s = addGroup(createInitialState(), 'a', '/proj')
     const fid = firstFeature(s).id

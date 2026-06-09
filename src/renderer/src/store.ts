@@ -105,10 +105,24 @@ export function toggleFeatureCollapsed(state: AppState, featureId: string): AppS
 }
 
 export function toggleFeatureViewMode(state: AppState, featureId: string): AppState {
-  return {
-    ...state,
-    workspace: mapFeature(state.workspace, featureId, (f) => ({ ...f, viewMode: (f.viewMode ?? 'tabs') === 'tabs' ? 'grid' : 'tabs' }))
+  const group = groupOfFeature(state.workspace, featureId)
+  const feature = group?.features.find((f) => f.id === featureId) ?? null
+  const nextMode = (feature?.viewMode ?? 'tabs') === 'tabs' ? 'grid' : 'tabs'
+  const workspace = mapFeature(state.workspace, featureId, (f) => ({ ...f, viewMode: nextMode }))
+  // Opening the grid shows every pane; closing it collapses back to a single tab,
+  // so focus the feature's first (visible) terminal — exactly one stays on, no
+  // matter which pane happened to be active in the grid.
+  if (nextMode === 'tabs' && feature) {
+    const first = feature.terminals.find((t) => !state.hidden.includes(t.id)) ?? feature.terminals[0] ?? null
+    return {
+      ...state,
+      workspace,
+      activeGroupId: group?.id ?? state.activeGroupId,
+      activeFeatureId: featureId,
+      activeTerminalId: first?.id ?? state.activeTerminalId
+    }
   }
+  return { ...state, workspace }
 }
 
 export function deleteFeature(state: AppState, featureId: string): AppState {
