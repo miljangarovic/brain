@@ -1,7 +1,7 @@
 // src/renderer/src/attention/useAttention.ts
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppState } from '../store'
-import { getTerminalById, allTerminals, isUnderReview, isHidden, setActiveTerminal, showTerminal } from '../store'
+import { getTerminalById, allTerminals, isUnderReview, showTerminal } from '../store'
 import { readTail } from './tailRegistry'
 import { isTouched } from './touched'
 import { classifyIdle, type AttentionState } from './detect'
@@ -91,12 +91,12 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
   }, [fire])
 
   const handleNotificationClick = useCallback((key: string) => {
-    // Un-hide a hidden terminal so it actually shows when you click its alert.
-    apply((s) => (isHidden(s, key) ? showTerminal(s, key) : setActiveTerminal(s, key)))
+    // showTerminal both un-hides (no-op when visible) and activates the terminal,
+    // so a click on the alert always reveals it.
+    apply((s) => showTerminal(s, key))
     clearInternal(key)
   }, [apply, clearInternal])
 
-  const clear = useCallback((id: string) => clearInternal(id), [clearInternal])
   const clearAll = useCallback(() => {
     for (const id of Object.keys(attentionRef.current)) clearInternal(id)
   }, [clearInternal])
@@ -115,5 +115,5 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
     for (const id of Object.keys(attentionRef.current)) if (!ids.has(id)) clearInternal(id)
   }, [state.workspace, clearInternal])
 
-  return { attention, queue, muted, handleBusy, handleExit, handleNotificationClick, clear, clearAll, toggleMute }
+  return { attention, queue, muted, handleBusy, handleExit, handleNotificationClick, clear: clearInternal, clearAll, toggleMute }
 }

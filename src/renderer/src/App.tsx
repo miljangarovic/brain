@@ -1,11 +1,11 @@
 // src/renderer/src/App.tsx
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import { removedIds } from './ptyReaper'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
-  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
+  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath
 } from './store'
@@ -188,9 +188,9 @@ export default function App() {
   // ALL terminals stay mounted so their shells keep running; hidden ones are just
   // omitted from the tab bar / grid (mounted but display:none).
   const terminals = allTerminals(state)
-  const attentionItems = attention.queue.map((q) => ({
+  const attentionItems = useMemo(() => attention.queue.map((q) => ({
     terminalId: q.terminalId, state: q.state, lastLine: q.lastLine, path: terminalPath(state, q.terminalId),
-  }))
+  })), [attention.queue, state.workspace]) // eslint-disable-line react-hooks/exhaustive-deps -- terminalPath reads only state.workspace
   const featureVisible = (activeFeature?.terminals ?? []).filter((t) => !state.hidden.includes(t.id))
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
   const featureTerminalIds = new Set(featureVisible.map((t) => t.id))
@@ -208,7 +208,7 @@ export default function App() {
         activeGroupId={state.activeGroupId}
         liveAgents={liveAgents}
         busy={busy}
-        onSelectTerminal={(id) => apply((s) => (isHidden(s, id) ? showTerminal(s, id) : setActiveTerminal(s, id)))}
+        onSelectTerminal={(id) => apply((s) => showTerminal(s, id))}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
         onAddGroup={() => setGroupDialogOpen(true)}
@@ -248,7 +248,7 @@ export default function App() {
         attention={attention.attention}
         attentionItems={attentionItems}
         attentionMuted={attention.muted}
-        onAttentionSelect={(id) => apply((s) => (isHidden(s, id) ? showTerminal(s, id) : setActiveTerminal(s, id)))}
+        onAttentionSelect={(id) => { apply((s) => showTerminal(s, id)); attention.clear(id) }}
         onAttentionClear={attention.clear}
         onAttentionClearAll={attention.clearAll}
         onToggleAttentionMute={attention.toggleMute}
