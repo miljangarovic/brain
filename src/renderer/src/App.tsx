@@ -6,7 +6,7 @@ import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
-  setActiveTerminal, setActiveFeature,
+  setActiveTerminal, setActiveFeature, setTerminalSessionId,
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals
 } from './store'
 import { migrateWorkspace } from './migrate'
@@ -75,9 +75,19 @@ export default function App() {
   useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
   useEffect(() => window.orchestrix.onPtyBusy(review.handleBusy), [review.handleBusy])
 
+  // Agent terminals present at first load are "restored" — their PTYs should
+  // spawn with the agent's resume command so the previous session continues
+  // instead of starting fresh. Terminals created later in the session are not in
+  // this set, so they launch normally. Held in a ref (it never changes after the
+  // initial load and must not trigger re-renders).
+  const resumeIdsRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     window.orchestrix.loadWorkspace().then((ws) => {
-      setState(createInitialState(migrateWorkspace(ws)))
+      const initial = createInitialState(migrateWorkspace(ws))
+      resumeIdsRef.current = new Set(
+        allTerminals(initial).filter((t) => t.kind === 'claude' || t.kind === 'codex').map((t) => t.id)
+      )
+      setState(initial)
       setLoaded(true)
     })
   }, [setState])
@@ -148,7 +158,18 @@ export default function App() {
 
   const launchAgent = (featureId: string, kind: AgentKind) => {
     const a = AGENTS[kind]
-    apply((s) => addTerminal(s, featureId, { name: a.defaultName, startupCommand: a.command, kind }))
+    const id = createId()
+    // claude lets us pin the conversation id up front (--session-id), so a restart
+    // resumes THIS terminal's session, not the cwd's most-recent one. codex can't,
+    // so it launches plain and we detect its session id from the rollout it writes.
+    const sessionId = kind === 'claude' ? createId() : undefined
+    apply((s) => addTerminal(s, featureId, { id, name: a.defaultName, startupCommand: a.command, kind, sessionId }))
+    if (kind === 'codex') {
+      const cwd = state.workspace.groups.find((g) => g.features.some((f) => f.id === featureId))?.cwd ?? ''
+      void window.orchestrix.captureAgentSession({ kind, cwd }).then((sid) => {
+        if (sid) apply((s) => setTerminalSessionId(s, id, sid))
+      })
+    }
   }
   const createGroup = (input: NewGroupInput) => {
     apply((s) => addGroup(s, input.name, input.cwd))
@@ -291,6 +312,7 @@ export default function App() {
                 reviewStatus={reviewStatus[t.id]}
                 onActivate={() => apply((s) => setActiveTerminal(s, t.id))}
                 dnd={dnd}
+                resume={resumeIdsRef.current.has(t.id)}
               />
             )
           })}

@@ -28,6 +28,11 @@ export interface Terminal {
   shell?: string         // '' / undefined means: $SHELL || /bin/bash
   kind?: TerminalKind    // undefined === 'shell'
   review?: ReviewLink    // present only on the reviewer terminal (B)
+  // Agent conversation id, so a restart resumes THIS terminal's session rather
+  // than the cwd's most-recent one. claude: pinned at launch via --session-id;
+  // codex: detected from its rollout file after launch. Absent for plain shells
+  // and pre-existing terminals (they fall back to --continue / resume --last).
+  sessionId?: string
 }
 
 export interface Feature {

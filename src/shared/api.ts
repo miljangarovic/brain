@@ -23,4 +23,8 @@ export interface OrchestrixApi {
   watchFile(watchId: string, path: string): void
   unwatchFile(watchId: string): void
   onFsChanged(cb: (watchId: string) => void): () => void
+  // Best-effort: after a fresh agent launch, resolve the conversation/session id
+  // it created (currently codex only — claude pins its id up front). Returns null
+  // if none is found within the capture window.
+  captureAgentSession(opts: { kind: string; cwd: string }): Promise<string | null>
 }

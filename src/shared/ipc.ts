@@ -18,5 +18,6 @@ export const IPC = {
   fsWatch: 'fs:watch',
   fsUnwatch: 'fs:unwatch',
   fsChanged: 'fs:changed',
-  ptyBusy: 'pty:busy'
+  ptyBusy: 'pty:busy',
+  agentCaptureSession: 'agent:captureSession'
 } as const

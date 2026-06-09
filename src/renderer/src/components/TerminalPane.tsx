@@ -27,7 +27,7 @@ export interface PaneDnd {
 }
 
 export function TerminalPane({
-  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd
+  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume
 }: {
   terminal: Terminal
   active: boolean
@@ -39,6 +39,7 @@ export function TerminalPane({
   reviewStatus: ReviewStatus | undefined
   onActivate: () => void
   dnd?: PaneDnd             // grid reorder handlers (present only for gridded panes)
+  resume?: boolean          // restored agent terminal → spawn with its resume command
 }) {
   const gridStyle = gridded
     ? {
@@ -77,7 +78,7 @@ export function TerminalPane({
         </div>
       )}
       <div className={gridded ? 'relative flex-1 min-h-0' : 'absolute inset-0'}>
-        <TerminalView terminal={terminal} active={active} />
+        <TerminalView terminal={terminal} active={active} resume={resume} />
       </div>
       {gridded && dnd?.isDropTarget && (
         <div
