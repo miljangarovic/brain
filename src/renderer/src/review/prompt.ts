@@ -37,14 +37,14 @@ function bodyLines(a: ReviewerPromptArgs): string[] {
   if (a.phase === 'spec') {
     return [
       'You are a reviewer — a second AI agent. Do NOT modify the spec; only WRITE your critique to the review file.',
-      `Review the spec/plan at: ${a.specPath}. The agreed intent is at: ${a.intentPath}.`,
+      `Review the spec/plan at: ${a.specPath ?? '(spec not yet written)'}. The agreed intent is at: ${a.intentPath ?? '(intent not yet written)'}.`,
       'Judge: does the spec fully cover the intent? Correctness, gaps, contradictions, scope (YAGNI), feasibility. Be concrete; propose exact changes.'
     ]
   }
   return [
     'You are a reviewer — a second AI agent. Do NOT commit; only WRITE your critique to the review file.',
     'Run `git status` and `git diff` and review the uncommitted changes in this repository.',
-    `The intent is at: ${a.intentPath}; the spec is at: ${a.specPath}.`,
+    `The intent is at: ${a.intentPath ?? '(intent not yet written)'}; the spec is at: ${a.specPath ?? '(spec not yet written)'}.`,
     'Judge: does the implementation follow the spec? Bugs, edge cases, correctness, simplicity.'
   ]
 }
@@ -73,10 +73,10 @@ export interface RelayPromptArgs {
 /** Single-line prompt injected into the origin (A) telling it to apply the critique. */
 export function relayToOriginPrompt(a: RelayPromptArgs): string {
   if (a.phase === 'intent') {
-    return `The reviewer left a critique in ${a.reviewFile}. Update the intent document ${a.intentPath} (create it if missing) where you agree; where you disagree, briefly explain why. Do not start the spec or code yet.`
+    return `The reviewer left a critique in ${a.reviewFile}. Update the intent document ${a.intentPath ?? '(the intent document)'} (create it if missing) where you agree; where you disagree, briefly explain why. Do not start the spec or code yet.`
   }
   if (a.phase === 'spec') {
-    return `The reviewer left a critique in ${a.reviewFile}. Update ${a.specPath} where you agree; where you disagree, briefly explain. Do not implement yet.`
+    return `The reviewer left a critique in ${a.reviewFile}. Update ${a.specPath ?? '(the spec)'} where you agree; where you disagree, briefly explain. Do not implement yet.`
   }
   return `The reviewer left a critique in ${a.reviewFile}. Apply the fixes in the code where you agree; where you disagree, briefly explain. Do not commit.`
 }

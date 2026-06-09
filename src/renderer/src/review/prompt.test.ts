@@ -37,6 +37,10 @@ describe('reviewerStartupPrompt', () => {
     const p = reviewerStartupPrompt({ phase: 'spec', round: 2, reviewFile: '/r/review-spec-2.md', specPath: '/a/spec.md', intentPath: '/r/intent.md' })
     expect(p.toLowerCase()).toContain('revised')
   })
+  it('never emits the literal "undefined" when optional paths are omitted', () => {
+    expect(reviewerStartupPrompt({ phase: 'impl', round: 1, reviewFile: '/r/review-impl-1.md' })).not.toContain('undefined')
+    expect(reviewerStartupPrompt({ phase: 'spec', round: 1, reviewFile: '/r/review-spec-1.md' })).not.toContain('undefined')
+  })
 })
 
 describe('reviewerInjectPrompt', () => {
