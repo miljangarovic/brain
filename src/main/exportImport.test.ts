@@ -224,7 +224,7 @@ describe('manifest round-trips archive + documents', () => {
   it('archivedFeatures and documents survive export → import extraction', async () => {
     const withExtras: Group = {
       ...group,
-      features: [{ ...group.features[0], documents: [{ id: 'd1', name: 'spec', path: '/docs/spec.md' }] }],
+      features: [{ ...group.features[0], documents: [{ id: 'd1', name: 'spec', path: '/docs/spec.md' }], files: [{ id: 'fp1', name: 'notes', path: '/old/proj/notes.md', mdView: 'raw' as const }] }],
       archivedFeatures: [{ id: 'fa', name: 'Old Flow', collapsed: false, terminals: [] }]
     }
     const out = tmpZip()
@@ -238,5 +238,6 @@ describe('manifest round-trips archive + documents', () => {
     const g = (res.manifest as { group: Group }).group
     expect(g.archivedFeatures![0].name).toBe('Old Flow')
     expect(g.features[0].documents![0]).toMatchObject({ name: 'spec', path: '/docs/spec.md' })
+    expect(g.features[0].files![0]).toMatchObject({ name: 'notes', path: '/old/proj/notes.md' })
   })
 })
