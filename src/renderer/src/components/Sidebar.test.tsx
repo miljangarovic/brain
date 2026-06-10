@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Sidebar, insertionFromMidpoints, reorderToIndex } from './Sidebar'
+import { Sidebar, insertionFromMidpoints, reorderToIndex, fileDropToFullIndex } from './Sidebar'
 import type { Group } from '@shared/types'
 
 const groups: Group[] = [
@@ -649,5 +649,60 @@ describe('Sidebar (3-level)', () => {
       await userEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
       expect(onRemoveDocument).toHaveBeenCalledWith('f1', 'd1')
     })
+  })
+})
+
+describe('document-backed file panes (no duplicate sidebar rows)', () => {
+  const withDocPane: Group[] = [{
+    ...groups[0],
+    features: [
+      {
+        ...groups[0].features[0],
+        files: [
+          { id: 'fp1', name: 'notes.md', path: '/p/notes.md' },
+          { id: 'fp2', name: 'spec', path: '/docs/spec.md' } // same path as document d1
+        ]
+      },
+      groups[0].features[1]
+    ]
+  }]
+
+  it('a pane opened from a document does not add a second sidebar row', () => {
+    const { container } = renderSidebar({ groups: withDocPane })
+    expect(container.querySelector('[data-file-id="fp2"]')).toBeNull()
+    expect(container.querySelector('[data-file-id="fp1"]')).not.toBeNull()
+    expect(container.querySelector('[data-doc-id="d1"]')).not.toBeNull()
+  })
+
+  it('the document row carries the active accent while its pane is active', () => {
+    const { container } = renderSidebar({ groups: withDocPane, activeTerminalId: 'fp2' })
+    expect((container.querySelector('[data-doc-id="d1"]') as HTMLElement).className).toContain('bg-accent-sel')
+    const inactive = renderSidebar({ groups: withDocPane, activeTerminalId: 't1' })
+    expect((inactive.container.querySelector('[data-doc-id="d1"]') as HTMLElement).className).not.toContain('bg-accent-sel')
+  })
+})
+
+describe('fileDropToFullIndex', () => {
+  const all = [
+    { id: 'a', path: '/a' },      // visible
+    { id: 'h1', path: '/doc1' },  // hidden (document-backed)
+    { id: 'b', path: '/b' },      // visible
+    { id: 'h2', path: '/doc2' },  // hidden
+    { id: 'c', path: '/c' }       // visible
+  ]
+  const docs = new Set(['/doc1', '/doc2'])
+
+  it('maps a visible insertion to the full-array index moveFile expects', () => {
+    expect(fileDropToFullIndex(all, docs, 'c', 0)).toBe(0)  // 'c' before 'a'
+    expect(fileDropToFullIndex(all, docs, 'a', 1)).toBe(3)  // 'a' before 'c' → rest [h1,b,h2,c], index 3
+  })
+
+  it('past the last visible row appends to the very end of the full array', () => {
+    expect(fileDropToFullIndex(all, docs, 'a', 2)).toBe(4)  // rest length
+  })
+
+  it('with no hidden panes it degrades to the plain visible index', () => {
+    const plain = [{ id: 'a', path: '/a' }, { id: 'b', path: '/b' }]
+    expect(fileDropToFullIndex(plain, new Set(), 'b', 0)).toBe(0)
   })
 })
