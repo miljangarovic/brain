@@ -129,3 +129,53 @@ describe('buildImport — feature scope', () => {
     expect(out.fallbackGroup).toEqual({ name: 'proj', cwd: '/old/proj' })
   })
 })
+
+describe('buildImport — archive and documents', () => {
+  const withExtras: ExportManifest = {
+    ...manifest,
+    group: {
+      ...group,
+      features: [{ ...group.features[0], documents: [{ id: 'd1', name: 'spec', path: '/old/proj/docs/spec.md' }] }],
+      archivedFeatures: [
+        { id: 'fa', name: 'old-flow', collapsed: false, terminals: [
+          { id: 't-arch', name: 'claude', cwd: '/old/proj', kind: 'claude', sessionId: 'dead-9' }
+        ] }
+      ]
+    },
+    sessions: { ...manifest.sessions, 't-arch': { kind: 'claude', file: 'sessions/old-flow-claude-cccc.md' } }
+  }
+  const build = (exists: (p: string) => boolean = () => true, newRoot: string | null = null) =>
+    buildImport({ manifest: withExtras, dir: '/data/imports/abc', newRoot, exists, createId: counterId() })
+
+  it('documents carry through with fresh ids and verbatim paths', () => {
+    const docs = build().group!.features[0].documents!
+    expect(docs).toHaveLength(1)
+    expect(docs[0].id).toMatch(/^new-/)
+    expect(docs[0]).toMatchObject({ name: 'spec', path: '/old/proj/docs/spec.md' })
+  })
+
+  it('archived features import with fresh ids and continue-from-summary commands', () => {
+    const g = build().group!
+    expect(g.archivedFeatures).toHaveLength(1)
+    const t = g.archivedFeatures![0].terminals[0]
+    expect(t.id).toMatch(/^new-/)
+    expect(t.sessionId).toBeDefined()
+    expect(t.sessionId).not.toBe('dead-9')
+    expect(t.startupCommand).toContain('/data/imports/abc/sessions/old-flow-claude-cccc.md')
+  })
+
+  it('archived terminal ids stay out of terminalIds (nothing spawn-gates them)', () => {
+    const out = build()
+    const archivedIds = out.group!.archivedFeatures!.flatMap((f) => f.terminals.map((t) => t.id))
+    expect(out.terminalIds).toHaveLength(5) // the five ACTIVE terminals only
+    for (const id of archivedIds) expect(out.terminalIds).not.toContain(id)
+  })
+
+  it('collectCwdCandidates walks archived features too', () => {
+    expect(collectCwdCandidates(withExtras, '/new/proj')).toContain('/new/proj')
+    const archOnly: ExportManifest = { ...withExtras, group: { ...withExtras.group, archivedFeatures: [
+      { id: 'fa', name: 'x', collapsed: false, terminals: [{ id: 'ta', name: 's', cwd: '/old/proj/arch-only' }] }
+    ] } }
+    expect(collectCwdCandidates(archOnly, '/new/proj')).toContain('/new/proj/arch-only')
+  })
+})

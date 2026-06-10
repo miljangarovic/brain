@@ -1,4 +1,4 @@
-import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, GridStyle, createWorkspace } from '@shared/types'
+import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, GridStyle, createWorkspace, FeatureDoc } from '@shared/types'
 import { createId } from '@shared/id'
 
 export interface AppState {
@@ -20,6 +20,9 @@ const mapFeature = (ws: Workspace, featureId: string, fn: (f: Feature) => Featur
 
 const groupOfFeature = (ws: Workspace, featureId: string): Group | undefined =>
   ws.groups.find((g) => g.features.some((f) => f.id === featureId))
+
+const groupOfArchived = (ws: Workspace, featureId: string): Group | undefined =>
+  ws.groups.find((g) => (g.archivedFeatures ?? []).some((f) => f.id === featureId))
 
 const featureOfTerminal = (ws: Workspace, terminalId: string): { group: Group; feature: Feature } | undefined => {
   for (const g of ws.groups) for (const f of g.features) if (f.terminals.some((t) => t.id === terminalId)) return { group: g, feature: f }
@@ -201,6 +204,93 @@ export function moveFeature(state: AppState, featureId: string, toIndex: number)
   return { ...state, workspace: mapGroup(state.workspace, group.id, (g) => ({ ...g, features })) }
 }
 
+// ---- archive ---------------------------------------------------------------
+// Move a feature out of the active list into its group's archive. Its terminals
+// leave the workspace tree, so the PTY reaper kills their processes. Selection
+// follows the deleteFeature rule when the archived feature was active;
+// activeGroupId is untouched (the active feature is always in the active group).
+export function archiveFeature(state: AppState, featureId: string): AppState {
+  const group = groupOfFeature(state.workspace, featureId)
+  const feature = group?.features.find((f) => f.id === featureId)
+  if (!group || !feature) return state
+  const ws = mapGroup(state.workspace, group.id, (g) => ({
+    ...g,
+    features: g.features.filter((f) => f.id !== featureId),
+    archivedFeatures: [...(g.archivedFeatures ?? []), feature]
+  }))
+  const termIds = new Set(feature.terminals.map((t) => t.id))
+  const hidden = state.hidden.filter((id) => !termIds.has(id))
+  let { activeFeatureId, activeTerminalId } = state
+  if (activeFeatureId === featureId) {
+    const g2 = ws.groups.find((g) => g.id === group.id) ?? null
+    const sel = selectFeature(g2, hidden)
+    activeFeatureId = sel.featureId
+    activeTerminalId = sel.terminalId
+  }
+  return { ...state, workspace: ws, activeFeatureId, activeTerminalId, hidden }
+}
+
+// Move an archived feature back to the END of its group's active list. The
+// active selection is untouched — the archive dialog stays open for more moves.
+// The caller (App) re-seeds the boot/resume spawn sets for its terminals.
+export function restoreFeature(state: AppState, featureId: string): AppState {
+  const group = groupOfArchived(state.workspace, featureId)
+  const feature = group?.archivedFeatures?.find((f) => f.id === featureId)
+  if (!group || !feature) return state
+  return {
+    ...state,
+    workspace: mapGroup(state.workspace, group.id, (g) => ({
+      ...g,
+      features: [...g.features, feature],
+      archivedFeatures: (g.archivedFeatures ?? []).filter((f) => f.id !== featureId)
+    }))
+  }
+}
+
+// Permanently delete a feature from the archive (the UI confirms first).
+export function deleteArchivedFeature(state: AppState, featureId: string): AppState {
+  const group = groupOfArchived(state.workspace, featureId)
+  if (!group) return state
+  return {
+    ...state,
+    workspace: mapGroup(state.workspace, group.id, (g) => ({
+      ...g,
+      archivedFeatures: (g.archivedFeatures ?? []).filter((f) => f.id !== featureId)
+    }))
+  }
+}
+
+// ---- documents -------------------------------------------------------------
+// Documents are named references to files on disk; the file itself is never
+// touched. All three operate on ACTIVE features only — an archived feature's
+// documents ride along untouched until restore (mapFeature walks g.features).
+export function addDocument(state: AppState, featureId: string, input: { name: string; path: string; id?: string }): AppState {
+  const group = groupOfFeature(state.workspace, featureId)
+  const feature = group?.features.find((f) => f.id === featureId)
+  if (!feature) return state
+  if ((feature.documents ?? []).some((d) => d.path === input.path)) return state // duplicate path: no-op
+  const doc: FeatureDoc = { id: input.id ?? createId(), name: input.name, path: input.path }
+  return { ...state, workspace: mapFeature(state.workspace, featureId, (f) => ({ ...f, documents: [...(f.documents ?? []), doc] })) }
+}
+
+export function renameDocument(state: AppState, featureId: string, docId: string, name: string): AppState {
+  return {
+    ...state,
+    workspace: mapFeature(state.workspace, featureId, (f) => ({
+      ...f, documents: (f.documents ?? []).map((d) => (d.id === docId ? { ...d, name } : d))
+    }))
+  }
+}
+
+export function removeDocument(state: AppState, featureId: string, docId: string): AppState {
+  return {
+    ...state,
+    workspace: mapFeature(state.workspace, featureId, (f) => ({
+      ...f, documents: (f.documents ?? []).filter((d) => d.id !== docId)
+    }))
+  }
+}
+
 // ---- terminals -----------------------------------------------------------
 export function addTerminal(
   state: AppState,
@@ -242,12 +332,17 @@ export function renameTerminal(state: AppState, terminalId: string, name: string
 // and the active selection are left untouched.
 // Record the agent conversation id discovered for a terminal (codex, after its
 // rollout file appears). No-op if the terminal is gone by the time it resolves.
+// Reaches archived terminals too (codex session capture racing an archive).
 export function setTerminalSessionId(state: AppState, terminalId: string, sessionId: string): AppState {
+  const patch = (f: Feature): Feature => ({
+    ...f, terminals: f.terminals.map((t) => (t.id === terminalId ? { ...t, sessionId } : t))
+  })
   return {
     ...state,
     workspace: mapGroups(state.workspace, (g) => ({
       ...g,
-      features: g.features.map((f) => ({ ...f, terminals: f.terminals.map((t) => (t.id === terminalId ? { ...t, sessionId } : t)) }))
+      features: g.features.map(patch),
+      ...(g.archivedFeatures ? { archivedFeatures: g.archivedFeatures.map(patch) } : {})
     }))
   }
 }

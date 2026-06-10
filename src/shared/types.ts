@@ -42,6 +42,15 @@ export interface Terminal {
 // panes one below another; 'cols' puts them side by side.
 export type GridStyle = 'auto' | 'auto-left' | 'auto-top' | 'auto-bottom' | 'rows' | 'cols'
 
+// A document attached to a feature: a NAMED REFERENCE to a file on disk (spec,
+// plan, notes). The app never touches the file itself; a missing file just
+// renders the row as broken.
+export interface FeatureDoc {
+  id: string
+  name: string   // display name; defaults to the file's basename
+  path: string   // absolute path on disk
+}
+
 export interface Feature {
   id: string
   name: string
@@ -49,6 +58,7 @@ export interface Feature {
   viewMode?: 'tabs' | 'grid'   // undefined === 'tabs'
   gridStyle?: GridStyle        // undefined === 'auto'
   terminals: Terminal[]
+  documents?: FeatureDoc[]     // undefined === []
 }
 
 export interface Group {
@@ -57,6 +67,10 @@ export interface Group {
   cwd: string                  // '' === home (~)
   collapsed: boolean
   features: Feature[]
+  // Features moved out of the active list. Their terminals are not part of the
+  // workspace tree, so their PTYs are dead while archived; restore re-adds them
+  // to `features` and they spawn like terminals restored at app boot.
+  archivedFeatures?: Feature[] // undefined === []
 }
 
 export interface Workspace {

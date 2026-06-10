@@ -1,4 +1,4 @@
-import { Workspace, Group, Feature, Terminal } from '@shared/types'
+import { Workspace, Group, Feature, Terminal, FeatureDoc } from '@shared/types'
 import { createId } from '@shared/id'
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object'
@@ -20,15 +20,27 @@ function sanitizeTerminal(tv: unknown): Terminal | null {
   return base
 }
 
+// A document reference is only useful with a path; entries without one are
+// dropped. Missing ids/names are filled (name falls back to the file's basename).
+function sanitizeDoc(dv: unknown): FeatureDoc | null {
+  if (!isObj(dv)) return null
+  const d = dv as unknown as FeatureDoc
+  if (typeof d.path !== 'string' || !d.path) return null
+  return { id: str(d.id, createId()), name: str(d.name, d.path.split('/').pop() || 'doc'), path: d.path }
+}
+
 function sanitizeFeature(fv: unknown): Feature | null {
   if (!isObj(fv)) return null
   const f = fv as unknown as Feature
+  const { documents: _rawDocs, ...rest } = f
+  const docs = (Array.isArray(f.documents) ? f.documents : []).map(sanitizeDoc).filter((d): d is FeatureDoc => d !== null)
   return {
-    ...f,
+    ...rest,
     id: str(f.id, createId()),
     name: str(f.name, 'general'),
     collapsed: !!f.collapsed,
-    terminals: (Array.isArray(f.terminals) ? f.terminals : []).map(sanitizeTerminal).filter((t): t is Terminal => t !== null)
+    terminals: (Array.isArray(f.terminals) ? f.terminals : []).map(sanitizeTerminal).filter((t): t is Terminal => t !== null),
+    ...(docs.length > 0 ? { documents: docs } : {})
   }
 }
 
@@ -45,7 +57,13 @@ export function migrateWorkspace(raw: unknown): Workspace {
     const cwd = str(g.cwd, '')
     const collapsed = !!g.collapsed
     if (Array.isArray(g.features)) {
-      return { id, name, cwd, collapsed, features: g.features.map(sanitizeFeature).filter((f): f is Feature => f !== null) }
+      const archived = (Array.isArray(g.archivedFeatures) ? g.archivedFeatures : [])
+        .map(sanitizeFeature).filter((f): f is Feature => f !== null)
+      return {
+        id, name, cwd, collapsed,
+        features: g.features.map(sanitizeFeature).filter((f): f is Feature => f !== null),
+        ...(archived.length > 0 ? { archivedFeatures: archived } : {})
+      }
     }
     const feature: Feature = {
       id: createId(),

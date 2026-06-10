@@ -37,7 +37,12 @@ export interface AgentSessionRef {
 }
 
 export function collectAgentSessions(input: ExportScopeInput): AgentSessionRef[] {
-  const features: Feature[] = input.scope === 'group' ? input.group.features : [input.feature]
+  // Group scope walks the archive too: an archived feature restored after import
+  // (where the original sessionId is useless) must wake with a summary like any
+  // other agent terminal.
+  const features: Feature[] = input.scope === 'group'
+    ? [...input.group.features, ...(input.group.archivedFeatures ?? [])]
+    : [input.feature]
   const refs: AgentSessionRef[] = []
   for (const f of features)
     for (const t of f.terminals)
