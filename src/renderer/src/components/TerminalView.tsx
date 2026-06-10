@@ -32,6 +32,11 @@ export function TerminalView({ terminal, active, resume, onOpenFile }: { termina
   const fitRef = useRef<FitAddon | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
 
+  // The link provider registers once on mount; the ref keeps its activate
+  // callback pointed at the LATEST onOpenFile (the prop closes over App state).
+  const onOpenFileRef = useRef(onOpenFile)
+  useEffect(() => { onOpenFileRef.current = onOpenFile })
+
   // Clipboard actions, shared by the keyboard shortcuts and the right-click menu.
   const copySelection = useCallback(() => {
     const sel = xtermRef.current?.getSelection()
@@ -97,7 +102,7 @@ export function TerminalView({ terminal, active, resume, onOpenFile }: { termina
               // xterm link ranges are 1-based with an INCLUSIVE end column.
               range: { start: { x: c.start + 1, y: lineNo }, end: { x: c.end, y: lineNo } },
               text: c.text,
-              activate: (e: MouseEvent) => { if (e.ctrlKey || e.metaKey) (onOpenFile ?? window.brain.openPath)(target) }
+              activate: (e: MouseEvent) => { if (e.ctrlKey || e.metaKey) (onOpenFileRef.current ?? window.brain.openPath)(target) }
             }]
           })
           cb(links.length > 0 ? links : undefined)
