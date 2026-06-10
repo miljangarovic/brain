@@ -74,12 +74,13 @@ export async function registerVoice(opts: {
         const pcm = p.pcm instanceof Float32Array ? p.pcm : new Float32Array(p.pcm as ArrayLike<number>)
         const wavPath = join(tmpdir(), `brain-voice-${process.pid}-${my}.wav`)
         await fsp.writeFile(wavPath, encodeWavPcm16(pcm, 16000))
+        if (!alive()) { void fsp.rm(wavPath, { force: true }).catch(() => {}) ; return }
         let raw: string
         try {
           // NOTE: the addon has no initial-prompt option — script/vocabulary bias is handled by toLatin + the intent LLM's fuzzy matching instead.
           raw = await transcriber.transcribe({ wavPath, modelPath, language: config.language })
         } finally {
-          void fsp.rm(wavPath, { force: true })
+          void fsp.rm(wavPath, { force: true }).catch(() => {})
         }
         if (!alive()) return
         transcript = toLatin(raw).trim()
@@ -97,7 +98,7 @@ export async function registerVoice(opts: {
         send(IPC.voiceResult, { transcript, command })
       } catch (err) {
         if (!alive()) return
-        const message = err instanceof VoiceIntentError ? err.message : `Voice command failed: ${String(err)}`
+        const message = err instanceof VoiceIntentError ? err.message : `Voice command failed: ${err instanceof Error ? err.message : String(err)}`
         sendState({ phase: 'error', message, ...(transcript ? { transcript } : {}) })
       }
     })()

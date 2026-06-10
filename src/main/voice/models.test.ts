@@ -68,6 +68,22 @@ describe('ensureModel', () => {
     const files = await fsp.readdir(dir).catch(() => [])
     expect(files).toEqual([])
   })
+  it('a joiner of an in-flight download receives progress too', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    const fetchImpl = vi.fn().mockImplementation(async () => {
+      await gate
+      return okResponse(new Uint8Array([1, 2]), 2)
+    })
+    const got: number[][] = []
+    const p1 = ensureModel('sagicc-small-sr-q5_0', dir, fetchImpl, (r, t) => got.push([0, r, t ?? -1]))
+    const p2 = ensureModel('sagicc-small-sr-q5_0', dir, fetchImpl, (r, t) => got.push([1, r, t ?? -1]))
+    release()
+    await Promise.all([p1, p2])
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(got.some(([who]) => who === 0)).toBe(true)
+    expect(got.some(([who]) => who === 1)).toBe(true)
+  })
   it('a mid-stream error cleans up and a retry can succeed', async () => {
     const failing = {
       ok: true,

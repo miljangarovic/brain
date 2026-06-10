@@ -22,7 +22,7 @@ export const VOICE_MODELS: Record<string, { url: string; file: string }> = {
   }
 }
 
-const inFlight = new Map<string, Promise<string>>()
+const inFlight = new Map<string, { promise: Promise<string>; listeners: Set<(received: number, total: number | null) => void> }>()
 
 export function ensureModel(
   modelId: string,
@@ -34,10 +34,15 @@ export function ensureModel(
   if (!entry) return Promise.reject(new Error(`unknown model id: ${modelId}`))
   const path = join(dir, entry.file)
   const existing = inFlight.get(path)
-  if (existing) return existing
-  const p = download(entry.url, path, fetchImpl, onProgress).finally(() => inFlight.delete(path))
-  inFlight.set(path, p)
-  return p
+  if (existing) {
+    existing.listeners.add(onProgress)
+    return existing.promise
+  }
+  const listeners = new Set<(received: number, total: number | null) => void>([onProgress])
+  const promise = download(entry.url, path, fetchImpl, (r, t) => { for (const cb of listeners) cb(r, t) })
+    .finally(() => inFlight.delete(path))
+  inFlight.set(path, { promise, listeners })
+  return promise
 }
 
 async function download(
