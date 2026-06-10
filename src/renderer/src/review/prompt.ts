@@ -1,9 +1,7 @@
 import type { ReviewPhase } from '@shared/types'
 
-/** POSIX single-quote escaping for embedding a prompt as one shell argument. */
-export function shellSingleQuote(s: string): string {
-  return `'` + s.replace(/'/g, `'\\''`) + `'`
-}
+export { shellSingleQuote } from '../shellQuote'
+import { shellSingleQuote } from '../shellQuote'
 
 /** `<agent> '<prompt>'` — launches the agent with the prompt as its first message. */
 export function buildReviewerCommand(agentCommand: string, prompt: string): string {
