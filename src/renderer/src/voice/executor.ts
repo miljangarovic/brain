@@ -51,7 +51,7 @@ function planHigh(cmd: VoiceCommand, s: AppState): ExecPlan {
     case 'switch_feature': {
       const f = findFeature(s, cmd.featureId)
       if (!f) return err('Feature not found — try again')
-      const first = f.terminals.find((t) => !s.hidden.includes(t.id)) ?? f.terminals[0]
+      const first = f.terminals.find((t) => !s.hidden.includes(t.id))
       return {
         type: 'run',
         descriptor: {

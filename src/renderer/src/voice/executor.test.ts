@@ -30,6 +30,16 @@ describe('planCommand — immediate actions', () => {
     expect(p.descriptor.run(s).activeFeatureId).toBe(f1)
     expect(p.descriptor.toast).toContain('file-panes')
   })
+  it('switch_feature onto a feature whose only terminal is hidden → plan is run, no startIds', () => {
+    let { s, f1, t1 } = fixture()
+    s = hideTerminal(s, t1)
+    // hide the second terminal too so f1 has no visible terminals
+    s = hideTerminal(s, s.workspace.groups[0].features[1].terminals[1].id)
+    const p = planCommand(cmd({ action: 'switch_feature', featureId: f1 }), s)
+    if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    expect(p.descriptor.startIds).toBeUndefined()
+    expect(p.descriptor.run(s).activeFeatureId).toBe(f1)
+  })
   it('toggle_grid defaults to the active feature and notes restored hidden terminals', () => {
     let { s, t2 } = fixture()
     s = hideTerminal(s, t2)

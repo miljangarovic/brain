@@ -22,6 +22,7 @@ export function useVoice(deps: VoiceDeps) {
   const [ui, dispatch] = useReducer(reduceVoice, IDLE)
   const recRef = useRef<RecorderHandle | null>(null)
   const startingRef = useRef(false)
+  const cancelEpochRef = useRef(0)
   const depsRef = useRef(deps)
   depsRef.current = deps
   const uiRef = useRef(ui)
@@ -33,7 +34,9 @@ export function useVoice(deps: VoiceDeps) {
     const rec = recRef.current
     if (!rec) return
     recRef.current = null
+    const epoch = cancelEpochRef.current
     const pcm = await rec.stop()
+    if (epoch !== cancelEpochRef.current) return
     if (!pcm) { dispatch({ type: 'dismiss' }); return }
     window.brain.sendVoiceAudio(pcm, buildSnapshot(depsRef.current.state))
     dispatch({ type: 'audio-sent' })
@@ -55,6 +58,7 @@ export function useVoice(deps: VoiceDeps) {
   }, [finish])
 
   const cancel = useCallback(() => {
+    cancelEpochRef.current++
     recRef.current?.cancel()
     recRef.current = null
     window.brain.cancelVoice()

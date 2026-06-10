@@ -51,23 +51,6 @@ Examples:
   ]
 }
 
-// Whisper biasing prompt: latinica (nudges the output script) + command verbs
-// + the workspace names the user is likely to say. Whisper caps the initial
-// prompt at 224 tokens — names are joined until a ~600-char budget runs out.
-export function whisperInitialPrompt(snapshot: WorkspaceSnapshot): string {
-  const names: string[] = []
-  for (const g of snapshot.groups) {
-    names.push(g.name)
-    for (const f of g.features) names.push(f.name)
-  }
-  let list = ''
-  for (const n of names) {
-    if (list.length + n.length > 600) break
-    list += (list ? ', ' : '') + n
-  }
-  return `Komande: prebaci na, otvori grid, zatvori grid, dodaj claude terminal, dodaj codex terminal, zatvori terminal, sakrij terminal, preimenuj, sa promptom. Imena: ${list}.`
-}
-
 export function parseIntentResponse(content: string): VoiceCommand {
   const stripped = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
   try { return validateVoiceCommand(JSON.parse(stripped)) } catch { return { action: 'unknown', confidence: 'low' } }

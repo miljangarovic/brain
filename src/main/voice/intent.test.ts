@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { buildIntentMessages, parseIntentResponse, parseIntent, whisperInitialPrompt, VoiceIntentError } from './intent'
+import { buildIntentMessages, parseIntentResponse, parseIntent, VoiceIntentError } from './intent'
 import type { WorkspaceSnapshot } from '@shared/voice'
 
 const snap: WorkspaceSnapshot = {
@@ -26,16 +26,6 @@ describe('buildIntentMessages', () => {
     expect(system.content).toContain('activeFeatureId')
     expect(user.role).toBe('user')
     expect(user.content).toContain('prebaci na file panes')
-  })
-})
-
-describe('whisperInitialPrompt', () => {
-  it('is latinica, contains command verbs and workspace names, ≤ ~800 chars', () => {
-    const p = whisperInitialPrompt(snap)
-    expect(p).toContain('mappit')
-    expect(p).toContain('file-panes')
-    expect(p).toMatch(/prebaci|dodaj|zatvori/)
-    expect(p.length).toBeLessThan(900)
   })
 })
 
