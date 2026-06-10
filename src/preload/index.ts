@@ -4,6 +4,7 @@ import type { BrainApi } from '../shared/api'
 import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
 import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from '../shared/exportTypes'
+import type { FileLoadResult } from '../shared/files'
 
 // pty:data / pty:exit are consumed by EVERY mounted terminal, and all terminals
 // stay mounted — so one ipcRenderer listener per terminal trips the default
@@ -71,6 +72,9 @@ const api: BrainApi = {
   },
   importArchive: () => ipcRenderer.invoke(IPC.importRun) as Promise<ImportRunResult>,
   pathsExist: (paths: string[]) => ipcRenderer.invoke(IPC.fsExists, { paths }) as Promise<boolean[]>,
+  loadFile: (path) => ipcRenderer.invoke(IPC.fileLoad, { path }) as Promise<FileLoadResult>,
+  saveFile: (path, content) => ipcRenderer.invoke(IPC.fileSave, { path, content }) as Promise<{ ok: true } | { ok: false; error: string }>,
+  openExternal: (url) => ipcRenderer.send(IPC.shellOpenExternal, { url }),
 }
 
 contextBridge.exposeInMainWorld('brain', api)

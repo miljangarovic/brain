@@ -27,5 +27,8 @@ export const IPC = {
   exportRun: 'export:run',
   exportProgress: 'export:progress',
   importRun: 'import:run',
-  fsExists: 'fs:exists'
+  fsExists: 'fs:exists',
+  fileLoad: 'file:load',
+  fileSave: 'file:save',
+  shellOpenExternal: 'shell:openExternal'
 } as const
