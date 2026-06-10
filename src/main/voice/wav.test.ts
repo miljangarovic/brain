@@ -10,6 +10,9 @@ describe('encodeWavPcm16', () => {
     expect(buf.toString('ascii', 12, 16)).toBe('fmt ')
     expect(buf.toString('ascii', 36, 40)).toBe('data')
     expect(buf.readUInt32LE(4)).toBe(36 + 6)        // riff chunk size
+    expect(buf.readUInt32LE(16)).toBe(16)           // fmt chunk size
+    expect(buf.readUInt16LE(20)).toBe(1)            // PCM format tag
+    expect(buf.readUInt16LE(32)).toBe(2)            // block align
     expect(buf.readUInt16LE(22)).toBe(1)            // mono
     expect(buf.readUInt32LE(24)).toBe(16000)        // sample rate
     expect(buf.readUInt32LE(28)).toBe(16000 * 2)    // byte rate
