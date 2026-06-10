@@ -14,7 +14,7 @@ import { resolveTranscript } from './transcript'
 import { resolveExistingPaths } from './pathLinks'
 import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
-import { runExport, extractImportArchive, slugify } from './exportImport'
+import { runExport, extractImportArchive, exportFileName } from './exportImport'
 import { summarizeSession } from './sessionSummary'
 import type { ExportScopeInput } from '@shared/exportTypes'
 import { randomUUID } from 'crypto'
@@ -167,9 +167,8 @@ export function registerIpc(opts: {
   // then summarize each agent session headlessly and write the archive.
   ipcMain.handle(IPC.exportRun, async (_e, input: ExportScopeInput) => {
     const win = getWin()
-    const name = input.scope === 'group' ? input.group.name : input.feature.name
     const options: Electron.SaveDialogOptions = {
-      defaultPath: `${slugify(name)}-${new Date().toISOString().slice(0, 10)}.zip`,
+      defaultPath: exportFileName(input),
       filters: [{ name: 'Zip', extensions: ['zip'] }]
     }
     const res = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)

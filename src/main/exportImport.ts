@@ -18,6 +18,15 @@ export function sessionFileName(featureName: string, terminalName: string, termi
   return `sessions/${slugify(featureName)}-${slugify(terminalName)}-${shortId}.md`
 }
 
+// Suggested archive filename: the names locate it (project, or project +
+// feature), the LOCAL timestamp (down to seconds) says when it was exported.
+export function exportFileName(input: ExportScopeInput, now: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`
+  const names = input.scope === 'group' ? [input.group.name] : [input.group.name, input.feature.name]
+  return `${names.map(slugify).join('-')}-${stamp}.zip`
+}
+
 export interface AgentSessionRef {
   terminalId: string
   kind: AgentSessionKind

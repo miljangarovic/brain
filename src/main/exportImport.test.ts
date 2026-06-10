@@ -6,7 +6,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Group } from '@shared/types'
 import type { ExportManifest, ExportProgress } from '@shared/exportTypes'
-import { slugify, sessionFileName, collectAgentSessions, runExport, validateManifest, extractImportArchive } from './exportImport'
+import { slugify, sessionFileName, exportFileName, collectAgentSessions, runExport, validateManifest, extractImportArchive } from './exportImport'
 
 const tmpZip = () => join(tmpdir(), `brain-export-test-${Math.random().toString(36).slice(2)}.zip`)
 
@@ -28,6 +28,17 @@ describe('slugify / sessionFileName', () => {
   })
   it('names the md after feature, terminal and a short id', () => {
     expect(sessionFileName('Auth Flow', 'claude', 'aaaa1111-0000')).toBe('sessions/auth-flow-claude-aaaa.md')
+  })
+})
+
+describe('exportFileName', () => {
+  const at = new Date(2026, 5, 10, 14, 32, 5) // local time; month is 0-based
+  it('group scope: project name + local timestamp', () => {
+    expect(exportFileName({ scope: 'group', group }, at)).toBe('my-proj-2026-06-10-14-32-05.zip')
+  })
+  it('feature scope: project + feature name + local timestamp', () => {
+    expect(exportFileName({ scope: 'feature', group: { name: 'My Proj', cwd: '/home/me/proj' }, feature: group.features[0] }, at))
+      .toBe('my-proj-auth-flow-2026-06-10-14-32-05.zip')
   })
 })
 
