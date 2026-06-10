@@ -94,7 +94,7 @@ export function validateManifest(raw: unknown): ExportManifest | null {
   const m = raw as Record<string, unknown> | null
   if (!m || m['format'] !== EXPORT_FORMAT || m['version'] !== EXPORT_VERSION) return null
   const group = m['group'] as Record<string, unknown> | undefined
-  if (!group || typeof m['sessions'] !== 'object' || m['sessions'] === null) return null
+  if (!group || typeof m['sessions'] !== 'object' || m['sessions'] === null || Array.isArray(m['sessions'])) return null
   if (m['scope'] === 'group')
     return Array.isArray(group['features']) ? (m as unknown as ExportManifest) : null
   if (m['scope'] === 'feature') {
@@ -131,7 +131,15 @@ export async function extractImportArchive(zipPath: string, destDir: string): Pr
       entry.error = 'session file missing from archive'
       continue
     }
-    await fsp.writeFile(join(destDir, entry.file), fileEntry.getData())
+    // getData throws on corrupt/unsupported entries (BAD_CRC etc.) — degrade,
+    // don't let one bad entry reject the whole import.
+    let data: Buffer
+    try { data = fileEntry.getData() } catch {
+      delete entry.file
+      entry.error = 'session file could not be read from archive'
+      continue
+    }
+    await fsp.writeFile(join(destDir, entry.file), data)
   }
   return { manifest, dir: destDir }
 }

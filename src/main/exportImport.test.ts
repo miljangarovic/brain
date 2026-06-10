@@ -87,6 +87,7 @@ describe('validateManifest', () => {
     expect(validateManifest({ ...base, scope: 'nope' })).toBeNull()
     expect(validateManifest({ ...base, scope: 'group', group: {} })).toBeNull()
     expect(validateManifest({ ...base, scope: 'feature', group: { name: 'p' }, feature: { terminals: [] } })).toBeNull()
+    expect(validateManifest({ ...base, sessions: [], scope: 'group', group: { features: [] } })).toBeNull()
   })
 })
 
@@ -124,6 +125,38 @@ describe('extractImportArchive', () => {
       expect(res.manifest.sessions.t2).toEqual({ kind: 'codex', error: 'invalid session file path' })
       expect(res.manifest.sessions.t3).toEqual({ kind: 'codex', error: 'session file missing from archive' })
       await expect(fsp.access(join(dest, '..', 'evil.md'))).rejects.toThrow()
+    }
+    await fsp.rm(zipPath, { force: true })
+    await fsp.rm(dest, { recursive: true, force: true })
+  })
+
+  it('a corrupt session entry degrades instead of rejecting the import', async () => {
+    const m = {
+      format: 'brain-export', version: 1, exportedAt: 'x', scope: 'group',
+      group: { id: 'g', name: 'p', cwd: '/p', collapsed: false, features: [] },
+      sessions: { t1: { kind: 'claude', file: 'sessions/auth-claude-aaaa.md' } }
+    }
+    const zipPath = await makeArchive(m, { 'sessions/auth-claude-aaaa.md': '# md' })
+    // Break the entry's stored CRC in its LOCAL file header (signature
+    // PK\x03\x04; CRC at offset 14, filename at offset 30) — adm-zip verifies
+    // getData() against exactly that field and throws BAD_CRC.
+    const buf = await fsp.readFile(zipPath)
+    const sig = Buffer.from('PK\x03\x04', 'binary')
+    const name = Buffer.from('sessions/auth-claude-aaaa.md')
+    let lh = -1
+    for (let i = buf.indexOf(sig); i !== -1; i = buf.indexOf(sig, i + 1)) {
+      if (buf.subarray(i + 30, i + 30 + name.length).equals(name)) { lh = i; break }
+    }
+    expect(lh).toBeGreaterThan(-1)
+    buf.writeUInt32LE((buf.readUInt32LE(lh + 14) ^ 0xffffffff) >>> 0, lh + 14)
+    await fsp.writeFile(zipPath, buf)
+
+    const dest = tmpDir()
+    const res = await extractImportArchive(zipPath, dest)
+    expect('manifest' in res).toBe(true)
+    if ('manifest' in res) {
+      expect(res.manifest.sessions.t1).toEqual({ kind: 'claude', error: 'session file could not be read from archive' })
+      await expect(fsp.access(join(dest, 'sessions/auth-claude-aaaa.md'))).rejects.toThrow()
     }
     await fsp.rm(zipPath, { force: true })
     await fsp.rm(dest, { recursive: true, force: true })
