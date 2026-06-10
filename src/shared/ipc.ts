@@ -9,6 +9,7 @@ export const IPC = {
   ptyExit: 'pty:exit',
   dialogPickDirectory: 'dialog:pickDirectory',
   shellOpenPath: 'shell:openPath',
+  shellShowItem: 'shell:showItem',
   ptyProc: 'pty:proc',
   dialogPickFile: 'dialog:pickFile',
   reviewSuggestSpec: 'review:suggestSpec',

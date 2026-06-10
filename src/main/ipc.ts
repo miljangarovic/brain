@@ -72,6 +72,7 @@ export function registerIpc(opts: {
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
   })
   ipcMain.on(IPC.shellOpenPath, (_e, p: { path: string }) => { void shell.openPath(p.path || os.homedir()) })
+  ipcMain.on(IPC.shellShowItem, (_e, p: { path: string }) => { if (p?.path) shell.showItemInFolder(p.path) })
 
   // Poll each PTY's foreground process name; push changes so the renderer can
   // show a live agent icon (claude/codex) and revert it when the agent exits.

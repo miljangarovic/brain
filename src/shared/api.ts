@@ -17,6 +17,8 @@ export interface BrainApi {
   onPtyExit(cb: (id: string, code: number) => void): () => void
   pickDirectory(): Promise<string | null>
   openPath(path: string): void
+  // Reveal a file in the OS file manager (folder opened, file selected).
+  showItemInFolder(path: string): void
   onPtyProc(cb: (id: string, process: string) => void): () => void
   onPtyBusy(cb: (id: string, busy: boolean) => void): () => void
   pickFile(opts?: { defaultPath?: string }): Promise<string | null>

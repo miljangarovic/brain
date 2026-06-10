@@ -30,6 +30,7 @@ const api: BrainApi = {
   onPtyExit: (cb) => { ptyExitSubs.add(cb); return () => { ptyExitSubs.delete(cb) } },
   pickDirectory: () => ipcRenderer.invoke(IPC.dialogPickDirectory) as Promise<string | null>,
   openPath: (path: string) => ipcRenderer.send(IPC.shellOpenPath, { path }),
+  showItemInFolder: (path: string) => ipcRenderer.send(IPC.shellShowItem, { path }),
   onPtyProc: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, p: { id: string; process: string }) => cb(p.id, p.process)
     ipcRenderer.on(IPC.ptyProc, listener)
