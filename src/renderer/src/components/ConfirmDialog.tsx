@@ -11,9 +11,18 @@ export function ConfirmDialog({
   const confirmRef = useRef<HTMLButtonElement>(null)
   useEffect(() => { confirmRef.current?.focus() }, [])
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      // Capture phase + stop: Escape dismisses only the topmost dialog.
+      // ConfirmDialog (z-[60]) stacks above ArchiveDialog (z-50); without this,
+      // ArchiveDialog's own window listener (registered first) would also fire.
+      // Stopping propagation also prevents the key from leaking into a focused terminal.
+      e.preventDefault()
+      e.stopPropagation()
+      onCancel()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [onCancel])
 
   return (
