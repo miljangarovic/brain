@@ -47,6 +47,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onExportFeature: noop,
     onImport: noop,
     onArchiveFeature: noop,
+    onOpenArchive: noop,
     onAddDocument: noop,
     onOpenDocument: noop,
     onRenameDocument: noop,
@@ -557,6 +558,26 @@ describe('Sidebar (3-level)', () => {
       groupsZone(container).dispatchEvent(new MouseEvent('dragover', { bubbles: true, cancelable: true, clientY: 5 }))
       groupsZone(container).dispatchEvent(new MouseEvent('drop', { bubbles: true, cancelable: true, clientY: 5 }))
       expect(onMoveFeature).toHaveBeenCalledWith('fb', 0)
+    })
+  })
+
+  describe('archive row', () => {
+    it('shows the per-group archived count and opens the archive', async () => {
+      const onOpenArchive = vi.fn()
+      const withArchive: Group[] = [{
+        ...groups[0],
+        archivedFeatures: [{ id: 'fa', name: 'old', collapsed: false, terminals: [] }]
+      }]
+      renderSidebar({ groups: withArchive, onOpenArchive })
+      const row = screen.getByLabelText('Archive of proj')
+      expect(row).toHaveTextContent('Archive (1)')
+      await userEvent.click(row)
+      expect(onOpenArchive).toHaveBeenCalledWith('g1')
+    })
+
+    it('is visible with count 0 when nothing is archived', () => {
+      renderSidebar()
+      expect(screen.getByLabelText('Archive of proj')).toHaveTextContent('Archive (0)')
     })
   })
 })

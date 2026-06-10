@@ -95,6 +95,7 @@ export function Sidebar(props: {
   onDeleteFeature: (id: string) => void
   onDeleteTerminal: (id: string) => void
   onArchiveFeature: (id: string) => void
+  onOpenArchive: (groupId: string) => void
   onAddDocument: (featureId: string) => void
   onOpenInFiles: (groupId: string) => void
   onExportGroup: (groupId: string) => void
@@ -121,7 +122,7 @@ export function Sidebar(props: {
   const {
     groups, activeTerminalId, activeFeatureId, activeGroupId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveGroup, onMoveFeature, onMoveTerminal,
-    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onArchiveFeature, onAddDocument, onOpenInFiles,
+    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onArchiveFeature, onOpenArchive, onAddDocument, onOpenInFiles,
     onExportGroup, onExportFeature, onImport,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
     onOpenDocument, onRenameDocument, onRemoveDocument, docExists, pendingRenameDocId, onPendingRenameDocConsumed,
@@ -452,6 +453,14 @@ export function Sidebar(props: {
                     className="w-full rounded-md border border-dashed border-divider bg-transparent px-2 py-[3px] text-xs text-fg placeholder-fg-muted outline-none transition focus:border-solid focus:border-accent focus:bg-field"
                   />
                 </div>
+                <button
+                  aria-label={`Archive of ${g.name}`}
+                  onClick={() => onOpenArchive(g.id)}
+                  className="mx-1 mb-1 flex items-center gap-1.5 rounded-md px-2 py-[2px] text-xs text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+                >
+                  <ArchiveIcon className="shrink-0" />
+                  Archive ({(g.archivedFeatures ?? []).length})
+                </button>
               </div>
             )}
           </div>
