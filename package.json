@@ -17,10 +17,14 @@
     "dist:dir": "electron-vite build && electron-builder --dir"
   },
   "dependencies": {
+    "@codemirror/language-data": "^6.5.2",
+    "@uiw/react-codemirror": "^4.25.10",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "adm-zip": "^0.5.17",
-    "node-pty": "^1.0.0"
+    "node-pty": "^1.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.6.0",

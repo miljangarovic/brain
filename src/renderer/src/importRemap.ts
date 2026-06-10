@@ -89,6 +89,11 @@ export function buildImport(opts: {
     ...(f.gridStyle ? { gridStyle: f.gridStyle } : {}),
     // Document paths stay VERBATIM: dead ones just render as broken rows.
     ...(f.documents?.length ? { documents: f.documents.map((d) => ({ id: createId(), name: d.name, path: d.path })) } : {}),
+    // Open-file panes: fresh ids, VERBATIM paths (dead ones show the missing
+    // fallback), persisted mdView kept. Never spawn-gated — not in terminalIds.
+    ...(f.files?.length
+      ? { files: f.files.map((p) => ({ id: createId(), name: p.name, path: p.path, ...(p.mdView ? { mdView: p.mdView } : {}) })) }
+      : {}),
     terminals: f.terminals.map((t) => importTerminal(t, track))
   })
 

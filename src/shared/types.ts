@@ -51,6 +51,16 @@ export interface FeatureDoc {
   path: string   // absolute path on disk
 }
 
+// An OPEN file shown as a pane of the feature (tab bar + grid + sidebar) — a
+// reference by absolute path, loaded on mount. Unlike FeatureDoc (a passive
+// bookmark), a FilePane is a live view/editor and participates in selection.
+export interface FilePane {
+  id: string
+  path: string                  // absolute path on disk
+  name: string                  // display name; defaults to the file's basename
+  mdView?: 'rendered' | 'raw'   // markdown view state; undefined === 'rendered'
+}
+
 export interface Feature {
   id: string
   name: string
@@ -59,6 +69,7 @@ export interface Feature {
   gridStyle?: GridStyle        // undefined === 'auto'
   terminals: Terminal[]
   documents?: FeatureDoc[]     // undefined === []
+  files?: FilePane[]           // open file panes; undefined === []
 }
 
 export interface Group {

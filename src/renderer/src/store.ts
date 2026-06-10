@@ -1,11 +1,11 @@
-import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, GridStyle, createWorkspace, FeatureDoc } from '@shared/types'
+import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, GridStyle, createWorkspace, FeatureDoc, FilePane } from '@shared/types'
 import { createId } from '@shared/id'
 
 export interface AppState {
   workspace: Workspace
   activeGroupId: string | null
   activeFeatureId: string | null
-  activeTerminalId: string | null
+  activeTerminalId: string | null // the ACTIVE PANE id — a terminal OR an open file pane
   hidden: string[] // terminal ids hidden from the tab bar; their shell keeps running (transient)
 }
 
@@ -29,14 +29,23 @@ const featureOfTerminal = (ws: Workspace, terminalId: string): { group: Group; f
   return undefined
 }
 
+const featureOfFilePane = (ws: Workspace, paneId: string): { group: Group; feature: Feature } | undefined => {
+  for (const g of ws.groups) for (const f of g.features) if ((f.files ?? []).some((p) => p.id === paneId)) return { group: g, feature: f }
+  return undefined
+}
+
 // First terminal of `f` that isn't hidden from the tab bar — activating a hidden
 // terminal would select something with no visible tab or pane.
 const firstVisibleTerminal = (f: Feature | null, hidden: string[]): Terminal | null =>
   f?.terminals.find((t) => !hidden.includes(t.id)) ?? null
 
+// The uniform selection fallback: first visible terminal, else first file pane.
+const firstVisiblePane = (f: Feature | null, hidden: string[]): { id: string } | null =>
+  firstVisibleTerminal(f, hidden) ?? f?.files?.[0] ?? null
+
 const selectFeature = (g: Group | null, hidden: string[]): { featureId: string | null; terminalId: string | null } => {
   const f = g?.features[0] ?? null
-  return { featureId: f?.id ?? null, terminalId: firstVisibleTerminal(f, hidden)?.id ?? null }
+  return { featureId: f?.id ?? null, terminalId: firstVisiblePane(f, hidden)?.id ?? null }
 }
 
 // ---- init ----------------------------------------------------------------
@@ -158,7 +167,7 @@ export function toggleFeatureViewMode(state: AppState, featureId: string): AppSt
   // so focus the feature's first (visible) terminal — exactly one stays on, no
   // matter which pane happened to be active in the grid.
   if (nextMode === 'tabs' && feature) {
-    const first = feature.terminals.find((t) => !state.hidden.includes(t.id)) ?? feature.terminals[0] ?? null
+    const first = feature.terminals.find((t) => !state.hidden.includes(t.id)) ?? feature.terminals[0] ?? feature.files?.[0] ?? null
     return {
       ...state,
       workspace,
@@ -291,6 +300,80 @@ export function removeDocument(state: AppState, featureId: string, docId: string
   }
 }
 
+// ---- file panes ------------------------------------------------------------
+// Open files shown as panes of a feature, parallel to terminals — no PTY, no
+// spawn gating, never in `hidden`. Operations target ACTIVE features only.
+export function openFile(state: AppState, featureId: string, input: { path: string; name?: string; id?: string }): AppState {
+  const group = groupOfFeature(state.workspace, featureId)
+  const feature = group?.features.find((f) => f.id === featureId)
+  if (!group || !feature) return state
+  const existing = (feature.files ?? []).find((p) => p.path === input.path)
+  if (existing) return setActiveTerminal(state, existing.id)
+  const pane: FilePane = {
+    id: input.id ?? createId(),
+    path: input.path,
+    name: input.name ?? (input.path.split('/').pop() || input.path)
+  }
+  const next = {
+    ...state,
+    workspace: mapFeature(state.workspace, featureId, (f) => ({ ...f, files: [...(f.files ?? []), pane] }))
+  }
+  return setActiveTerminal(next, pane.id)
+}
+
+export function closeFile(state: AppState, paneId: string): AppState {
+  const loc = featureOfFilePane(state.workspace, paneId)
+  if (!loc) return state
+  const workspace = mapFeature(state.workspace, loc.feature.id, (f) => ({
+    ...f, files: (f.files ?? []).filter((p) => p.id !== paneId)
+  }))
+  let { activeTerminalId } = state
+  if (activeTerminalId === paneId) {
+    const f2 = workspace.groups.flatMap((g) => g.features).find((f) => f.id === loc.feature.id) ?? null
+    activeTerminalId = firstVisiblePane(f2, state.hidden)?.id ?? null
+  }
+  return { ...state, workspace, activeTerminalId }
+}
+
+// Reorder a file pane within its feature. Mirrors moveTerminal.
+export function moveFile(state: AppState, paneId: string, toIndex: number): AppState {
+  const loc = featureOfFilePane(state.workspace, paneId)
+  if (!loc) return state
+  const files = loc.feature.files ?? []
+  const moved = files.find((p) => p.id === paneId)!
+  const rest = files.filter((p) => p.id !== paneId)
+  const dest = Math.max(0, Math.min(toIndex, rest.length))
+  return {
+    ...state,
+    workspace: mapFeature(state.workspace, loc.feature.id, (f) => ({ ...f, files: [...rest.slice(0, dest), moved, ...rest.slice(dest)] }))
+  }
+}
+
+const patchFilePane = (state: AppState, paneId: string, patch: Partial<FilePane>): AppState => {
+  const loc = featureOfFilePane(state.workspace, paneId)
+  if (!loc) return state
+  return {
+    ...state,
+    workspace: mapFeature(state.workspace, loc.feature.id, (f) => ({
+      ...f, files: (f.files ?? []).map((p) => (p.id === paneId ? { ...p, ...patch } : p))
+    }))
+  }
+}
+
+export function renameFilePane(state: AppState, paneId: string, name: string): AppState {
+  return patchFilePane(state, paneId, { name })
+}
+
+export function setFilePaneMdView(state: AppState, paneId: string, mdView: 'rendered' | 'raw'): AppState {
+  return patchFilePane(state, paneId, { mdView })
+}
+
+export const findFilePane = (s: AppState, paneId: string): { feature: Feature; pane: FilePane } | null => {
+  const loc = featureOfFilePane(s.workspace, paneId)
+  if (!loc) return null
+  return { feature: loc.feature, pane: (loc.feature.files ?? []).find((p) => p.id === paneId)! }
+}
+
 // ---- terminals -----------------------------------------------------------
 export function addTerminal(
   state: AppState,
@@ -384,7 +467,7 @@ export function removeTerminal(state: AppState, terminalId: string): AppState {
       if (activeTerminalId === terminalId) {
         const cand = terminals[idx] ?? terminals[idx - 1]
         const pick = cand && !hidden.includes(cand.id) ? cand : terminals.find((t) => !hidden.includes(t.id))
-        activeTerminalId = pick?.id ?? null
+        activeTerminalId = pick?.id ?? f.files?.[0]?.id ?? null
       }
       return { ...f, terminals }
     })
@@ -395,13 +478,14 @@ export function removeTerminal(state: AppState, terminalId: string): AppState {
 // Hide a terminal from the tab bar — its shell keeps running (the TerminalView
 // stays mounted). If it was the active one, move selection to a visible sibling.
 export function hideTerminal(state: AppState, terminalId: string): AppState {
+  const loc = featureOfTerminal(state.workspace, terminalId)
+  if (!loc) return state // not a terminal (e.g. a file pane id) — hide is a terminal concept
   if (state.hidden.includes(terminalId)) return state
   const hidden = [...state.hidden, terminalId]
   let activeTerminalId = state.activeTerminalId
   if (activeTerminalId === terminalId) {
-    const loc = featureOfTerminal(state.workspace, terminalId)
-    const sib = loc?.feature.terminals.find((t) => t.id !== terminalId && !hidden.includes(t.id))
-    activeTerminalId = sib?.id ?? null
+    const sib = loc.feature.terminals.find((t) => t.id !== terminalId && !hidden.includes(t.id))
+    activeTerminalId = sib?.id ?? loc.feature.files?.[0]?.id ?? null
   }
   return { ...state, hidden, activeTerminalId }
 }
@@ -438,12 +522,12 @@ export function setActiveFeature(state: AppState, featureId: string): AppState {
     ...state,
     activeGroupId: group?.id ?? state.activeGroupId,
     activeFeatureId: featureId,
-    activeTerminalId: firstVisibleTerminal(feature, state.hidden)?.id ?? null
+    activeTerminalId: firstVisiblePane(feature, state.hidden)?.id ?? null
   }
 }
 
 export function setActiveTerminal(state: AppState, terminalId: string): AppState {
-  const loc = featureOfTerminal(state.workspace, terminalId)
+  const loc = featureOfTerminal(state.workspace, terminalId) ?? featureOfFilePane(state.workspace, terminalId)
   return {
     ...state,
     activeGroupId: loc?.group.id ?? state.activeGroupId,

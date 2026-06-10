@@ -135,7 +135,7 @@ describe('buildImport — archive and documents', () => {
     ...manifest,
     group: {
       ...group,
-      features: [{ ...group.features[0], documents: [{ id: 'd1', name: 'spec', path: '/old/proj/docs/spec.md' }] }],
+      features: [{ ...group.features[0], documents: [{ id: 'd1', name: 'spec', path: '/old/proj/docs/spec.md' }], files: [{ id: 'fp1', name: 'notes', path: '/old/proj/notes.md', mdView: 'raw' as const }] }],
       archivedFeatures: [
         { id: 'fa', name: 'old-flow', collapsed: false, terminals: [
           { id: 't-arch', name: 'claude', cwd: '/old/proj', kind: 'claude', sessionId: 'dead-9' }
@@ -152,6 +152,15 @@ describe('buildImport — archive and documents', () => {
     expect(docs).toHaveLength(1)
     expect(docs[0].id).toMatch(/^new-/)
     expect(docs[0]).toMatchObject({ name: 'spec', path: '/old/proj/docs/spec.md' })
+  })
+
+  it('file panes carry through with fresh ids, verbatim paths, and mdView; never in terminalIds', () => {
+    const out = build()
+    const files = out.group!.features[0].files!
+    expect(files).toHaveLength(1)
+    expect(files[0].id).toMatch(/^new-/)
+    expect(files[0]).toMatchObject({ name: 'notes', path: '/old/proj/notes.md', mdView: 'raw' })
+    expect(out.terminalIds).not.toContain(files[0].id)
   })
 
   it('archived features import with fresh ids and continue-from-summary commands', () => {

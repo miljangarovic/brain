@@ -11,7 +11,8 @@ import {
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview,
   addImportedGroup, addImportedFeature,
-  archiveFeature, restoreFeature, deleteArchivedFeature, addDocument, renameDocument, removeDocument
+  archiveFeature, restoreFeature, deleteArchivedFeature, addDocument, renameDocument, removeDocument,
+  openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane, featureIdOfTerminal
 } from './store'
 import { collectCwdCandidates, buildImport } from './importRemap'
 import { ExportToast } from './components/ExportToast'
@@ -24,7 +25,8 @@ import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
 import { styledGridLayout } from './layout'
 import { Sidebar } from './components/Sidebar'
-import { TabBar } from './components/TabBar'
+import { TabBar, type TabItem } from './components/TabBar'
+import { FilePaneView } from './components/FilePaneView'
 import { FeatureHeader } from './components/FeatureHeader'
 import { TerminalPane } from './components/TerminalPane'
 import { NewGroupDialog, NewGroupInput } from './components/NewGroupDialog'
@@ -80,6 +82,15 @@ export default function App() {
     apply((s) => addDocument(s, featureId, { id, name: path.split('/').pop() || path, path }))
     setRenameDocId(id)
   }
+  const isFilePaneId = (id: string | null): boolean => !!id && !!findFilePane(state, id)
+  // Close = remove (content is auto-saved; FilePaneView flushes on unmount).
+  const closePane = (id: string) =>
+    apply((s) => (findFilePane(s, id) ? closeFile(s, id) : hideTerminal(s, id)))
+  const openFileIn = (featureId: string | null, path: string) => {
+    if (!featureId) return
+    apply((s) => openFile(s, featureId, { path }))
+  }
+
   // Drag-and-drop reorder of terminals inside the open grid. The pane header is the
   // drag handle; dropping a pane onto another moves it into that pane's slot. The
   // dragged id lives in a ref so dragover/drop read it synchronously (a stale
@@ -250,9 +261,9 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {           // hide active terminal (shell keeps running)
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {           // close file pane / hide terminal
         e.preventDefault()
-        if (state.activeTerminalId) apply((s) => hideTerminal(s, state.activeTerminalId!))
+        if (state.activeTerminalId) closePane(state.activeTerminalId)
       } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyG') {
         e.preventDefault()
         if (state.activeFeatureId) { markLayoutChange(); apply((s) => toggleFeatureViewMode(s, state.activeFeatureId!)) }
@@ -264,11 +275,14 @@ export default function App() {
     }
     const cycleTab = (dir: number) => {
       const f = getActiveFeature(state)
-      const visible = f?.terminals.filter((t) => !state.hidden.includes(t.id)) ?? []
+      const visible: { id: string; file: boolean }[] = [
+        ...(f?.terminals.filter((t) => !state.hidden.includes(t.id)).map((t) => ({ id: t.id, file: false })) ?? []),
+        ...((f?.files ?? []).map((p) => ({ id: p.id, file: true })))
+      ]
       if (visible.length === 0) return
-      const idx = visible.findIndex((t) => t.id === state.activeTerminalId)
+      const idx = visible.findIndex((v) => v.id === state.activeTerminalId)
       const next = visible[(idx + dir + visible.length) % visible.length]
-      markStarted(next.id)
+      if (!next.file) markStarted(next.id)
       apply((s) => setActiveTerminal(s, next.id))
     }
     window.addEventListener('keydown', onKey)
@@ -389,12 +403,19 @@ export default function App() {
   // the feature's hidden set (store.toggleFeatureViewMode), so every terminal
   // returns on the next grid open.
   const featureVisible = (activeFeature?.terminals ?? []).filter((t) => !state.hidden.includes(t.id))
+  const featureFiles = activeFeature?.files ?? []
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
   const featureTerminalIds = new Set(featureVisible.map((t) => t.id))
-  const { cols, rows, lastSpan, spanFirst, flow: gridFlow } = styledGridLayout(featureVisible.length, activeFeature?.gridStyle ?? 'auto')
+  const paneCount = featureVisible.length + featureFiles.length
+  const { cols, rows, lastSpan, spanFirst, flow: gridFlow } = styledGridLayout(paneCount, activeFeature?.gridStyle ?? 'auto')
+  const combinedIds = [...featureVisible.map((t) => t.id), ...featureFiles.map((p) => p.id)]
   // Auto-fill leaves any gap in one column (column flow) or one row (row flow);
   // the spanning pane stretches over it — first or last pane, per gridStyle.
-  const spanTerminalId = spanFirst ? featureVisible[0]?.id : featureVisible[featureVisible.length - 1]?.id
+  const spanPaneId = spanFirst ? combinedIds[0] : combinedIds[combinedIds.length - 1]
+  const tabItems: TabItem[] = [
+    ...featureVisible.map((t) => ({ kind: 'terminal' as const, terminal: t })),
+    ...featureFiles.map((p) => ({ kind: 'file' as const, pane: p }))
+  ]
 
   return (
     <div className="flex h-screen text-fg bg-panel">
@@ -444,7 +465,12 @@ export default function App() {
         onArchiveFeature={(fid) => apply((s) => archiveFeature(s, fid))}
         onOpenArchive={(gid) => setArchiveGroupId(gid)}
         onAddDocument={(fid) => void addDocumentTo(fid)}
-        onOpenDocument={(p) => window.brain.openPath(p)}
+        onOpenDocument={(fid, p) => openFileIn(fid, p)}
+        onOpenDocumentExternally={(p) => window.brain.openPath(p)}
+        onSelectFile={(id) => apply((s) => setActiveTerminal(s, id))}
+        onCloseFile={(id) => apply((s) => closeFile(s, id))}
+        onRenameFilePane={(id, name) => apply((s) => renameFilePane(s, id, name))}
+        onMoveFile={(id, toIndex) => apply((s) => moveFile(s, id, toIndex))}
         onRenameDocument={(fid, did, name) => apply((s) => renameDocument(s, fid, did, name))}
         onRemoveDocument={(fid, did) => apply((s) => removeDocument(s, fid, did))}
         docExists={docExists}
@@ -481,12 +507,13 @@ export default function App() {
           />
         )}
         <TabBar
-          terminals={featureVisible}
+          items={tabItems}
           activeId={state.activeTerminalId}
           liveAgents={liveAgents}
           busy={busy}
-          onSelect={(id) => { markStarted(id); apply((s) => setActiveTerminal(s, id)) }}
-          onClose={(id) => apply((s) => hideTerminal(s, id))}
+          onSelect={(id) => { if (!isFilePaneId(id)) markStarted(id); apply((s) => setActiveTerminal(s, id)) }}
+          onClose={closePane}
+          onOpenExternally={(p) => window.brain.openPath(p)}
           reviewStatus={reviewStatus}
           attention={attention.attention}
         />
@@ -495,7 +522,7 @@ export default function App() {
           className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-2 p-2 bg-panel' : ''}`}
           style={gridMode ? { gridAutoFlow: gridFlow, gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
         >
-          {featureVisible.length === 0 && (
+          {paneCount === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
               <span className="text-2xl font-semibold tracking-tight text-fg">Brain</span>
               <span className="text-sm">
@@ -544,8 +571,8 @@ export default function App() {
                 terminal={t}
                 active={isActive}
                 gridded={griddedHere}
-                gridRowSpan={griddedHere && gridFlow === 'column' && t.id === spanTerminalId ? lastSpan : undefined}
-                gridColSpan={griddedHere && gridFlow === 'row' && t.id === spanTerminalId ? lastSpan : undefined}
+                gridRowSpan={griddedHere && gridFlow === 'column' && t.id === spanPaneId ? lastSpan : undefined}
+                gridColSpan={griddedHere && gridFlow === 'row' && t.id === spanPaneId ? lastSpan : undefined}
                 visibleInTabs={inFeature && !gridMode && isActive}
                 busy={!!busy[t.id]}
                 liveAgent={liveAgents[t.id]}
@@ -555,9 +582,25 @@ export default function App() {
                 resume={resumeIdsRef.current.has(t.id)}
                 started={started}
                 onStart={() => markStarted(t.id)}
+                onOpenFile={(path) => openFileIn(featureIdOfTerminal(state, t.id), path)}
               />
             )
           })}
+          {featureFiles.map((p) => (
+            <FilePaneView
+              key={p.id}
+              pane={p}
+              active={p.id === state.activeTerminalId}
+              gridded={gridMode}
+              gridRowSpan={gridMode && gridFlow === 'column' && p.id === spanPaneId ? lastSpan : undefined}
+              gridColSpan={gridMode && gridFlow === 'row' && p.id === spanPaneId ? lastSpan : undefined}
+              visibleInTabs={!gridMode && p.id === state.activeTerminalId}
+              onActivate={() => apply((s) => setActiveTerminal(s, p.id))}
+              onClose={() => apply((s) => closeFile(s, p.id))}
+              onSetMdView={(v) => apply((s) => setFilePaneMdView(s, p.id, v))}
+              onOpenExternally={() => window.brain.openPath(p.path)}
+            />
+          ))}
         </div>
       </div>
 

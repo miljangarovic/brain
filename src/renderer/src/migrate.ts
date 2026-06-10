@@ -1,4 +1,4 @@
-import { Workspace, Group, Feature, Terminal, FeatureDoc } from '@shared/types'
+import { Workspace, Group, Feature, Terminal, FeatureDoc, FilePane } from '@shared/types'
 import { createId } from '@shared/id'
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object'
@@ -29,18 +29,34 @@ function sanitizeDoc(dv: unknown): FeatureDoc | null {
   return { id: str(d.id, createId()), name: str(d.name, d.path.split('/').pop() || 'doc'), path: d.path }
 }
 
+// An open-file pane needs a path; entries without one are dropped. Missing
+// ids/names are filled; mdView is kept only when it is a known value.
+function sanitizeFilePane(pv: unknown): FilePane | null {
+  if (!isObj(pv)) return null
+  const p = pv as unknown as FilePane
+  if (typeof p.path !== 'string' || !p.path) return null
+  return {
+    id: str(p.id, createId()),
+    name: str(p.name, p.path.split('/').pop() || 'file'),
+    path: p.path,
+    ...(p.mdView === 'rendered' || p.mdView === 'raw' ? { mdView: p.mdView } : {})
+  }
+}
+
 function sanitizeFeature(fv: unknown): Feature | null {
   if (!isObj(fv)) return null
   const f = fv as unknown as Feature
-  const { documents: _rawDocs, ...rest } = f
+  const { documents: _rawDocs, files: _rawFiles, ...rest } = f
   const docs = (Array.isArray(f.documents) ? f.documents : []).map(sanitizeDoc).filter((d): d is FeatureDoc => d !== null)
+  const files = (Array.isArray(f.files) ? f.files : []).map(sanitizeFilePane).filter((p): p is FilePane => p !== null)
   return {
     ...rest,
     id: str(f.id, createId()),
     name: str(f.name, 'general'),
     collapsed: !!f.collapsed,
     terminals: (Array.isArray(f.terminals) ? f.terminals : []).map(sanitizeTerminal).filter((t): t is Terminal => t !== null),
-    ...(docs.length > 0 ? { documents: docs } : {})
+    ...(docs.length > 0 ? { documents: docs } : {}),
+    ...(files.length > 0 ? { files } : {})
   }
 }
 
