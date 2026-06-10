@@ -21,6 +21,7 @@ export interface VoiceDeps {
 export function useVoice(deps: VoiceDeps) {
   const [ui, dispatch] = useReducer(reduceVoice, IDLE)
   const recRef = useRef<RecorderHandle | null>(null)
+  const startingRef = useRef(false)
   const depsRef = useRef(deps)
   depsRef.current = deps
   const uiRef = useRef(ui)
@@ -40,15 +41,17 @@ export function useVoice(deps: VoiceDeps) {
 
   const toggle = useCallback(() => {
     if (recRef.current) { void finish(); return }
+    if (startingRef.current) return
     // Spec: a new activation CANCELS whatever is in flight (transcription,
     // confirm modal, stale toast/error) and starts a fresh listen.
     if (uiRef.current.kind !== 'idle') {
       window.brain.cancelVoice()
       dispatch({ type: 'dismiss' })
     }
+    startingRef.current = true
     void startRecording({ onAutoStop: () => void finish() })
-      .then((rec) => { recRef.current = rec; dispatch({ type: 'listen' }) })
-      .catch(() => dispatch({ type: 'mic-error', message: 'Microphone unavailable — check system permissions' }))
+      .then((rec) => { recRef.current = rec; startingRef.current = false; dispatch({ type: 'listen' }) })
+      .catch(() => { startingRef.current = false; dispatch({ type: 'mic-error', message: 'Microphone unavailable — check system permissions' }) })
   }, [finish])
 
   const cancel = useCallback(() => {
