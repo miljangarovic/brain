@@ -1,6 +1,8 @@
 import type { ExportProgress, ExportSessionState } from '@shared/exportTypes'
 import { SpinnerIcon } from './icons'
 
+export interface ExportNotice { text: string; path?: string }
+
 const STATE_ICON: Record<Exclude<ExportSessionState, 'running'>, { glyph: string; cls: string }> = {
   pending: { glyph: '·', cls: 'text-fg-muted' },
   done: { glyph: '✓', cls: 'text-accent' },
@@ -12,7 +14,7 @@ const STATE_ICON: Record<Exclude<ExportSessionState, 'running'>, { glyph: string
 // reused for import results).
 export function ExportToast({ progress, notice, onDismiss }: {
   progress: ExportProgress | null
-  notice: string | null
+  notice: ExportNotice | null
   onDismiss: () => void
 }) {
   if (!progress && !notice) return null
@@ -52,7 +54,13 @@ export function ExportToast({ progress, notice, onDismiss }: {
         )
       ) : (
         <div className="flex items-center gap-2">
-          <span className="min-w-0 break-words">{notice}</span>
+          <span className="min-w-0 break-words">{notice!.text}</span>
+          {notice!.path && (
+            <button type="button" onClick={() => window.brain.showItemInFolder(notice!.path!)}
+              className="shrink-0 rounded border border-divider px-1.5 py-0.5 text-xs text-fg-muted transition hover:border-accent hover:text-accent">
+              Show in folder
+            </button>
+          )}
           <button type="button" aria-label="Dismiss" onClick={onDismiss} className="shrink-0 px-1 text-fg-muted transition hover:text-fg">✕</button>
         </div>
       )}

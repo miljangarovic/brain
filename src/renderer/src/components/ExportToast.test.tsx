@@ -38,15 +38,28 @@ describe('ExportToast', () => {
 
   it('shows a dismissible notice when done', async () => {
     const onDismiss = vi.fn()
-    render(<ExportToast progress={null} notice="Exported to /tmp/x.zip" onDismiss={onDismiss} />)
+    render(<ExportToast progress={null} notice={{ text: 'Exported to /tmp/x.zip' }} onDismiss={onDismiss} />)
     expect(screen.getByRole('status')).toHaveTextContent('Exported to /tmp/x.zip')
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(onDismiss).toHaveBeenCalled()
   })
 
   it('progress wins over a stale notice', () => {
-    render(<ExportToast progress={prog(0, 2, ['running', 'pending'])} notice="old" onDismiss={() => {}} />)
+    render(<ExportToast progress={prog(0, 2, ['running', 'pending'])} notice={{ text: 'old' }} onDismiss={() => {}} />)
     expect(screen.getByRole('status')).toHaveTextContent('Exporting — 0%')
     expect(screen.queryByText('old')).not.toBeInTheDocument()
+  })
+
+  it('notice with a path offers Show in folder', async () => {
+    const showItem = vi.fn()
+    ;(window as unknown as { brain: { showItemInFolder: (p: string) => void } }).brain = { showItemInFolder: showItem }
+    render(<ExportToast progress={null} notice={{ text: 'Exported to /tmp/x.zip', path: '/tmp/x.zip' }} onDismiss={() => {}} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Show in folder' }))
+    expect(showItem).toHaveBeenCalledWith('/tmp/x.zip')
+  })
+
+  it('text-only notice has no folder button', () => {
+    render(<ExportToast progress={null} notice={{ text: 'Import failed: x' }} onDismiss={() => {}} />)
+    expect(screen.queryByRole('button', { name: 'Show in folder' })).not.toBeInTheDocument()
   })
 })

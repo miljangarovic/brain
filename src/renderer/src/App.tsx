@@ -60,7 +60,7 @@ export default function App() {
   // any progress event that straggles in after the invoke already resolved —
   // without it a late event would re-show the spinner forever.
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null)
-  const [exportNotice, setExportNotice] = useState<string | null>(null)
+  const [exportNotice, setExportNotice] = useState<{ text: string; path?: string } | null>(null)
   const transferRef = useRef(false)
   useEffect(() => window.brain.onExportProgress((p) => { if (transferRef.current) setExportProgress(p) }), [])
 
@@ -239,9 +239,22 @@ export default function App() {
     transferRef.current = false
     setExportProgress(null)
     if (res.canceled) return
-    setExportNotice(res.ok
-      ? `Exported to ${res.path}${res.warnings.length ? ` — ${res.warnings.length} session(s) without summary: ${res.warnings.join('; ')}` : ''}`
-      : `Export failed: ${res.warnings.join('; ') || 'unknown error'}`)
+    if (res.ok) {
+      const path = res.path ?? ''
+      setExportNotice({
+        text: `Exported to ${path}${res.warnings.length ? ` — ${res.warnings.length} session(s) without summary: ${res.warnings.join('; ')}` : ''}`,
+        ...(path ? { path } : {})
+      })
+      // Summarization can take minutes — announce the finish even when the
+      // window is in the background. Click focuses the app (existing behavior).
+      window.brain.showNotification({
+        key: `export:${path}`,
+        title: 'Export finished',
+        body: path.split('/').pop() || path
+      })
+    } else {
+      setExportNotice({ text: `Export failed: ${res.warnings.join('; ') || 'unknown error'}` })
+    }
   }
   const exportGroup = (groupId: string) => {
     if (transferRef.current) return
@@ -265,7 +278,7 @@ export default function App() {
       const res = await window.brain.importArchive()
       if (res.canceled) return
       if (res.error || !res.manifest || !res.dir) {
-        setExportNotice(`Import failed: ${res.error ?? 'unknown error'}`)
+        setExportNotice({ text: `Import failed: ${res.error ?? 'unknown error'}` })
         return
       }
       // Old root missing on this machine → let the user point at the new one.
@@ -288,16 +301,16 @@ export default function App() {
       if (built.scope === 'group' && built.group) {
         const g = built.group
         apply((s) => addImportedGroup(s, g))
-        setExportNotice(`Imported project "${g.name}" — open a terminal to continue its session${cwdNote}`)
+        setExportNotice({ text: `Imported project "${g.name}" — open a terminal to continue its session${cwdNote}` })
       } else if (built.feature) {
         const f = built.feature
         apply((s) => addImportedFeature(s, f, built.fallbackGroup))
-        setExportNotice(`Imported feature "${f.name}" — open a terminal to continue its session${cwdNote}`)
+        setExportNotice({ text: `Imported feature "${f.name}" — open a terminal to continue its session${cwdNote}` })
       }
     } catch (err) {
       // Foreign/hand-crafted archives can pass validation yet still surprise the
       // remap — surface it as a notice instead of an unhandled rejection.
-      setExportNotice(`Import failed: ${String(err)}`)
+      setExportNotice({ text: `Import failed: ${String(err)}` })
     } finally {
       transferRef.current = false
     }
