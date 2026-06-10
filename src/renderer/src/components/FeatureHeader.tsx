@@ -77,13 +77,13 @@ export function FeatureHeader({
         {showControls && <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />}
         {rid && review.needsDecision && (
           <>
-            <button onClick={() => onMoreRounds(rid)} title="Run more review rounds" className={goBtn}>Nastavi</button>
-            <button onClick={() => onAcceptPhase(rid)} title="Accept as approved (reviewer closes)" className={ghostBtn}>Prihvati</button>
-            <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
+            <button onClick={() => onMoreRounds(rid)} title="Run more review rounds" className={goBtn}>Continue</button>
+            <button onClick={() => onAcceptPhase(rid)} title="Accept as approved (reviewer closes)" className={ghostBtn}>Accept</button>
+            <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Stop loop</button>
           </>
         )}
         {rid && review.active && !review.needsDecision && (
-          <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
+          <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Stop loop</button>
         )}
         <AddMenuButton onAdd={onAdd} className="px-1.5 py-1 rounded-md text-sm text-fg-muted hover:text-accent hover:bg-hover transition-colors" />
       </div>

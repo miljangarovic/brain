@@ -61,10 +61,10 @@ describe('FeatureHeader', () => {
     expect(screen.getByRole('button', { name: 'Side by side' })).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('shows "Zaustavi petlju" while the loop is active', () => {
+  it('shows "Stop loop" while the loop is active', () => {
     const onStopLoop = vi.fn()
     render(<FeatureHeader {...base} onStopLoop={onStopLoop} review={{ ...noReview, reviewerId: 'b', active: true }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Zaustavi petlju' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop loop' }))
     expect(onStopLoop).toHaveBeenCalledWith('b')
   })
 
@@ -72,9 +72,9 @@ describe('FeatureHeader', () => {
     const onMoreRounds = vi.fn(); const onAcceptPhase = vi.fn(); const onStopLoop = vi.fn()
     render(<FeatureHeader {...base} onMoreRounds={onMoreRounds} onAcceptPhase={onAcceptPhase} onStopLoop={onStopLoop}
       review={{ ...noReview, reviewerId: 'b', needsDecision: true }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Nastavi' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Prihvati' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Zaustavi petlju' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop loop' }))
     expect(onMoreRounds).toHaveBeenCalledWith('b')
     expect(onAcceptPhase).toHaveBeenCalledWith('b')
     expect(onStopLoop).toHaveBeenCalledWith('b')
