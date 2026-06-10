@@ -16,4 +16,7 @@ describe('extractTranscript', () => {
     expect(extractTranscript(undefined)).toBe('')
     expect(extractTranscript({ foo: 1 })).toBe('')
   })
+  it('accepts flat string segments (no_timestamps variant)', () => {
+    expect(extractTranscript({ transcription: ['prebaci ', 'na grid'] })).toBe('prebaci na grid')
+  })
 })

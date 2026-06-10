@@ -12,14 +12,18 @@ export interface ChildLike {
 
 interface Pending { resolve: (text: string) => void; reject: (err: Error) => void }
 
+// A queued (not yet dispatched) request: dispatch fn + its reject for early rejection.
+interface Queued { dispatch: () => void; reject: (err: Error) => void }
+
 export function createTranscriber(opts: { childPath: string; forkImpl?: (path: string) => ChildLike }) {
   const fork = opts.forkImpl ?? ((p: string) => utilityProcess.fork(p) as unknown as ChildLike)
   let child: ChildLike | null = null
   let nextId = 1
   const pending = new Map<number, Pending>()
   // Queue of requests waiting to be dispatched (all but the in-flight one).
-  const queue: Array<() => void> = []
+  const queue: Queued[] = []
   let inFlight = false
+  let disposed = false
 
   const ensureChild = (): ChildLike => {
     if (child) return child
@@ -38,55 +42,54 @@ export function createTranscriber(opts: { childPath: string; forkImpl?: (path: s
       else p.reject(new Error(m.error ?? 'transcription failed'))
       // Drain next item from queue.
       const next = queue.shift()
-      if (next) { inFlight = true; next() }
+      if (next) { inFlight = true; next.dispatch() }
     })
     c.on('exit', () => {
       child = null
       inFlight = false
-      for (const [id, p] of pending) { pending.delete(id); p.reject(new Error('transcriber process exited')) }
-      // Drain queue with the same error.
-      while (queue.length) {
-        const next = queue.shift()
-        if (next) next()
+      // Reject all in-flight pending requests.
+      for (const [id, p] of pending) {
+        pending.delete(id)
+        p.reject(new Error('transcriber process exited'))
       }
+      // Reject all queued requests — do NOT dispatch or fork from here.
+      // The next transcribe() call will lazily respawn a new child.
+      const drained = queue.splice(0)
+      for (const q of drained) q.reject(new Error('transcriber process exited'))
     })
     child = c
     return c
   }
 
-  const dispatch = (id: number, req: { wavPath: string; modelPath: string; language: string; prompt?: string }) => {
-    ensureChild().postMessage({ id, ...req })
-  }
-
-  const transcribe = (req: { wavPath: string; modelPath: string; language: string; prompt?: string }, timeoutMs = 60000): Promise<string> => {
+  const transcribe = (req: { wavPath: string; modelPath: string; language: string }, timeoutMs = 60000): Promise<string> => {
+    if (disposed) return Promise.reject(new Error('transcriber disposed'))
     return new Promise<string>((resolve, reject) => {
       const id = nextId++
-      let timer: ReturnType<typeof setTimeout> | undefined
 
-      const settle = (p: Pending) => {
-        timer = setTimeout(() => {
+      const settle = () => {
+        const timer = setTimeout(() => {
           pending.delete(id)
           inFlight = false
           reject(new Error('transcription timed out'))
           const next = queue.shift()
-          if (next) { inFlight = true; next() }
+          if (next) { inFlight = true; next.dispatch() }
         }, timeoutMs)
         pending.set(id, {
           resolve: (t) => { clearTimeout(timer); resolve(t) },
           reject: (e) => { clearTimeout(timer); reject(e) }
         })
+        ensureChild().postMessage({ id, ...req })
       }
 
       if (!inFlight) {
         // Dispatch immediately — keeps first-call synchronous (tests check sent[0] right away).
         inFlight = true
-        settle({ resolve, reject })
-        dispatch(id, req)
+        settle()
       } else {
         // Enqueue for after the in-flight request settles.
-        queue.push(() => {
-          settle({ resolve, reject })
-          dispatch(id, req)
+        queue.push({
+          dispatch: settle,
+          reject,
         })
       }
     })
@@ -94,6 +97,22 @@ export function createTranscriber(opts: { childPath: string; forkImpl?: (path: s
 
   return {
     transcribe,
-    dispose: () => { child?.kill(); child = null }
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      // Reject queued items BEFORE killing the child — so when kill() fires the
+      // exit event synchronously, the exit handler finds an empty queue and
+      // empty pending map (no double-settle).
+      const drained = queue.splice(0)
+      for (const q of drained) q.reject(new Error('transcriber disposed'))
+      // Reject in-flight pending requests.
+      for (const [id, p] of pending) {
+        pending.delete(id)
+        p.reject(new Error('transcriber disposed'))
+      }
+      // Kill child last — exit handler will find empty pending/queue.
+      child?.kill()
+      child = null
+    }
   }
 }
