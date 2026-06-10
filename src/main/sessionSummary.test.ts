@@ -101,6 +101,16 @@ describe('summarizeSession', () => {
     const res = await summarizeSession({ kind: 'codex', sessionId: 's', cwd: '/p', spawnFn, outputFile: out })
     expect(res).toEqual({ ok: false, error: 'codex wrote no summary file' })
   })
+
+  it('codex: whitespace-only output file is an error', async () => {
+    const out = join(tmpdir(), `brain-sum-test-${Math.random().toString(36).slice(2)}.md`)
+    const { spawnFn } = fakeSpawn((c) => {
+      void fsp.writeFile(out, '  \n').then(() => c.emit('close', 0))
+    })
+    const res = await summarizeSession({ kind: 'codex', sessionId: 's', cwd: '/p', spawnFn, outputFile: out })
+    expect(res).toEqual({ ok: false, error: 'codex produced no output' })
+    await fsp.rm(out, { force: true })
+  })
 })
 
 describe('mapWithLimit', () => {
