@@ -13,6 +13,9 @@
 **Deviations from spec (intentional, small):**
 1. No `startVoice` preload method — the sidebar mic button calls the renderer-side voice controller directly (same code path as the `voice:start` listener); a renderer→main→renderer round-trip would add nothing.
 2. The whisper addon is fed a temp **WAV file** (`fname_inp`) encoded from the PCM, because that is the addon's documented stable API. Direct PCM input (the addon supports it; exact param name is in its `.d.ts`) is a follow-up optimization, not v1.
+3. "Model kept warm after first use" may not hold: the addon's documented API is stateless (`transcribe({ model: path, … })` per call), which likely reloads the model each command. Task 9 Step 1 checks the `.d.ts` for a persistent-context API and uses it if present; otherwise the benchmark's ≤ ~2.5 s latency rule governs the model choice with the reload cost included honestly.
+4. The spec's middle benchmark candidate `Sagicc/whisper-medium-sr-combined` is substituted with `Sagicc` **small**-sr — the Sagicc/Whisper.cpp HF repo only ships large + small GGML. If small loses on accuracy while large misses the latency bar, converting medium with whisper.cpp's conversion script is the follow-up candidate.
+5. Invalid/stale ids surface as the error toast (with the transcript), not the spec's "confirm overlay with an error note" — functionally equivalent (nothing executable to confirm, never silent), and simpler.
 
 **⚠ Before starting:** `App.tsx`, `Sidebar.tsx`, `Sidebar.test.tsx` carry uncommitted user changes in the working tree (`git status`). Ask the user to commit/stash them first — Tasks 15–16 modify those files.
 
@@ -147,7 +150,7 @@ export function validateVoiceCommand(raw: unknown): VoiceCommand {
 In `src/shared/ipc.ts`, add before the closing `} as const`:
 
 ```ts
-  fsExists: 'fs:exists',
+  shellOpenExternal: 'shell:openExternal',
   voiceStart: 'voice:start',
   voiceAudio: 'voice:audio',
   voiceState: 'voice:state',
@@ -155,7 +158,7 @@ In `src/shared/ipc.ts`, add before the closing `} as const`:
   voiceCancel: 'voice:cancel'
 ```
 
-(The `fsExists` line already exists — shown for placement; append the five `voice*` lines after it, adding the comma to `fsExists`.)
+(The `shellOpenExternal` line is currently the LAST entry — shown for placement; append the five `voice*` lines after it, adding the comma to `shellOpenExternal`.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -561,6 +564,10 @@ describe('buildSnapshot', () => {
     expect(terms.find((t) => t.id === tid)?.hidden).toBe(true)
     expect(terms.find((t) => t.id !== tid)?.hidden).toBeUndefined()
   })
+  it('nulls activeTerminalId when it is not a terminal (a file pane is selected)', () => {
+    const s = { ...fixture(), activeTerminalId: 'some-file-pane-id' }
+    expect(buildSnapshot(s).activeTerminalId).toBeNull()
+  })
 })
 ```
 
@@ -581,6 +588,12 @@ import type { AppState } from '../store'
 import type { WorkspaceSnapshot } from '@shared/voice'
 
 export function buildSnapshot(s: AppState): WorkspaceSnapshot {
+  // activeTerminalId can hold a FILE PANE id (panes participate in selection,
+  // see setActiveTerminal/cycleTab) — the LLM must never target it as a
+  // terminal, so it is nulled unless it names a real terminal.
+  const terminalIds = new Set(
+    s.workspace.groups.flatMap((g) => g.features).flatMap((f) => f.terminals).map((t) => t.id)
+  )
   return {
     groups: s.workspace.groups.map((g) => ({
       id: g.id,
@@ -597,7 +610,7 @@ export function buildSnapshot(s: AppState): WorkspaceSnapshot {
       }))
     })),
     activeFeatureId: s.activeFeatureId,
-    activeTerminalId: s.activeTerminalId
+    activeTerminalId: s.activeTerminalId && terminalIds.has(s.activeTerminalId) ? s.activeTerminalId : null
   }
 }
 ```
@@ -605,7 +618,7 @@ export function buildSnapshot(s: AppState): WorkspaceSnapshot {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/renderer/src/voice/snapshot.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -784,6 +797,21 @@ describe('ensureModel', () => {
   it('throws on unknown model id', async () => {
     await expect(ensureModel('nope', dir, vi.fn(), () => {})).rejects.toThrow(/unknown model/i)
   })
+  it('concurrent calls share ONE in-flight download (no interleaved .part writes)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse(new Uint8Array([9, 9]), 2))
+    const [a, b] = await Promise.all([
+      ensureModel('sagicc-small-sr-q5_0', dir, fetchImpl, () => {}),
+      ensureModel('sagicc-small-sr-q5_0', dir, fetchImpl, () => {})
+    ])
+    expect(a).toBe(b)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+  it('a short read (body < content-length) throws and leaves no model file', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse(new Uint8Array([1, 2]), 10))
+    await expect(ensureModel('sagicc-small-sr-q5_0', dir, fetchImpl, () => {})).rejects.toThrow(/truncated/)
+    const files = await fsp.readdir(dir).catch(() => [])
+    expect(files).toEqual([])
+  })
 })
 ```
 
@@ -799,9 +827,12 @@ Expected: FAIL — `Cannot find module './models'`
 ```ts
 // GGML model registry + first-use downloader. Downloads stream to
 // <file>.part and rename on success, so a crash never leaves a torn model
-// file that whisper would try to load.
+// file that whisper would try to load. Single-flight per target path:
+// concurrent activations during a first-run download must share one fetch —
+// two writers on the same .part would interleave and the torn result would
+// be renamed and cached as a valid model forever.
 import { createWriteStream, promises as fsp } from 'fs'
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 export const VOICE_MODELS: Record<string, { url: string; file: string }> = {
   'sagicc-large-v3-sr-q5_0': {
@@ -818,21 +849,36 @@ export const VOICE_MODELS: Record<string, { url: string; file: string }> = {
   }
 }
 
-export async function ensureModel(
+const inFlight = new Map<string, Promise<string>>()
+
+export function ensureModel(
   modelId: string,
   dir: string,
   fetchImpl: typeof fetch,
   onProgress: (received: number, total: number | null) => void
 ): Promise<string> {
   const entry = VOICE_MODELS[modelId]
-  if (!entry) throw new Error(`unknown model id: ${modelId}`)
+  if (!entry) return Promise.reject(new Error(`unknown model id: ${modelId}`))
   const path = join(dir, entry.file)
+  const existing = inFlight.get(path)
+  if (existing) return existing
+  const p = download(entry.url, path, fetchImpl, onProgress).finally(() => inFlight.delete(path))
+  inFlight.set(path, p)
+  return p
+}
+
+async function download(
+  url: string,
+  path: string,
+  fetchImpl: typeof fetch,
+  onProgress: (received: number, total: number | null) => void
+): Promise<string> {
   if (await fsp.stat(path).then(() => true, () => false)) return path
 
-  await fsp.mkdir(dir, { recursive: true })
+  await fsp.mkdir(dirname(path), { recursive: true })
   const part = path + '.part'
   try {
-    const res = await fetchImpl(entry.url)
+    const res = await fetchImpl(url)
     if (!res.ok || !res.body) throw new Error(`model download failed: HTTP ${res.status}`)
     const len = res.headers.get('content-length')
     const total = len ? Number(len) : null
@@ -847,6 +893,11 @@ export async function ensureModel(
       onProgress(received, total)
     }
     await new Promise<void>((resolve, reject) => ws.end((e?: Error | null) => (e ? reject(e) : resolve())))
+    // Cheap integrity check standing in for the spec's checksum: a body that
+    // does not match its advertised size must never be renamed into place.
+    if (total !== null && received !== total) {
+      throw new Error(`model download truncated: ${received}/${total} bytes`)
+    }
     await fsp.rename(part, path)
     return path
   } catch (err) {
@@ -859,7 +910,7 @@ export async function ensureModel(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/main/voice/models.test.ts`
-Expected: PASS (5 tests)
+Expected: PASS (7 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -1024,7 +1075,9 @@ Examples:
 "prebaci na fajl pejns" → {"action":"switch_feature","featureId":"<id of file-panes>","confidence":"high"}
 "otvori grid" → {"action":"toggle_grid","confidence":"high"}
 "dodaj klod terminal u file panes sa promptom sredi testove" → {"action":"add_terminal","featureId":"<id>","kind":"claude","prompt":"sredi testove","confidence":"high"}
-"close the second tab" → {"action":"hide_terminal","terminalId":"<id of 2nd visible terminal>","confidence":"high"}`
+"close the second tab" → {"action":"hide_terminal","terminalId":"<id of 2nd visible terminal>","confidence":"high"}
+"preimenuj feature u export import" → {"action":"rename_feature","featureId":"<active feature id>","name":"export import","confidence":"high"}
+"change the grid style to columns" → {"action":"set_grid_style","gridStyle":"cols","confidence":"high"}`
   return [
     { role: 'system', content: system },
     { role: 'user', content: transcript }
@@ -1126,7 +1179,7 @@ node -e "const w = require('@kutalia/whisper-node-addon'); const t = w.transcrib
 find node_modules/@kutalia/whisper-node-addon -name '*.d.ts' | head -5
 ```
 
-Expected: `function`. Open the listed `.d.ts` and confirm the option names used in Step 5 (`fname_inp`, `model`, `language`, `use_gpu`, and whether `no_timestamps` / `no_prints` / `prompt` exist — include each only if present; if the prompt option is named differently, e.g. `initial_prompt`, use that name).
+Expected: `function`. Open the listed `.d.ts` and confirm the option names used in Step 5 (`fname_inp`, `model`, `language`, `use_gpu`, and whether `no_timestamps` / `no_prints` / `prompt` exist — include each only if present; if the prompt option is named differently, e.g. `initial_prompt`, use that name). Also check for a **persistent-context / keep-model-loaded API** (anything like `init`, `createContext`, `keep_context`, a class wrapping a loaded model): the documented `transcribe({ model: path })` shape is stateless and likely reloads the ~1.1 GB model per call. If a warm API exists, load the model ONCE in the child (Step 5) and reuse it across requests; if not, the deviation is already declared in the plan header and the benchmark's latency rule (Task 17) governs the model choice with reload cost included.
 
 - [ ] **Step 2: Write the failing test for result extraction**
 
@@ -1929,9 +1982,13 @@ describe('reduceVoice', () => {
       expect(reduceVoice(st, { type: 'dismiss' })).toEqual(IDLE)
     }
   })
-  it('stray events in idle stay idle', () => {
+  it('stray NON-ERROR events in idle stay idle', () => {
     expect(reduceVoice(IDLE, { type: 'state', ev: { phase: 'transcribing' } })).toEqual(IDLE)
     expect(reduceVoice(IDLE, { type: 'executed', toast: 'x' })).toEqual(IDLE)
+  })
+  it('error phase surfaces even from idle (startup shortcut warning)', () => {
+    expect(reduceVoice(IDLE, { type: 'state', ev: { phase: 'error', message: 'shortcut taken' } }))
+      .toEqual({ kind: 'error', message: 'shortcut taken' })
   })
 })
 ```
@@ -1948,8 +2005,10 @@ Expected: FAIL — `Cannot find module './machine'`
 ```ts
 // Pure UI state machine for the voice overlay. Side effects (recorder, IPC,
 // executing plans) live in useVoice — this reducer only answers "what is on
-// screen". Stray events outside an active flow are ignored (a late
-// voice:state after cancel must not resurrect the overlay).
+// screen". Errors ALWAYS surface (the startup "shortcut taken" warning
+// arrives while idle); other stray events outside an active flow are ignored
+// (main gen-guards canceled generations, so progress events cannot resurrect
+// a canceled flow anyway).
 import type { VoiceStateEvent } from '@shared/voice'
 import type { ExecDescriptor } from './executor'
 
@@ -1983,12 +2042,14 @@ export function reduceVoice(s: VoiceUiState, e: VoiceUiEvent): VoiceUiState {
     case 'mic-error': return { kind: 'error', message: e.message }
     case 'audio-sent': return s.kind === 'listening' ? { kind: 'processing', label: 'Transcribing…' } : s
     case 'state': {
+      if (e.ev.phase === 'error') {
+        return { kind: 'error', message: e.ev.message, ...(e.ev.transcript ? { transcript: e.ev.transcript } : {}) }
+      }
       if (!active(s)) return s
       switch (e.ev.phase) {
         case 'transcribing': return { kind: 'processing', label: 'Transcribing…' }
         case 'parsing': return { kind: 'processing', label: 'Parsing…', transcript: e.ev.transcript }
         case 'downloading-model': return { kind: 'downloading', received: e.ev.received, total: e.ev.total }
-        case 'error': return { kind: 'error', message: e.ev.message, ...(e.ev.transcript ? { transcript: e.ev.transcript } : {}) }
       }
       return s
     }
@@ -2005,7 +2066,7 @@ export function reduceVoice(s: VoiceUiState, e: VoiceUiEvent): VoiceUiState {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/renderer/src/voice/machine.test.ts`
-Expected: PASS (8 tests)
+Expected: PASS (9 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2184,6 +2245,11 @@ describe('VoiceOverlay', () => {
     fireEvent.click(screen.getByLabelText('Dismiss'))
     expect(onCancel).toHaveBeenCalled()
   })
+  it('Escape cancels during processing (spec: Esc cancels at any stage)', () => {
+    const { onCancel } = renderState({ kind: 'processing', label: 'Transcribing…' })
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalled()
+  })
 })
 ```
 
@@ -2220,7 +2286,9 @@ export function VoiceOverlay({ state, onConfirm, onCancel }: {
   }, [isConfirm]) // eslint-disable-line react-hooks/exhaustive-deps -- reset only when the confirm opens
 
   useEffect(() => {
-    if (state.kind !== 'confirm' && state.kind !== 'listening' && state.kind !== 'error') return
+    // Spec: Esc cancels at ANY stage — listening, processing, downloading,
+    // confirm, even a lingering toast/error. Enter only confirms the modal.
+    if (state.kind === 'idle') return
     const confirmable = state.kind === 'confirm'
     const withPrompt = confirmable && state.editablePrompt !== undefined
     const onKey = (e: KeyboardEvent) => {
@@ -2307,7 +2375,7 @@ export function VoiceOverlay({ state, onConfirm, onCancel }: {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/renderer/src/components/VoiceOverlay.test.tsx`
-Expected: PASS (7 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2429,16 +2497,22 @@ export async function registerVoice(opts: {
 }): Promise<{ dispose: () => void }> {
   const { getWin, userDataDir } = opts
   const config = await loadVoiceConfig(userDataDir)
-  if (!config.enabled) return { dispose: () => {} }
-
-  const transcriber = createTranscriber({ childPath: join(__dirname, 'transcriberChild.js') })
-  let gen = 0
 
   const send = (channel: string, payload: unknown) => {
     const win = getWin()
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
   const sendState = (ev: VoiceStateEvent) => send(IPC.voiceState, ev)
+
+  if (!config.enabled) {
+    // The sidebar mic button renders regardless of config — answer its audio
+    // with a clear error instead of leaving the pill stuck on "Transcribing…".
+    ipcMain.on(IPC.voiceAudio, () => sendState({ phase: 'error', message: 'Voice is disabled in voice.json' }))
+    return { dispose: () => {} }
+  }
+
+  const transcriber = createTranscriber({ childPath: join(__dirname, 'transcriberChild.js') })
+  let gen = 0
 
   const registered = globalShortcut.register(config.shortcut, () => {
     const win = getWin()
@@ -2694,6 +2768,10 @@ export function useVoice(deps: VoiceDeps) {
   useEffect(() => window.brain.onVoiceStart(() => toggle()), [toggle])
   useEffect(() => window.brain.onVoiceState((ev) => dispatch({ type: 'state', ev })), [])
   useEffect(() => window.brain.onVoiceResult(({ transcript, command }) => {
+    // A result whose flow was canceled while it was already in transit
+    // (main's gen guard could not catch it) must not execute silently.
+    const k = uiRef.current.kind
+    if (k !== 'processing' && k !== 'downloading') return
     const plan = planCommand(command, depsRef.current.state)
     if (plan.type === 'run') {
       runDescriptor(plan.descriptor, runDeps())
@@ -2951,7 +3029,9 @@ With `npm run dev`, GROQ_API_KEY set, model downloaded:
 - [ ] "preimenuj feature u …" — confirm modal (no textarea), Enter renames
 - [ ] English command ("switch to the voice feature") works
 - [ ] mixed command ("dodaj claude terminal u file panes") works
-- [ ] Esc during listening cancels; Esc during confirm cancels; pressing the shortcut mid-flow (while parsing / confirm open) cancels it and starts a new listen
+- [ ] Esc during listening cancels; Esc during confirm cancels; Esc during Transcribing/Parsing/model-download cancels; pressing the shortcut mid-flow (while parsing / confirm open) cancels it and starts a new listen
+- [ ] set `"shortcut"` in voice.json to a combination another app already owns → warning toast appears at startup; the mic button still works
+- [ ] set `"enabled": false` in voice.json → mic button click shows "Voice is disabled" instead of hanging on Transcribing…
 - [ ] second shortcut press while speaking stops recording immediately
 - [ ] silence: shortcut, say nothing → auto-stop → "Nothing was heard"
 - [ ] gibberish phrase → unknown → error toast with the transcript
