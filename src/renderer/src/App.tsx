@@ -286,6 +286,9 @@ export default function App() {
           const g = state.workspace.groups.find((x) => x.id === gid)
           window.brain.openPath(g?.cwd ?? '')
         }}
+        onExportGroup={() => {}} // wired in the app-wiring task
+        onExportFeature={() => {}}
+        onImport={() => {}}
         reviewStatus={reviewStatus}
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
         pendingRenameTerminalId={renameTerminalId}
