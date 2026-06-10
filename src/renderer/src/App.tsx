@@ -56,9 +56,13 @@ export default function App() {
 
   // Export/import feedback: live progress while the main process summarizes
   // sessions, then a dismissible result notice (shared with import results).
+  // `transferRef` guards against double-triggering an export/import AND drops
+  // any progress event that straggles in after the invoke already resolved —
+  // without it a late event would re-show the spinner forever.
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null)
   const [exportNotice, setExportNotice] = useState<string | null>(null)
-  useEffect(() => window.brain.onExportProgress(setExportProgress), [])
+  const transferRef = useRef(false)
+  useEffect(() => window.brain.onExportProgress((p) => { if (transferRef.current) setExportProgress(p) }), [])
 
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
@@ -232,6 +236,7 @@ export default function App() {
     }
   }
   const finishExport = (res: ExportRunResult) => {
+    transferRef.current = false
     setExportProgress(null)
     if (res.canceled) return
     setExportNotice(res.ok
@@ -239,43 +244,58 @@ export default function App() {
       : `Export failed: ${res.warnings.join('; ') || 'unknown error'}`)
   }
   const exportGroup = (groupId: string) => {
+    if (transferRef.current) return
     const g = state.workspace.groups.find((x) => x.id === groupId)
-    if (g) void window.brain.exportArchive({ scope: 'group', group: g }).then(finishExport)
+    if (!g) return
+    transferRef.current = true
+    void window.brain.exportArchive({ scope: 'group', group: g }).then(finishExport)
   }
   const exportFeature = (featureId: string) => {
+    if (transferRef.current) return
     const g = state.workspace.groups.find((x) => x.features.some((f) => f.id === featureId))
     const f = g?.features.find((x) => x.id === featureId)
-    if (g && f) void window.brain.exportArchive({ scope: 'feature', group: { name: g.name, cwd: g.cwd }, feature: f }).then(finishExport)
+    if (!g || !f) return
+    transferRef.current = true
+    void window.brain.exportArchive({ scope: 'feature', group: { name: g.name, cwd: g.cwd }, feature: f }).then(finishExport)
   }
   const importArchive = async () => {
-    const res = await window.brain.importArchive()
-    if (res.canceled) return
-    if (res.error || !res.manifest || !res.dir) {
-      setExportNotice(`Import failed: ${res.error ?? 'unknown error'}`)
-      return
-    }
-    // Old root missing on this machine → let the user point at the new one.
-    // Canceling the picker just means every dead cwd falls back to home.
-    const newRoot = res.cwdExists ? null : await window.brain.pickDirectory()
-    const candidates = collectCwdCandidates(res.manifest, newRoot)
-    const found = await window.brain.pathsExist(candidates)
-    const existing = new Set(candidates.filter((_, i) => found[i]))
-    const built = buildImport({
-      manifest: res.manifest, dir: res.dir, newRoot,
-      exists: (p) => existing.has(p), createId
-    })
-    // Imported terminals must stay cold until explicitly opened — without this,
-    // adding them mid-session would auto-spawn every agent at once (spawnGate
-    // treats non-boot ids as user-created). Must happen BEFORE the state update.
-    for (const id of built.terminalIds) bootIdsRef.current.add(id)
-    if (built.scope === 'group' && built.group) {
-      const g = built.group
-      apply((s) => addImportedGroup(s, g))
-      setExportNotice(`Imported project "${g.name}" — open a terminal to continue its session`)
-    } else if (built.feature) {
-      const f = built.feature
-      apply((s) => addImportedFeature(s, f, built.fallbackGroup))
-      setExportNotice(`Imported feature "${f.name}" — open a terminal to continue its session`)
+    if (transferRef.current) return
+    transferRef.current = true
+    try {
+      const res = await window.brain.importArchive()
+      if (res.canceled) return
+      if (res.error || !res.manifest || !res.dir) {
+        setExportNotice(`Import failed: ${res.error ?? 'unknown error'}`)
+        return
+      }
+      // Old root missing on this machine → let the user point at the new one.
+      // Canceling the picker just means every dead cwd falls back to home.
+      const newRoot = res.cwdExists ? null : await window.brain.pickDirectory()
+      const candidates = collectCwdCandidates(res.manifest, newRoot)
+      const found = await window.brain.pathsExist(candidates)
+      const existing = new Set(candidates.filter((_, i) => found[i]))
+      const built = buildImport({
+        manifest: res.manifest, dir: res.dir, newRoot,
+        exists: (p) => existing.has(p), createId
+      })
+      // Imported terminals must stay cold until explicitly opened — without this,
+      // adding them mid-session would auto-spawn every agent at once (spawnGate
+      // treats non-boot ids as user-created). Must happen BEFORE the state update.
+      for (const id of built.terminalIds) bootIdsRef.current.add(id)
+      // Tell the user when the original project folder wasn't found and wasn't
+      // remapped — their terminals will open in the home directory.
+      const cwdNote = !res.cwdExists && !newRoot ? ' (original folder not found — terminals open in home)' : ''
+      if (built.scope === 'group' && built.group) {
+        const g = built.group
+        apply((s) => addImportedGroup(s, g))
+        setExportNotice(`Imported project "${g.name}" — open a terminal to continue its session${cwdNote}`)
+      } else if (built.feature) {
+        const f = built.feature
+        apply((s) => addImportedFeature(s, f, built.fallbackGroup))
+        setExportNotice(`Imported feature "${f.name}" — open a terminal to continue its session${cwdNote}`)
+      }
+    } finally {
+      transferRef.current = false
     }
   }
   const createGroup = (input: NewGroupInput) => {
