@@ -22,5 +22,9 @@ export const IPC = {
   agentCaptureSession: 'agent:captureSession',
   notifyShow: 'notify:show',
   notificationClick: 'notification:click',
-  linksResolve: 'links:resolve'
+  linksResolve: 'links:resolve',
+  exportRun: 'export:run',
+  exportProgress: 'export:progress',
+  importRun: 'import:run',
+  fsExists: 'fs:exists'
 } as const
