@@ -30,5 +30,10 @@ export const IPC = {
   fsExists: 'fs:exists',
   fileLoad: 'file:load',
   fileSave: 'file:save',
-  shellOpenExternal: 'shell:openExternal'
+  shellOpenExternal: 'shell:openExternal',
+  voiceStart: 'voice:start',
+  voiceAudio: 'voice:audio',
+  voiceState: 'voice:state',
+  voiceResult: 'voice:result',
+  voiceCancel: 'voice:cancel'
 } as const
