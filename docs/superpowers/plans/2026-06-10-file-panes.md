@@ -195,7 +195,7 @@ import { describe, it, expect } from 'vitest'
 import { mkdtempSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { loadFile, saveFile, TEXT_LIMIT } from './fileLoad'
+import { loadFile, saveFile, TEXT_LIMIT, IMAGE_LIMIT } from './fileLoad'
 
 const dir = () => mkdtempSync(join(tmpdir(), 'brain-fileload-'))
 
@@ -224,6 +224,12 @@ describe('loadFile', () => {
     const p = join(dir(), 'big.txt')
     writeFileSync(p, 'x'.repeat(TEXT_LIMIT + 1))
     await expect(loadFile(p)).resolves.toEqual({ kind: 'too-large', size: TEXT_LIMIT + 1 })
+  })
+
+  it('rejects oversized images as too-large with the size', async () => {
+    const p = join(dir(), 'big.png')
+    writeFileSync(p, Buffer.alloc(IMAGE_LIMIT + 1))
+    await expect(loadFile(p)).resolves.toEqual({ kind: 'too-large', size: IMAGE_LIMIT + 1 })
   })
 
   it('missing/unreadable files report missing', async () => {
@@ -658,13 +664,23 @@ describe('file panes — uniform selection fallback', () => {
     expect(out.activeTerminalId).toBe('p1')
   })
 
-  it('grid→tabs collapse on a terminal-less feature focuses the first file pane', () => {
+  // Two panes with p2 active: the stale-selection fallback in the CURRENT code
+  // would keep p2, so this is genuinely red before the fix and pins the rule.
+  it('grid→tabs collapse on a terminal-less feature focuses the FIRST file pane', () => {
     let s = addGroup(createInitialState(), 'proj', '/p')
     const fid = s.workspace.groups[0].features[0].id
     s = openFile(s, fid, { id: 'p1', path: '/p/a.md' })
-    s = toggleFeatureViewMode(s, fid) // tabs → grid
-    const out = toggleFeatureViewMode(s, fid) // grid → tabs: refocus rule
-    expect(out.activeTerminalId).toBe('p1')
+    s = openFile(s, fid, { id: 'p2', path: '/p/b.md' }) // active: p2
+    s = toggleFeatureViewMode(s, fid)                   // tabs → grid
+    expect(toggleFeatureViewMode(s, fid).activeTerminalId).toBe('p1')
+  })
+
+  it('setActiveFeature on a terminal-less feature selects its first file pane', () => {
+    let s = addGroup(createInitialState(), 'proj', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = openFile(s, fid, { id: 'p1', path: '/p/a.md' })
+    s = addFeature(s, s.workspace.groups[0].id, 'extra') // selection moves away
+    expect(setActiveFeature(s, fid).activeTerminalId).toBe('p1')
   })
 
   it('selectFeature (via deleteFeature of the active feature) lands on a file-pane-only sibling', () => {
@@ -683,7 +699,8 @@ describe('file panes — uniform selection fallback', () => {
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run src/renderer/src/store.test.ts`
-Expected: all five FAIL (fallbacks return null today; hideTerminal pollutes `hidden`).
+Expected: all six FAIL (fallbacks return null or keep stale selection today; hideTerminal
+pollutes `hidden`). (Extend the test-file import with `setActiveFeature` if missing.)
 
 - [ ] **Step 3: Implement**
 
@@ -731,6 +748,17 @@ fall back to the feature's first file pane. Locate the block that computes
 
 ```ts
     const first = feature.terminals.find((t) => !state.hidden.includes(t.id)) ?? feature.terminals[0] ?? feature.files?.[0] ?? null
+```
+
+(The branch's existing `first?.id ?? state.activeTerminalId` tail stays as-is —
+with `feature.files?.[0]` in the pick, the stale-selection tail is unreachable
+whenever the feature has any pane, which is exactly what the new test pins.)
+
+5. `setActiveFeature` — the one remaining `firstVisibleTerminal` caller; switch it to
+the uniform rule:
+
+```ts
+    activeTerminalId: firstVisiblePane(feature, state.hidden)?.id ?? null
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -783,10 +811,17 @@ describe('MarkdownView', () => {
     expect(screen.getByRole('table')).toBeInTheDocument()
   })
 
-  it('intercepts link clicks and opens them externally', async () => {
+  it('intercepts http(s) link clicks and opens them externally (raw attribute, not resolved href)', async () => {
     render(<MarkdownView source={'[site](https://example.com)'} />)
     await userEvent.click(screen.getByRole('link', { name: 'site' }))
-    expect(window.brain.openExternal).toHaveBeenCalledWith('https://example.com/')
+    expect(window.brain.openExternal).toHaveBeenCalledWith('https://example.com')
+  })
+
+  it('relative and anchor links are swallowed — the renderer never navigates, nothing opens', async () => {
+    render(<MarkdownView source={'[see](./other.md) [top](#section)'} />)
+    await userEvent.click(screen.getByRole('link', { name: 'see' }))
+    await userEvent.click(screen.getByRole('link', { name: 'top' }))
+    expect(window.brain.openExternal).not.toHaveBeenCalled()
   })
 })
 ```
@@ -821,27 +856,36 @@ export function MarkdownView({ source }: { source: string }) {
       className="h-full overflow-y-auto bg-surface px-6 py-4"
       onClick={(e) => {
         const a = (e.target as HTMLElement).closest('a')
-        if (a && a.href) { e.preventDefault(); window.brain.openExternal(a.href) }
+        if (!a) return
+        e.preventDefault()
+        // The RAW attribute, not a.href: the resolved property would point
+        // relative links at the dev-server origin (dev) or file:// (prod).
+        // Only absolute http(s) goes to the browser; relative/anchor links are
+        // swallowed — the renderer must never navigate.
+        const href = a.getAttribute('href') ?? ''
+        if (/^https?:\/\//i.test(href)) window.brain.openExternal(href)
       }}
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          h1: (p) => <h1 className="mt-2 mb-3 text-2xl font-semibold tracking-tight text-fg-bright" {...p} />,
-          h2: (p) => <h2 className="mt-5 mb-2 text-xl font-semibold tracking-tight text-fg-bright" {...p} />,
-          h3: (p) => <h3 className="mt-4 mb-1.5 text-lg font-semibold text-fg-bright" {...p} />,
-          h4: (p) => <h4 className="mt-3 mb-1 text-base font-semibold text-fg-bright" {...p} />,
-          p: (p) => <p className="my-2 text-sm leading-relaxed text-fg" {...p} />,
-          a: (p) => <a className="text-accent underline decoration-accent/40 hover:decoration-accent cursor-pointer" {...p} />,
-          ul: (p) => <ul className="my-2 list-disc pl-6 text-sm text-fg" {...p} />,
-          ol: (p) => <ol className="my-2 list-decimal pl-6 text-sm text-fg" {...p} />,
-          li: (p) => <li className="my-0.5 leading-relaxed" {...p} />,
-          blockquote: (p) => <blockquote className="my-2 border-l-2 border-accent/50 pl-3 text-sm text-fg-muted" {...p} />,
-          code: (p) => <code className="rounded bg-panel px-1 py-0.5 text-[0.85em] text-fg-bright" {...p} />,
-          pre: (p) => <pre className="my-3 overflow-x-auto rounded-md border border-line bg-panel p-3 text-xs leading-relaxed" {...p} />,
-          table: (p) => <table className="my-3 border-collapse text-sm" {...p} />,
-          th: (p) => <th className="border border-line bg-panel px-2 py-1 text-left font-semibold text-fg-bright" {...p} />,
-          td: (p) => <td className="border border-line px-2 py-1 text-fg" {...p} />,
+          // react-markdown passes a `node` prop to overrides — destructure it
+          // away or React warns about an unknown DOM attribute on every element.
+          h1: ({ node: _n, ...p }) => <h1 className="mt-2 mb-3 text-2xl font-semibold tracking-tight text-fg-bright" {...p} />,
+          h2: ({ node: _n, ...p }) => <h2 className="mt-5 mb-2 text-xl font-semibold tracking-tight text-fg-bright" {...p} />,
+          h3: ({ node: _n, ...p }) => <h3 className="mt-4 mb-1.5 text-lg font-semibold text-fg-bright" {...p} />,
+          h4: ({ node: _n, ...p }) => <h4 className="mt-3 mb-1 text-base font-semibold text-fg-bright" {...p} />,
+          p: ({ node: _n, ...p }) => <p className="my-2 text-sm leading-relaxed text-fg" {...p} />,
+          a: ({ node: _n, ...p }) => <a className="text-accent underline decoration-accent/40 hover:decoration-accent cursor-pointer" {...p} />,
+          ul: ({ node: _n, ...p }) => <ul className="my-2 list-disc pl-6 text-sm text-fg" {...p} />,
+          ol: ({ node: _n, ...p }) => <ol className="my-2 list-decimal pl-6 text-sm text-fg" {...p} />,
+          li: ({ node: _n, ...p }) => <li className="my-0.5 leading-relaxed" {...p} />,
+          blockquote: ({ node: _n, ...p }) => <blockquote className="my-2 border-l-2 border-accent/50 pl-3 text-sm text-fg-muted" {...p} />,
+          code: ({ node: _n, ...p }) => <code className="rounded bg-panel px-1 py-0.5 text-[0.85em] text-fg-bright" {...p} />,
+          pre: ({ node: _n, ...p }) => <pre className="my-3 overflow-x-auto rounded-md border border-line bg-panel p-3 text-xs leading-relaxed" {...p} />,
+          table: ({ node: _n, ...p }) => <table className="my-3 border-collapse text-sm" {...p} />,
+          th: ({ node: _n, ...p }) => <th className="border border-line bg-panel px-2 py-1 text-left font-semibold text-fg-bright" {...p} />,
+          td: ({ node: _n, ...p }) => <td className="border border-line px-2 py-1 text-fg" {...p} />,
           hr: () => <hr className="my-4 border-line" />
         }}
       >
@@ -1039,9 +1083,6 @@ describe('FilePaneView', () => {
     renderPane({ pane: { id: 'p2', path: '/p/a.ts', name: 'a.ts' } })
     const editor = await screen.findByLabelText('editor')
     vi.useFakeTimers()
-    act(() => {
-      ;(editor as HTMLTextAreaElement).focus()
-    })
     // fire two rapid changes through the textarea's onChange
     act(() => {
       const ev = (v: string) => {
@@ -1257,7 +1298,7 @@ export function FilePaneView({
         const msg = load.kind === 'binary'
           ? 'Binary file — cannot display it here.'
           : load.kind === 'too-large'
-            ? `File too large to open in the editor (${Math.round(load.size / 1024 / 1024)} MB).`
+            ? `File too large to display (${Math.round(load.size / 1024 / 1024)} MB).`
             : 'File not found on disk.'
         return (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-fg-muted">
@@ -1766,8 +1807,14 @@ to compare against `spanPaneId`.)
           {paneCount === 0 && (
 ```
 
-8. Render file panes of the ACTIVE feature after the `terminals.map(...)` block (they
-mount only while their feature is active — no process to keep alive):
+8. Render file panes of the ACTIVE feature after the `terminals.map(...)` block.
+**Deliberate mounting model:** ALL file panes of the active feature stay mounted
+(inactive ones `display: none` in tabs mode, exactly like TerminalPane) — editor
+scroll/undo and the pending-save timer survive within-feature tab switches; the
+flush guarantee is carried by the unmount that DOES happen on feature switch/close.
+Do not "optimize" this to conditional mounting — that would cut the debounce timer's
+lifetime without flushing. (The spec's "only the visible ones render" is amended by
+this choice; the spec file carries the same note.)
 
 ```tsx
           {featureFiles.map((p) => (

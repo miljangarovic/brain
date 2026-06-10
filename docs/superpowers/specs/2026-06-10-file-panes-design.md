@@ -165,8 +165,11 @@ New module `src/main/fileLoad.ts` (pure, unit-tested) + handlers in `ipc.ts`:
   (replaces the previous `openPath` behavior; "Open externally" added to the document
   row's hover/context affordances). Ctrl+click on a resolved path link in a terminal →
   `openFile` into THAT terminal's feature (replaces `openPath`).
-- Unlike terminals (which stay mounted to keep their PTY alive), file panes
-  mount/unmount freely — only the visible ones render; content reloads on mount.
+- Unlike terminals (which stay mounted forever to keep their PTY alive), file panes
+  mount only while their FEATURE is active: all panes of the active feature stay
+  mounted (inactive ones `display: none`, like TerminalPane) so editor scroll/undo
+  and the pending-save timer survive within-feature tab switches; switching features
+  or closing the pane unmounts it (with a flush) and content reloads on next mount.
 
 ## Dependencies (new)
 
