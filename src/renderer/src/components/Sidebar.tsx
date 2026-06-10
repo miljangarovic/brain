@@ -230,7 +230,7 @@ export function Sidebar(props: {
             <div
               data-group-id={g.id}
               aria-current={groupActive ? 'true' : undefined}
-              className={`relative group flex items-center gap-1 px-2 py-1 transition-colors ${groupActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'group' && drag.id === g.id ? 'opacity-40' : ''} ${!isEditing('group', g.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              className={`relative group mx-1 mt-1 mb-[2px] flex items-center gap-1 rounded-md px-1.5 py-[2px] transition-colors ${groupActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'group' && drag.id === g.id ? 'opacity-40' : ''} ${!isEditing('group', g.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
               draggable={!isEditing('group', g.id)}
               onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'group', id: g.id }; setDrag({ kind: 'group', id: g.id }) }}
               onDragEnd={clearDrag}
@@ -245,11 +245,11 @@ export function Sidebar(props: {
               {dropAt?.kind === 'group' && dropAt.index === groups.length && gi === groups.length - 1 && (
                 <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
               )}
-              <button aria-label={`Collapse/expand ${g.name}`} onClick={() => onToggleGroup(g.id)} className={`w-4 hover:text-fg ${groupActive ? 'text-accent' : 'text-fg-muted'}`}>
-                {g.collapsed ? '▸' : '▾'}
+              <button aria-label={`Collapse/expand ${g.name}`} onClick={() => onToggleGroup(g.id)} className={`flex h-4 w-4 shrink-0 items-center justify-center self-center hover:text-fg ${groupActive ? 'text-accent' : 'text-fg-muted'}`}>
+                <span className={`block text-[9px] leading-none transition-transform duration-150 ${g.collapsed ? '' : 'rotate-90'}`}>▶</span>
               </button>
               {isEditing('group', g.id) ? renameInput(`Rename project ${g.name}`) : (
-                <span className="flex-1 min-w-0 truncate text-sm font-semibold text-fg-bright cursor-pointer"
+                <span className={`flex-1 min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.12em] cursor-pointer transition-colors ${groupActive ? 'text-accent' : 'text-fg-muted group-hover:text-fg'}`}
                   onClick={() => onNameClick(() => onToggleGroup(g.id))}
                   onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>{g.name}</span>
               )}
@@ -258,7 +258,7 @@ export function Sidebar(props: {
 
             {!g.collapsed && (
               <div
-                className="pl-3"
+                className="ml-3 border-l border-divider pl-0.5"
                 data-group-features={g.id}
                 onDragOver={(e) => {
                   const d = dragRef.current
@@ -285,7 +285,7 @@ export function Sidebar(props: {
                     <div
                       data-feature-id={f.id}
                       aria-current={featureActive ? 'true' : undefined}
-                      className={`relative group flex items-center gap-1 px-2 py-1 transition-colors ${featureActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'feature' && drag.id === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      className={`relative group mx-1 my-[2px] flex items-center gap-1 rounded-md px-1.5 py-[2px] transition-colors ${featureActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'feature' && drag.id === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
                       draggable={!isEditing('feature', f.id)}
                       onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'feature', id: f.id, groupId: g.id }; setDrag({ kind: 'feature', id: f.id, groupId: g.id }) }}
                       onDragEnd={clearDrag}
@@ -299,13 +299,16 @@ export function Sidebar(props: {
                       {dropAt?.kind === 'feature' && dropAt.groupId === g.id && dropAt.index === g.features.length && i === g.features.length - 1 && (
                         <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
                       )}
-                      <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className={`w-4 hover:text-fg ${featureActive ? 'text-accent' : 'text-fg-muted'}`}>
-                        {f.collapsed ? '▸' : '▾'}
+                      <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className={`flex h-4 w-4 shrink-0 items-center justify-center self-center hover:text-fg ${featureActive ? 'text-accent' : 'text-fg-muted'}`}>
+                        <span className={`block text-[9px] leading-none transition-transform duration-150 ${f.collapsed ? '' : 'rotate-90'}`}>▶</span>
                       </button>
                       {isEditing('feature', f.id) ? renameInput(`Rename feature ${f.name}`) : (
-                        <span className={`flex-1 truncate text-sm font-medium cursor-pointer ${featureActive ? 'text-fg-bright' : 'text-fg'}`}
+                        <span className={`flex-1 truncate text-[13px] font-medium cursor-pointer ${featureActive ? 'text-fg-bright' : 'text-fg'}`}
                           onClick={() => onNameClick(() => onToggleFeature(f.id))}
                           onDoubleClick={() => onNameDblClick(() => startRename('feature', f.id, f.name))}>{f.name}</span>
+                      )}
+                      {f.collapsed && f.terminals.length > 0 && (
+                        <span className="shrink-0 rounded-full bg-sel px-1.5 text-[10px] leading-4 text-fg-muted">{f.terminals.length}</span>
                       )}
                       {f.terminals.some((t) => busy[t.id] && liveAgents[t.id]) && <SpinnerIcon className="shrink-0 text-accent" />}
                       <AddMenuButton
@@ -319,7 +322,7 @@ export function Sidebar(props: {
 
                     {!f.collapsed && (
                       <div
-                        className="pl-2"
+                        className="ml-[18px] border-l border-divider pl-0.5"
                         data-feature-terminals={f.id}
                         onDragOver={(e) => {
                           const d = dragRef.current
@@ -347,8 +350,11 @@ export function Sidebar(props: {
                               draggable={!isEditing('terminal', t.id)}
                               onDragStart={(e) => { e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'terminal', id: t.id, featureId: f.id }; setDrag({ kind: 'terminal', id: t.id, featureId: f.id }) }}
                               onDragEnd={clearDrag}
-                              className={`relative group flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${drag?.kind === 'terminal' && drag.id === t.id ? 'opacity-40' : ''} ${
-                                active ? 'border-accent bg-accent-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
+                              className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors ${drag?.kind === 'terminal' && drag.id === t.id ? 'opacity-40' : ''} ${
+                                active ? 'bg-accent-sel text-fg-bright' : 'text-fg hover:bg-hover hover:text-fg-bright'}`}>
+                              {active && (
+                                <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
+                              )}
                               {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === ti && (
                                 <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
                               )}
@@ -357,7 +363,7 @@ export function Sidebar(props: {
                               )}
                               {busy[t.id] && liveAgents[t.id]
                                 ? <SpinnerIcon className="shrink-0 text-accent" />
-                                : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
+                                : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className={`shrink-0 ${active ? 'text-accent' : 'text-fg-muted'}`} />}
                               <ReviewStatusDot status={reviewStatus[t.id]} />
                               <AttentionDot state={attention[t.id]} />
                               {isEditing('terminal', t.id)
@@ -381,13 +387,13 @@ export function Sidebar(props: {
                   </div>
                   )
                 })}
-                <div className="px-2 pt-1 pb-0.5">
+                <div className="px-2 pt-1 pb-1">
                   <input
                     aria-label={`New feature in ${g.name}`} placeholder="+ Feature"
                     value={featureDraft[g.id] ?? ''}
                     onChange={(e) => setFeatureDraft((d) => ({ ...d, [g.id]: e.target.value }))}
                     onKeyDown={(e) => { if (e.key === 'Enter') submitFeature(g.id) }}
-                    className="w-full px-2 py-1.5 text-sm rounded-md bg-field text-fg placeholder-fg-muted outline-none focus:ring-1 focus:ring-accent transition"
+                    className="w-full rounded-md border border-dashed border-divider bg-transparent px-2 py-[3px] text-xs text-fg placeholder-fg-muted outline-none transition focus:border-solid focus:border-accent focus:bg-field"
                   />
                 </div>
               </div>
@@ -399,7 +405,7 @@ export function Sidebar(props: {
 
       <div className="p-2 border-t border-line">
         <button aria-label="New Project" onClick={onAddGroup}
-          className="w-full px-2 py-1.5 text-sm rounded-md bg-field text-fg-muted hover:text-accent outline-none transition">
+          className="w-full rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
           + New Project
         </button>
       </div>
