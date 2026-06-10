@@ -11,7 +11,7 @@ const groups: Group[] = [
     ], documents: [
       { id: 'd1', name: 'spec', path: '/docs/spec.md' },
       { id: 'd2', name: 'plan', path: '/docs/plan.md' }
-    ] },
+    ], files: [{ id: 'fp1', name: 'notes.md', path: '/p/notes.md' }] },
     { id: 'f2', name: 'ui', collapsed: true, terminals: [
       { id: 't2', name: 'dev', cwd: '/home/me/proj' }
     ] }
@@ -49,6 +49,11 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onArchiveFeature: noop,
     onOpenArchive: noop,
     onAddDocument: noop,
+    onSelectFile: noop,
+    onCloseFile: noop,
+    onRenameFilePane: noop,
+    onMoveFile: noop,
+    onOpenDocumentExternally: noop,
     onOpenDocument: noop,
     onRenameDocument: noop,
     onRemoveDocument: noop,
@@ -469,7 +474,7 @@ describe('Sidebar (3-level)', () => {
       const term = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
       expect(term.compareDocumentPosition(spec) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       await userEvent.click(screen.getByText('spec'))
-      await waitFor(() => expect(onOpenDocument).toHaveBeenCalledWith('/docs/spec.md'))
+      await waitFor(() => expect(onOpenDocument).toHaveBeenCalledWith('f1', '/docs/spec.md'))
     })
 
     it('a missing file renders broken and does not open', async () => {
@@ -598,6 +603,51 @@ describe('Sidebar (3-level)', () => {
     it('is visible with count 0 when nothing is archived', () => {
       renderSidebar()
       expect(screen.getByLabelText('Archive of proj')).toHaveTextContent('Archive (0)')
+    })
+  })
+
+  describe('file pane rows', () => {
+    it('renders file rows between terminals and documents; click selects', async () => {
+      const onSelectFile = vi.fn()
+      renderSidebar({ onSelectFile })
+      const row = screen.getByText('notes.md').closest('[data-file-id]') as HTMLElement
+      const term = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
+      const doc = screen.getByText('spec').closest('[data-doc-id]') as HTMLElement
+      expect(term.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(row.compareDocumentPosition(doc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      await userEvent.click(screen.getByText('notes.md'))
+      expect(onSelectFile).toHaveBeenCalledWith('fp1')
+    })
+
+    it('hover X closes; double-click renames via onRenameFilePane', async () => {
+      const onCloseFile = vi.fn(); const onRenameFilePane = vi.fn()
+      renderSidebar({ onCloseFile, onRenameFilePane })
+      await userEvent.click(screen.getByLabelText('Close file notes.md'))
+      expect(onCloseFile).toHaveBeenCalledWith('fp1')
+      await userEvent.dblClick(screen.getByText('notes.md'))
+      const input = screen.getByLabelText('Rename file notes.md')
+      await userEvent.clear(input)
+      await userEvent.type(input, 'Notes{Enter}')
+      expect(onRenameFilePane).toHaveBeenCalledWith('fp1', 'Notes')
+    })
+
+    it('marks the active file row with the accent state', () => {
+      const { container } = renderSidebar({ activeTerminalId: 'fp1' })
+      const row = container.querySelector('[data-file-id="fp1"]') as HTMLElement
+      expect(row.className).toContain('bg-accent-sel')
+    })
+  })
+
+  describe('document row context menu', () => {
+    it('right-click offers Open externally and Remove', async () => {
+      const onOpenDocumentExternally = vi.fn(); const onRemoveDocument = vi.fn()
+      renderSidebar({ onOpenDocumentExternally, onRemoveDocument })
+      fireEvent.contextMenu(screen.getByText('spec'))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Open externally' }))
+      expect(onOpenDocumentExternally).toHaveBeenCalledWith('/docs/spec.md')
+      fireEvent.contextMenu(screen.getByText('spec'))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
+      expect(onRemoveDocument).toHaveBeenCalledWith('f1', 'd1')
     })
   })
 })

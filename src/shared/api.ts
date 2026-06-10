@@ -2,6 +2,7 @@ import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
 import type { ReviewPhase } from './types'
 import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from './exportTypes'
+import type { FileLoadResult } from './files'
 
 export interface BrainApi {
   loadWorkspace(): Promise<Workspace>
@@ -45,4 +46,11 @@ export interface BrainApi {
   // Pick an exported zip, extract it under userData/imports/, return the manifest.
   importArchive(): Promise<ImportRunResult>
   pathsExist(paths: string[]): Promise<boolean[]>
+  // In-app file panes. loadFile classifies the path (text/image/binary/…);
+  // saveFile writes editor content back. readTextFile (fs:read) stays separate —
+  // the review loop depends on it; do not merge the two surfaces.
+  loadFile(path: string): Promise<FileLoadResult>
+  saveFile(path: string, content: string): Promise<{ ok: true } | { ok: false; error: string }>
+  // http(s) links from rendered markdown — openPath only handles filesystem paths.
+  openExternal(url: string): void
 }

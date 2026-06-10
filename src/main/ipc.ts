@@ -9,6 +9,7 @@ import type { Workspace, ReviewPhase } from '@shared/types'
 import { AGENT_IDLE_MS, type PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { pathsExist } from './pathsExist'
+import { loadFile, saveFile } from './fileLoad'
 import { createReviewWatcher } from './reviewWatcher'
 import { createNotifier } from './notifications'
 import { resolveTranscript } from './transcript'
@@ -120,6 +121,14 @@ export function registerIpc(opts: {
   // Returns null on any error (missing/unreadable) — the caller treats that as "no content".
   ipcMain.handle(IPC.fsRead, async (_e, p: { path: string }) => {
     try { return await fsp.readFile(p.path, 'utf8') } catch { return null }
+  })
+
+  // In-app file panes: classify + load a file, and write editor content back.
+  ipcMain.handle(IPC.fileLoad, (_e, p: { path: string }) => loadFile(p.path))
+  ipcMain.handle(IPC.fileSave, (_e, p: { path: string; content: string }) => saveFile(p.path, p.content))
+  // Rendered-markdown links are http(s) URLs — shell.openPath can't open those.
+  ipcMain.on(IPC.shellOpenExternal, (_e, p: { url: string }) => {
+    if (/^https?:\/\//i.test(p?.url ?? '')) void shell.openExternal(p.url)
   })
 
   const reviewWatcher = createReviewWatcher((watchId) => send(IPC.fsChanged, { watchId }))

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon, ClaudeIcon, CodexIcon, ShellIcon, DocIcon, ArchiveIcon } from './icons'
+import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon, ClaudeIcon, CodexIcon, ShellIcon, DocIcon, ArchiveIcon, FileCodeIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
@@ -10,7 +10,7 @@ import { AttentionDot } from './AttentionDot'
 import { AttentionBell, type AttentionBellItem } from './AttentionBell'
 import type { AttentionState } from '../attention/detect'
 
-type RenameKind = 'group' | 'feature' | 'terminal' | 'doc'
+type RenameKind = 'group' | 'feature' | 'terminal' | 'doc' | 'file'
 
 // A drag in progress: which kind of row, plus the container it reorders within
 // (group → workspace, feature → its group, terminal → its feature). Cross-
@@ -19,10 +19,12 @@ type Drag =
   | { kind: 'group'; id: string }
   | { kind: 'feature'; id: string; groupId: string }
   | { kind: 'terminal'; id: string; featureId: string }
+  | { kind: 'file'; id: string; featureId: string }
 type DropAt =
   | { kind: 'group'; index: number }
   | { kind: 'feature'; groupId: string; index: number }
   | { kind: 'terminal'; featureId: string; index: number }
+  | { kind: 'file'; featureId: string; index: number }
 
 // Insertion point (0..n) among rows with vertical midpoints `midpoints` for a
 // cursor at `cursorY`: the first row the cursor sits above, else past the end.
@@ -57,6 +59,10 @@ function insertionFor(root: Element, d: Drag, y: number): DropAt | null {
   if (d.kind === 'feature') {
     const c = root.querySelector(`[data-group-features="${CSS.escape(d.groupId)}"]`)
     return c ? { kind: 'feature', groupId: d.groupId, index: insertionFromMidpoints(rowMidpoints(c, '[data-feature-id]'), y) } : null
+  }
+  if (d.kind === 'file') {
+    const c = root.querySelector(`[data-feature-files="${CSS.escape(d.featureId)}"]`)
+    return c ? { kind: 'file', featureId: d.featureId, index: insertionFromMidpoints(rowMidpoints(c, '[data-file-id]'), y) } : null
   }
   const c = root.querySelector(`[data-feature-terminals="${CSS.escape(d.featureId)}"]`)
   return c ? { kind: 'terminal', featureId: d.featureId, index: insertionFromMidpoints(rowMidpoints(c, '[data-term-id]'), y) } : null
@@ -106,7 +112,12 @@ export function Sidebar(props: {
   onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
   pendingRenameTerminalId?: string | null
   onPendingRenameConsumed?: () => void
-  onOpenDocument: (path: string) => void
+  onSelectFile: (paneId: string) => void
+  onCloseFile: (paneId: string) => void
+  onRenameFilePane: (paneId: string, name: string) => void
+  onMoveFile: (paneId: string, toIndex: number) => void
+  onOpenDocumentExternally: (path: string) => void
+  onOpenDocument: (featureId: string, path: string) => void
   onRenameDocument: (featureId: string, docId: string, name: string) => void
   onRemoveDocument: (featureId: string, docId: string) => void
   docExists: Record<string, boolean | undefined>
@@ -126,6 +137,7 @@ export function Sidebar(props: {
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onArchiveFeature, onOpenArchive, onAddDocument, onOpenInFiles,
     onExportGroup, onExportFeature, onImport,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
+    onSelectFile, onCloseFile, onRenameFilePane, onMoveFile, onOpenDocumentExternally,
     onOpenDocument, onRenameDocument, onRemoveDocument, docExists, pendingRenameDocId, onPendingRenameDocConsumed,
     attention, attentionItems, attentionMuted, onAttentionSelect, onAttentionClear, onAttentionClearAll, onToggleAttentionMute
   } = props
@@ -133,6 +145,7 @@ export function Sidebar(props: {
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; terminalId: string } | null>(null)
   const [featMenu, setFeatMenu] = useState<{ x: number; y: number; featureId: string } | null>(null)
+  const [docMenu, setDocMenu] = useState<{ x: number; y: number; featureId: string; docId: string; path: string } | null>(null)
 
   // Drag-and-drop reorder for projects, features, and terminals — each within its
   // own container only. The whole row is draggable. The active drag lives in a ref
@@ -175,6 +188,7 @@ export function Sidebar(props: {
     if (name) {
       if (editing.kind === 'group') onRenameGroup(editing.id, name)
       else if (editing.kind === 'feature') onRenameFeature(editing.id, name)
+      else if (editing.kind === 'file') onRenameFilePane(editing.id, name)
       else if (editing.kind === 'doc') {
         const f = groups.flatMap((g) => g.features).find((f) => (f.documents ?? []).some((d) => d.id === editing.id))
         if (f) onRenameDocument(f.id, editing.id, name)
@@ -269,6 +283,10 @@ export function Sidebar(props: {
           const from = groups.flatMap((x) => x.features).find((x) => x.id === d.featureId)?.terminals.findIndex((x) => x.id === d.id) ?? -1
           const to = reorderToIndex(at.index, from)
           if (from !== -1 && to !== from) onMoveTerminal(d.id, to)
+        } else if (at?.kind === 'file' && d.kind === 'file') {
+          const from = groups.flatMap((x) => x.features).find((x) => x.id === d.featureId)?.files?.findIndex((x) => x.id === d.id) ?? -1
+          const to = reorderToIndex(at.index, from)
+          if (from !== -1 && to !== from) onMoveFile(d.id, to)
         }
         clearDrag()
       }}
@@ -414,13 +432,53 @@ export function Sidebar(props: {
                             )
                           })}
                         </div>
+                        {(f.files ?? []).length > 0 && (
+                          <div className="ml-[18px] border-l border-divider pl-0.5" data-feature-files={f.id}>
+                            {(f.files ?? []).map((p, pi) => {
+                              const fActive = p.id === activeTerminalId
+                              return (
+                                <div key={p.id} data-file-id={p.id}
+                                  onClick={() => onSelectFile(p.id)}
+                                  draggable={!isEditing('file', p.id)}
+                                  onDragStart={(e) => { e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'file', id: p.id, featureId: f.id }; setDrag({ kind: 'file', id: p.id, featureId: f.id }) }}
+                                  onDragEnd={clearDrag}
+                                  title={p.path}
+                                  className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors ${drag?.kind === 'file' && drag.id === p.id ? 'opacity-40' : ''} ${
+                                    fActive ? 'bg-accent-sel text-fg-bright' : 'text-fg hover:bg-hover hover:text-fg-bright'}`}>
+                                  {fActive && <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />}
+                                  {dropAt?.kind === 'file' && dropAt.featureId === f.id && dropAt.index === pi && (
+                                    <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
+                                  )}
+                                  {dropAt?.kind === 'file' && dropAt.featureId === f.id && dropAt.index === (f.files ?? []).length && pi === (f.files ?? []).length - 1 && (
+                                    <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
+                                  )}
+                                  <FileCodeIcon className={`shrink-0 ${fActive ? 'text-accent' : 'text-fg-muted'}`} />
+                                  {isEditing('file', p.id)
+                                    ? renameInput(`Rename file ${p.name}`)
+                                    : (
+                                      <span className="flex-1 truncate"
+                                        onDoubleClick={(e) => { e.stopPropagation(); startRename('file', p.id, p.name) }}>
+                                        {p.name}
+                                      </span>
+                                    )}
+                                  {!isEditing('file', p.id) && (
+                                    <button aria-label={`Close file ${p.name}`} title="Close file"
+                                      onClick={(e) => { e.stopPropagation(); onCloseFile(p.id) }}
+                                      className={`${hoverBtn} text-base leading-none hover:text-danger`}>×</button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                         {(f.documents ?? []).length > 0 && (
                           <div className="ml-[18px] border-l border-divider pl-0.5">
                             {(f.documents ?? []).map((d) => {
                               const broken = docExists[d.path] === false
                               return (
                                 <div key={d.id} data-doc-id={d.id}
-                                  onClick={() => { if (!broken) onNameClick(() => onOpenDocument(d.path)) }}
+                                  onClick={() => { if (!broken) onNameClick(() => onOpenDocument(f.id, d.path)) }}
+                                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDocMenu({ x: e.clientX, y: e.clientY, featureId: f.id, docId: d.id, path: d.path }) }}
                                   title={broken ? `${d.path} (missing)` : d.path}
                                   className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors hover:bg-hover ${broken ? 'text-fg-muted line-through' : 'text-fg hover:text-fg-bright'}`}>
                                   <DocIcon className="shrink-0 text-fg-muted" />
@@ -498,6 +556,13 @@ export function Sidebar(props: {
         <ContextMenu x={termMenu.x} y={termMenu.y} onClose={() => setTermMenu(null)} items={[
           { label: 'Review', onSelect: () => onReviewTerminal(termMenu.terminalId, 'codex') },
           { label: 'Delete', onSelect: () => onDeleteTerminal(termMenu.terminalId) }
+        ]} />
+      )}
+
+      {docMenu && (
+        <ContextMenu x={docMenu.x} y={docMenu.y} onClose={() => setDocMenu(null)} items={[
+          { label: 'Open externally', onSelect: () => onOpenDocumentExternally(docMenu.path) },
+          { label: 'Remove', onSelect: () => onRemoveDocument(docMenu.featureId, docMenu.docId) }
         ]} />
       )}
 
