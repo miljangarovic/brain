@@ -4,7 +4,7 @@ import * as os from 'os'
 import { IPC } from '@shared/ipc'
 import { PtyManager } from './ptyManager'
 import { createBusyTracker } from './busyTracker'
-import { loadWorkspace, createDebouncedSaver } from './persistence'
+import { createDebouncedSaver } from './persistence'
 import type { Workspace, ReviewPhase } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
@@ -43,7 +43,9 @@ export function registerIpc(opts: {
   ptyManager.onData((id, data) => { send(IPC.ptyData, { id, data }); busy.touch(id) })
   ptyManager.onExit((id, code) => { send(IPC.ptyExit, { id, code }); busy.end(id) })
 
-  ipcMain.handle(IPC.workspaceLoad, () => loadWorkspace(workspacePath))
+  // loadLatest flushes any pending debounced save first, so a renderer reload
+  // inside the debounce window can't read (and then re-persist) stale state.
+  ipcMain.handle(IPC.workspaceLoad, () => saver.loadLatest())
   ipcMain.on(IPC.workspaceSave, (_e, ws: Workspace) => saver.save(ws))
   ipcMain.on(IPC.ptyCreate, (_e, o: PtyCreateOptions) => ptyManager.create(o))
   ipcMain.on(IPC.ptyInput, (_e, p: { id: string; data: string }) => { ptyManager.write(p.id, p.data); busy.input(p.id) })

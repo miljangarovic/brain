@@ -28,6 +28,7 @@ export default function App() {
   const { state, setState, apply } = useStore()
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [confirm, setConfirm] = useState<{ message: string; action: () => void } | null>(null)
   const askDelete = (message: string, action: () => void) => setConfirm({ message, action })
   // Id of a just-added shell terminal whose rename input the sidebar should auto-open.
@@ -95,6 +96,11 @@ export default function App() {
       )
       setState(initial)
       setLoaded(true)
+    }).catch((err) => {
+      // `loaded` stays false, keeping the save effect gated off — a failed load
+      // must never let an empty in-memory workspace overwrite the file on disk.
+      console.error('[orchestrix] failed to load workspace:', err)
+      setLoadError(true)
     })
   }, [setState])
 
@@ -287,7 +293,11 @@ export default function App() {
           {featureVisible.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
               <span className="text-2xl font-semibold tracking-tight text-fg">Brain</span>
-              <span className="text-sm">{activeGroup ? 'Add a terminal or open one from the sidebar.' : 'Create a project to get started.'}</span>
+              <span className="text-sm">
+                {loadError
+                  ? 'Workspace failed to load — saving is disabled to protect your data. Restart the app to retry.'
+                  : activeGroup ? 'Add a terminal or open one from the sidebar.' : 'Create a project to get started.'}
+              </span>
             </div>
           )}
           {terminals.map((t) => {
