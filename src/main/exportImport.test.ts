@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import AdmZip from 'adm-zip'
-import { promises as fsp } from 'fs'
+import { promises as fsp, mkdtempSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Group } from '@shared/types'
@@ -40,6 +40,19 @@ describe('collectAgentSessions', () => {
   it('feature scope collects from the single feature', () => {
     const refs = collectAgentSessions({ scope: 'feature', group: { name: 'My Proj', cwd: '/home/me/proj' }, feature: group.features[0] })
     expect(refs).toHaveLength(2)
+  })
+  it('group scope also collects sessions from archived features', () => {
+    const withArchive: Group = {
+      ...group,
+      archivedFeatures: [
+        { id: 'fa', name: 'Old Flow', collapsed: false, terminals: [
+          { id: 'cccc3333-0000-0000-0000-000000000000', name: 'claude', cwd: '/home/me/proj', kind: 'claude', sessionId: 'cs-old' }
+        ] }
+      ]
+    }
+    const refs = collectAgentSessions({ scope: 'group', group: withArchive })
+    expect(refs.map((r) => r.sessionId)).toEqual(['cs-1', 'cx-1', 'cs-old'])
+    expect(refs[2].featureName).toBe('Old Flow')
   })
 })
 
@@ -183,5 +196,26 @@ describe('extractImportArchive', () => {
     await fsp.writeFile(p, 'plain text')
     expect(await extractImportArchive(p, tmpDir())).toEqual({ error: 'Not a readable zip archive' })
     await fsp.rm(p, { force: true })
+  })
+})
+
+describe('manifest round-trips archive + documents', () => {
+  it('archivedFeatures and documents survive export → import extraction', async () => {
+    const withExtras: Group = {
+      ...group,
+      features: [{ ...group.features[0], documents: [{ id: 'd1', name: 'spec', path: '/docs/spec.md' }] }],
+      archivedFeatures: [{ id: 'fa', name: 'Old Flow', collapsed: false, terminals: [] }]
+    }
+    const out = tmpZip()
+    await runExport({
+      input: { scope: 'group', group: withExtras },
+      outPath: out,
+      summarize: async () => ({ ok: true, markdown: '# s' })
+    })
+    const res = await extractImportArchive(out, mkdtempSync(join(tmpdir(), 'brain-import-')))
+    if ('error' in res) throw new Error(res.error)
+    const g = (res.manifest as { group: Group }).group
+    expect(g.archivedFeatures![0].name).toBe('Old Flow')
+    expect(g.features[0].documents![0]).toMatchObject({ name: 'spec', path: '/docs/spec.md' })
   })
 })
