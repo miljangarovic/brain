@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ExportToast } from './ExportToast'
+import type { ExportProgress, ExportSessionState } from '@shared/exportTypes'
+
+const prog = (done: number, total: number, states: ExportSessionState[]): ExportProgress => ({
+  done, total,
+  items: states.map((state, i) => ({ label: `feat/term${i}`, state }))
+})
 
 describe('ExportToast', () => {
   it('renders nothing when idle', () => {
@@ -9,9 +15,18 @@ describe('ExportToast', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('shows summarization progress', () => {
-    render(<ExportToast progress={{ done: 1, total: 3, current: 'auth/claude' }} notice={null} onDismiss={() => {}} />)
-    expect(screen.getByRole('status')).toHaveTextContent('Summarizing sessions 1/3 — auth/claude')
+  it('shows percentage, counts and the per-session list', () => {
+    render(<ExportToast progress={prog(2, 5, ['done', 'done', 'running', 'pending', 'error'])} notice={null} onDismiss={() => {}} />)
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('Exporting — 40%')
+    expect(status).toHaveTextContent('2/5')
+    expect(screen.getAllByRole('listitem')).toHaveLength(5)
+    expect(status).toHaveTextContent('feat/term3')
+  })
+
+  it('shows a writing-archive line when there are no sessions', () => {
+    render(<ExportToast progress={prog(0, 0, [])} notice={null} onDismiss={() => {}} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Writing archive…')
   })
 
   it('shows a dismissible notice when done', async () => {
@@ -23,8 +38,8 @@ describe('ExportToast', () => {
   })
 
   it('progress wins over a stale notice', () => {
-    render(<ExportToast progress={{ done: 0, total: 2, current: '' }} notice="old" onDismiss={() => {}} />)
-    expect(screen.getByRole('status')).toHaveTextContent('Summarizing sessions 0/2')
+    render(<ExportToast progress={prog(0, 2, ['running', 'pending'])} notice="old" onDismiss={() => {}} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Exporting — 0%')
     expect(screen.queryByText('old')).not.toBeInTheDocument()
   })
 })

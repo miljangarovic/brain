@@ -28,7 +28,15 @@ interface ManifestCommon {
 
 export type ExportManifest = ManifestCommon & ExportScopeInput
 
-export interface ExportProgress { done: number; total: number; current: string /* "feature/terminal" label */ }
+export type ExportSessionState = 'pending' | 'running' | 'done' | 'error'
+
+export interface ExportProgress {
+  done: number
+  total: number
+  // One entry per agent session, stable order. Every event is a complete,
+  // self-contained snapshot — the renderer just renders the latest one.
+  items: { label: string; state: ExportSessionState }[]
+}
 
 export interface ExportRunResult {
   ok: boolean          // false + canceled: user closed the dialog; false alone: export failed (warnings carry why)

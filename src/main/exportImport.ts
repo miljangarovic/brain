@@ -4,7 +4,7 @@ import { join } from 'path'
 import type { Feature } from '@shared/types'
 import {
   EXPORT_FORMAT, EXPORT_VERSION,
-  type AgentSessionKind, type ExportManifest, type ExportProgress, type ExportScopeInput, type SessionEntry
+  type AgentSessionKind, type ExportManifest, type ExportProgress, type ExportScopeInput, type ExportSessionState, type SessionEntry
 } from '@shared/exportTypes'
 import { mapWithLimit, SUMMARY_CONCURRENCY, type SummaryResult } from './sessionSummary'
 
@@ -51,9 +51,19 @@ export async function runExport(opts: {
   const refs = collectAgentSessions(input)
   const sessions: Record<string, SessionEntry> = {}
   const files: { name: string; content: string }[] = []
+  // Progress is reported as full snapshots: every transition re-emits the whole
+  // list as fresh copies, so a late or dropped event can never corrupt the view.
+  const states: ExportSessionState[] = refs.map(() => 'pending')
   let done = 0
-  onProgress?.({ done, total: refs.length, current: '' })
-  await mapWithLimit(refs, SUMMARY_CONCURRENCY, async (ref) => {
+  const snapshot = (): ExportProgress => ({
+    done,
+    total: refs.length,
+    items: refs.map((r, i) => ({ label: `${r.featureName}/${r.terminalName}`, state: states[i] }))
+  })
+  onProgress?.(snapshot())
+  await mapWithLimit(refs, SUMMARY_CONCURRENCY, async (ref, i) => {
+    states[i] = 'running'
+    onProgress?.(snapshot())
     const res = await summarize(ref)
     if (res.ok) {
       const file = sessionFileName(ref.featureName, ref.terminalName, ref.terminalId)
@@ -62,8 +72,9 @@ export async function runExport(opts: {
     } else {
       sessions[ref.terminalId] = { kind: ref.kind, error: res.error }
     }
+    states[i] = res.ok ? 'done' : 'error'
     done++
-    onProgress?.({ done, total: refs.length, current: `${ref.featureName}/${ref.terminalName}` })
+    onProgress?.(snapshot())
   })
 
   const common = {

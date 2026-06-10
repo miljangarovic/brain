@@ -5,7 +5,7 @@ import { promises as fsp } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Group } from '@shared/types'
-import type { ExportManifest } from '@shared/exportTypes'
+import type { ExportManifest, ExportProgress } from '@shared/exportTypes'
 import { slugify, sessionFileName, collectAgentSessions, runExport, validateManifest, extractImportArchive } from './exportImport'
 
 const tmpZip = () => join(tmpdir(), `brain-export-test-${Math.random().toString(36).slice(2)}.zip`)
@@ -46,18 +46,28 @@ describe('collectAgentSessions', () => {
 describe('runExport', () => {
   it('writes a zip with manifest + one md per successful summary; failures become warnings', async () => {
     const out = tmpZip()
-    const progress: { done: number; total: number }[] = []
+    const progress: ExportProgress[] = []
     const { warnings } = await runExport({
       input: { scope: 'group', group },
       outPath: out,
       summarize: async (ref) => ref.kind === 'claude'
         ? { ok: true, markdown: '# Claude summary' }
         : { ok: false, error: 'summarization timed out' },
-      onProgress: (p) => progress.push({ done: p.done, total: p.total })
+      onProgress: (p) => progress.push(p)
     })
     expect(warnings).toEqual(['Auth Flow/codex: summarization timed out'])
-    expect(progress[0]).toEqual({ done: 0, total: 2 })
-    expect(progress.at(-1)).toEqual({ done: 2, total: 2 })
+    expect(progress[0]).toEqual({ done: 0, total: 2, items: [
+      { label: 'Auth Flow/claude', state: 'pending' },
+      { label: 'Auth Flow/codex', state: 'pending' }
+    ] })
+    expect(progress.at(-1)).toEqual({ done: 2, total: 2, items: [
+      { label: 'Auth Flow/claude', state: 'done' },
+      { label: 'Auth Flow/codex', state: 'error' }
+    ] })
+    // a running state was visible at some point, and snapshots are independent
+    // copies — the first one must still be all-pending after the run finished
+    expect(progress.some((p) => p.items.some((i) => i.state === 'running'))).toBe(true)
+    expect(progress[0].items.every((i) => i.state === 'pending')).toBe(true)
 
     const zip = new AdmZip(out)
     const manifest = JSON.parse(zip.getEntry('manifest.json')!.getData().toString('utf8')) as ExportManifest
