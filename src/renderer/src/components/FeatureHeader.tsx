@@ -1,5 +1,5 @@
 import type { GridStyle } from '@shared/types'
-import { GridIcon, LayoutBigLeftIcon, LayoutBigRightIcon, LayoutRowsIcon, LayoutColsIcon } from './icons'
+import { GridIcon, LayoutBigLeftIcon, LayoutBigRightIcon, LayoutBigTopIcon, LayoutBigBottomIcon, LayoutRowsIcon, LayoutColsIcon } from './icons'
 import { AddMenuButton, type AddKind } from './AddMenuButton'
 
 export interface ReviewControl {
@@ -12,6 +12,8 @@ export interface ReviewControl {
 const GRID_STYLES: { style: GridStyle; label: string; Icon: typeof LayoutBigLeftIcon }[] = [
   { style: 'auto-left', label: 'Big pane left', Icon: LayoutBigLeftIcon },
   { style: 'auto', label: 'Big pane right', Icon: LayoutBigRightIcon },
+  { style: 'auto-top', label: 'Big pane top', Icon: LayoutBigTopIcon },
+  { style: 'auto-bottom', label: 'Big pane bottom', Icon: LayoutBigBottomIcon },
   { style: 'rows', label: 'Stack vertically', Icon: LayoutRowsIcon },
   { style: 'cols', label: 'Side by side', Icon: LayoutColsIcon }
 ]

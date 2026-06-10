@@ -224,9 +224,9 @@ export default function App() {
   // which also stays the tab bar's list).
   const paneSet = paneTerminals(activeFeature?.terminals ?? [], state.hidden, gridMode)
   const featureTerminalIds = new Set(paneSet.map((t) => t.id))
-  const { cols, rows, lastSpan, spanFirst } = styledGridLayout(paneSet.length, activeFeature?.gridStyle ?? 'auto')
-  // Column-major fill leaves any gap in one column; the spanning pane stretches
-  // over it — the first pane (big-left) or the last (big-right), per gridStyle.
+  const { cols, rows, lastSpan, spanFirst, flow: gridFlow } = styledGridLayout(paneSet.length, activeFeature?.gridStyle ?? 'auto')
+  // Auto-fill leaves any gap in one column (column flow) or one row (row flow);
+  // the spanning pane stretches over it — first or last pane, per gridStyle.
   const spanTerminalId = spanFirst ? paneSet[0]?.id : paneSet[paneSet.length - 1]?.id
 
   return (
@@ -314,7 +314,7 @@ export default function App() {
 
         <div
           className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-2 p-2 bg-panel' : ''}`}
-          style={gridMode ? { gridAutoFlow: 'column', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
+          style={gridMode ? { gridAutoFlow: gridFlow, gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
         >
           {paneSet.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
@@ -365,7 +365,8 @@ export default function App() {
                 terminal={t}
                 active={isActive}
                 gridded={griddedHere}
-                gridRowSpan={griddedHere && t.id === spanTerminalId ? lastSpan : undefined}
+                gridRowSpan={griddedHere && gridFlow === 'column' && t.id === spanTerminalId ? lastSpan : undefined}
+                gridColSpan={griddedHere && gridFlow === 'row' && t.id === spanTerminalId ? lastSpan : undefined}
                 visibleInTabs={inFeature && !gridMode && isActive}
                 busy={!!busy[t.id]}
                 liveAgent={liveAgents[t.id]}

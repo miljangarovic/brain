@@ -37,9 +37,10 @@ export interface Terminal {
 
 // How the grid arranges a feature's panes: 'auto' = balanced grid, odd counts
 // give the LAST terminal a full-height pane on the right; 'auto-left' mirrors
-// that (big pane left, on the FIRST terminal); 'rows' stacks panes one below
-// another; 'cols' puts them side by side.
-export type GridStyle = 'auto' | 'auto-left' | 'rows' | 'cols'
+// that (big pane left, on the FIRST terminal); 'auto-top'/'auto-bottom' are the
+// transposed variants (full-WIDTH pane above or below the rest); 'rows' stacks
+// panes one below another; 'cols' puts them side by side.
+export type GridStyle = 'auto' | 'auto-left' | 'auto-top' | 'auto-bottom' | 'rows' | 'cols'
 
 export interface Feature {
   id: string

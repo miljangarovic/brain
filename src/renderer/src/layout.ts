@@ -44,17 +44,26 @@ export function paneTerminals<T extends { id: string }>(terminals: T[], hidden: 
   return gridMode ? terminals : terminals.filter((t) => !hidden.includes(t.id))
 }
 
-// gridLayout shaped by the feature's GridStyle. `spanFirst` says which pane
-// gets the `lastSpan` gap-filler: the FIRST one ('auto-left' — under
-// column-major flow it spans the whole first, leftmost column) or the LAST one
-// ('auto' — big pane bottom-right). 'rows'/'cols' are plain strips, no spanning.
+// gridLayout shaped by the feature's GridStyle. `flow` is the CSS
+// grid-auto-flow: 'column' styles span ROWS (the big pane is a full column,
+// left or right), 'row' styles transpose the geometry and span COLUMNS (the
+// big pane is a full-width row, top or bottom). `spanFirst` says which pane
+// gets the `lastSpan` gap-filler: the FIRST ('auto-left'/'auto-top') or the
+// LAST ('auto'/'auto-bottom'). 'rows'/'cols' are plain strips, no spanning.
 export function styledGridLayout(
   n: number,
   style: GridStyle
-): { cols: number; rows: number; lastSpan: number; spanFirst: boolean } {
+): { cols: number; rows: number; lastSpan: number; spanFirst: boolean; flow: 'column' | 'row' } {
   const count = Math.max(1, n)
-  if (style === 'rows') return { cols: 1, rows: count, lastSpan: 1, spanFirst: false }
-  if (style === 'cols') return { cols: count, rows: 1, lastSpan: 1, spanFirst: false }
+  if (style === 'rows') return { cols: 1, rows: count, lastSpan: 1, spanFirst: false, flow: 'column' }
+  if (style === 'cols') return { cols: count, rows: 1, lastSpan: 1, spanFirst: false, flow: 'column' }
   const base = gridLayout(count)
-  return { ...base, spanFirst: style === 'auto-left' && base.lastSpan > 1 }
+  if (style === 'auto-top' || style === 'auto-bottom') {
+    return {
+      cols: base.rows, rows: base.cols, lastSpan: base.lastSpan,
+      spanFirst: style === 'auto-top' && base.lastSpan > 1,
+      flow: 'row'
+    }
+  }
+  return { ...base, spanFirst: style === 'auto-left' && base.lastSpan > 1, flow: 'column' }
 }

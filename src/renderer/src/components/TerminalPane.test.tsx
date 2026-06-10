@@ -104,4 +104,11 @@ describe('TerminalPane', () => {
     expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
     expect(screen.queryByText(/click to start/i)).not.toBeInTheDocument()
   })
+
+  it('spans rows or columns per the grid style', () => {
+    const { container, rerender } = render(<TerminalPane {...base} gridded gridRowSpan={2} />)
+    expect((container.firstChild as HTMLElement).style.gridRow).toBe('span 2')
+    rerender(<TerminalPane {...base} gridded gridColSpan={3} />)
+    expect((container.firstChild as HTMLElement).style.gridColumn).toBe('span 3')
+  })
 })

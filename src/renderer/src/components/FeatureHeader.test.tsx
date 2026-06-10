@@ -29,6 +29,8 @@ describe('FeatureHeader', () => {
     rerender(<FeatureHeader {...base} viewMode="grid" review={noReview} />)
     expect(screen.getByRole('button', { name: 'Big pane left' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Big pane right' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Big pane top' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Big pane bottom' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Stack vertically' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Side by side' })).toBeInTheDocument()
   })
@@ -40,6 +42,10 @@ describe('FeatureHeader', () => {
     expect(onSetGridStyle).toHaveBeenCalledWith('rows')
     fireEvent.click(screen.getByRole('button', { name: 'Big pane left' }))
     expect(onSetGridStyle).toHaveBeenCalledWith('auto-left')
+    fireEvent.click(screen.getByRole('button', { name: 'Big pane top' }))
+    expect(onSetGridStyle).toHaveBeenCalledWith('auto-top')
+    fireEvent.click(screen.getByRole('button', { name: 'Big pane bottom' }))
+    expect(onSetGridStyle).toHaveBeenCalledWith('auto-bottom')
   })
 
   it('marks the active layout option as pressed', () => {

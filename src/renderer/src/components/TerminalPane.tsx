@@ -27,12 +27,13 @@ export interface PaneDnd {
 }
 
 export function TerminalPane({
-  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume, started, onStart
+  terminal, active, gridded, gridRowSpan, gridColSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume, started, onStart
 }: {
   terminal: Terminal
   active: boolean
   gridded: boolean          // shown as a grid cell (grid mode + in the active feature)
-  gridRowSpan?: number      // rows this pane spans in column-major grid (>1 fills the odd-count gap)
+  gridRowSpan?: number      // rows this pane spans (column-flow styles: big pane left/right)
+  gridColSpan?: number      // columns this pane spans (row-flow styles: big pane top/bottom)
   visibleInTabs: boolean    // shown in tabs mode (active, in feature, not gridded)
   busy: boolean
   liveAgent: 'claude' | 'codex' | undefined
@@ -46,7 +47,8 @@ export function TerminalPane({
   const gridStyle = gridded
     ? {
         ...(active ? { boxShadow: ACTIVE_PANE_SHADOW } : {}),
-        ...(gridRowSpan && gridRowSpan > 1 ? { gridRow: `span ${gridRowSpan}` } : {})
+        ...(gridRowSpan && gridRowSpan > 1 ? { gridRow: `span ${gridRowSpan}` } : {}),
+        ...(gridColSpan && gridColSpan > 1 ? { gridColumn: `span ${gridColSpan}` } : {})
       }
     : { display: visibleInTabs ? 'block' : 'none' }
   return (
