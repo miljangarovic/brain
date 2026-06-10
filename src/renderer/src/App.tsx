@@ -5,7 +5,7 @@ import { removedIds, pruneRecord } from './ptyReaper'
 import { shouldSpawn } from './spawnGate'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
-  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
+  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview
@@ -16,7 +16,7 @@ import { createId } from '@shared/id'
 import { AGENTS, detectAgent, agentLaunchCommand, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
-import { gridLayout, paneTerminals } from './layout'
+import { styledGridLayout, paneTerminals } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { FeatureHeader } from './components/FeatureHeader'
@@ -224,10 +224,10 @@ export default function App() {
   // which also stays the tab bar's list).
   const paneSet = paneTerminals(activeFeature?.terminals ?? [], state.hidden, gridMode)
   const featureTerminalIds = new Set(paneSet.map((t) => t.id))
-  const { cols, rows, lastSpan } = gridLayout(paneSet.length)
-  // Column-major fill leaves any gap at the bottom of the last column, so the last
-  // pane stretches over it to keep the rightmost column full height (odd counts).
-  const lastFeatureTerminalId = paneSet[paneSet.length - 1]?.id
+  const { cols, rows, lastSpan, spanFirst } = styledGridLayout(paneSet.length, activeFeature?.gridStyle ?? 'auto')
+  // Column-major fill leaves any gap in one column; the spanning pane stretches
+  // over it — the first pane (big-left) or the last (big-right), per gridStyle.
+  const spanTerminalId = spanFirst ? paneSet[0]?.id : paneSet[paneSet.length - 1]?.id
 
   return (
     <div className="flex h-screen text-fg bg-panel">
@@ -297,6 +297,8 @@ export default function App() {
             onMoreRounds={(rid) => void review.moreRounds(rid)}
             onAcceptPhase={(rid) => review.acceptPhase(rid)}
             onStopLoop={(rid) => review.stopLoop(rid)}
+            gridStyle={activeFeature.gridStyle ?? 'auto'}
+            onSetGridStyle={(gs) => apply((s) => setFeatureGridStyle(s, activeFeature.id, gs))}
           />
         )}
         <TabBar
@@ -363,7 +365,7 @@ export default function App() {
                 terminal={t}
                 active={isActive}
                 gridded={griddedHere}
-                gridRowSpan={griddedHere && t.id === lastFeatureTerminalId ? lastSpan : undefined}
+                gridRowSpan={griddedHere && t.id === spanTerminalId ? lastSpan : undefined}
                 visibleInTabs={inFeature && !gridMode && isActive}
                 busy={!!busy[t.id]}
                 liveAgent={liveAgents[t.id]}

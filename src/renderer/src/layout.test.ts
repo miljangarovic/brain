@@ -1,5 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { gridColumns, gridDimensions, gridLayout, paneMode, paneTerminals } from './layout'
+import { gridColumns, gridDimensions, gridLayout, styledGridLayout, paneMode, paneTerminals } from './layout'
+
+describe('styledGridLayout', () => {
+  it('auto keeps the balanced grid with the spanning pane last (big pane right)', () => {
+    expect(styledGridLayout(3, 'auto')).toEqual({ cols: 2, rows: 2, lastSpan: 2, spanFirst: false })
+    expect(styledGridLayout(4, 'auto')).toEqual({ cols: 2, rows: 2, lastSpan: 1, spanFirst: false })
+  })
+  it('auto-left mirrors auto: same shape, the FIRST pane gets the span (big pane left)', () => {
+    expect(styledGridLayout(3, 'auto-left')).toEqual({ cols: 2, rows: 2, lastSpan: 2, spanFirst: true })
+    expect(styledGridLayout(5, 'auto-left')).toEqual({ cols: 3, rows: 2, lastSpan: 2, spanFirst: true })
+  })
+  it('auto-left has nothing to mirror on gap-free counts', () => {
+    expect(styledGridLayout(4, 'auto-left')).toEqual({ cols: 2, rows: 2, lastSpan: 1, spanFirst: false })
+  })
+  it('rows stacks every terminal one below another', () => {
+    expect(styledGridLayout(3, 'rows')).toEqual({ cols: 1, rows: 3, lastSpan: 1, spanFirst: false })
+  })
+  it('cols puts every terminal side by side', () => {
+    expect(styledGridLayout(3, 'cols')).toEqual({ cols: 3, rows: 1, lastSpan: 1, spanFirst: false })
+  })
+  it('never returns zero rows or columns', () => {
+    expect(styledGridLayout(0, 'rows')).toEqual({ cols: 1, rows: 1, lastSpan: 1, spanFirst: false })
+    expect(styledGridLayout(0, 'cols')).toEqual({ cols: 1, rows: 1, lastSpan: 1, spanFirst: false })
+  })
+})
 
 describe('paneTerminals', () => {
   const terms = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]

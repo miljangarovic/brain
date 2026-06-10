@@ -120,3 +120,60 @@ export function SpeakerMutedIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+// Grid-style picker icons: each sketches the pane arrangement it selects.
+export function LayoutBigRightIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-layout-big-right" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
+    >
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.2" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.2" />
+      <rect x="13.5" y="3.5" width="7" height="17" rx="1.2" />
+    </svg>
+  )
+}
+
+export function LayoutBigLeftIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-layout-big-left" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
+    >
+      <rect x="3.5" y="3.5" width="7" height="17" rx="1.2" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.2" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.2" />
+    </svg>
+  )
+}
+
+export function LayoutRowsIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-layout-rows" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
+    >
+      <rect x="3.5" y="3.5" width="17" height="4.5" rx="1.2" />
+      <rect x="3.5" y="9.75" width="17" height="4.5" rx="1.2" />
+      <rect x="3.5" y="16" width="17" height="4.5" rx="1.2" />
+    </svg>
+  )
+}
+
+export function LayoutColsIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-layout-cols" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
+    >
+      <rect x="3.5" y="3.5" width="4.5" height="17" rx="1.2" />
+      <rect x="9.75" y="3.5" width="4.5" height="17" rx="1.2" />
+      <rect x="16" y="3.5" width="4.5" height="17" rx="1.2" />
+    </svg>
+  )
+}

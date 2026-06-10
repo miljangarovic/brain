@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
-  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
+  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
@@ -43,6 +43,16 @@ describe('store reducers', () => {
     expect(auth.name).toBe('auth')
     expect(s.activeFeatureId).toBe(auth.id)
     expect(s.activeTerminalId).toBeNull()
+  })
+
+  it('setFeatureGridStyle sets the persisted grid style on the feature', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    expect(firstFeature(s).gridStyle).toBeUndefined()
+    s = setFeatureGridStyle(s, fid, 'rows')
+    expect(firstFeature(s).gridStyle).toBe('rows')
+    s = setFeatureGridStyle(s, fid, 'auto-left')
+    expect(firstFeature(s).gridStyle).toBe('auto-left')
   })
 
   it('renameFeature / toggleFeatureCollapsed / toggleFeatureViewMode', () => {

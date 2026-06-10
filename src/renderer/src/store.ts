@@ -1,4 +1,4 @@
-import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, createWorkspace } from '@shared/types'
+import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, GridStyle, createWorkspace } from '@shared/types'
 import { createId } from '@shared/id'
 
 export interface AppState {
@@ -107,6 +107,10 @@ export function renameFeature(state: AppState, featureId: string, name: string):
 
 export function toggleFeatureCollapsed(state: AppState, featureId: string): AppState {
   return { ...state, workspace: mapFeature(state.workspace, featureId, (f) => ({ ...f, collapsed: !f.collapsed })) }
+}
+
+export function setFeatureGridStyle(state: AppState, featureId: string, gridStyle: GridStyle): AppState {
+  return { ...state, workspace: mapFeature(state.workspace, featureId, (f) => ({ ...f, gridStyle })) }
 }
 
 export function toggleFeatureViewMode(state: AppState, featureId: string): AppState {

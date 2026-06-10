@@ -1,4 +1,5 @@
-import { GridIcon } from './icons'
+import type { GridStyle } from '@shared/types'
+import { GridIcon, LayoutBigLeftIcon, LayoutBigRightIcon, LayoutRowsIcon, LayoutColsIcon } from './icons'
 import { AddMenuButton, type AddKind } from './AddMenuButton'
 
 export interface ReviewControl {
@@ -7,9 +8,18 @@ export interface ReviewControl {
   active: boolean        // loop running (reviewing or applying)
 }
 
+// The grid-style picker, in display order. Labels double as accessible names.
+const GRID_STYLES: { style: GridStyle; label: string; Icon: typeof LayoutBigLeftIcon }[] = [
+  { style: 'auto-left', label: 'Big pane left', Icon: LayoutBigLeftIcon },
+  { style: 'auto', label: 'Big pane right', Icon: LayoutBigRightIcon },
+  { style: 'rows', label: 'Stack vertically', Icon: LayoutRowsIcon },
+  { style: 'cols', label: 'Side by side', Icon: LayoutColsIcon }
+]
+
 export function FeatureHeader({
   featureName, viewMode, onToggleView, onAdd,
-  review, onMoreRounds, onAcceptPhase, onStopLoop
+  review, onMoreRounds, onAcceptPhase, onStopLoop,
+  gridStyle, onSetGridStyle
 }: {
   featureName: string
   viewMode: 'tabs' | 'grid'
@@ -19,6 +29,8 @@ export function FeatureHeader({
   onMoreRounds: (reviewerId: string) => void
   onAcceptPhase: (reviewerId: string) => void
   onStopLoop: (reviewerId: string) => void
+  gridStyle: GridStyle
+  onSetGridStyle: (style: GridStyle) => void
 }) {
   const rid = review.reviewerId
   // Prominent, filled review controls — they drive the loop, so they must read at a
@@ -43,6 +55,23 @@ export function FeatureHeader({
           <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
         )}
         {showControls && <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />}
+        {viewMode === 'grid' && (
+          <>
+            {GRID_STYLES.map(({ style, label, Icon }) => (
+              <button
+                key={style}
+                aria-label={label}
+                aria-pressed={gridStyle === style}
+                title={label}
+                onClick={() => onSetGridStyle(style)}
+                className={iconBtn(gridStyle === style)}
+              >
+                <Icon />
+              </button>
+            ))}
+            <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />
+          </>
+        )}
         <button
           aria-label={viewMode === 'grid' ? 'Tabs view' : 'Grid view'}
           aria-pressed={viewMode === 'grid'}

@@ -1,4 +1,5 @@
 // Pure layout helpers for the per-group grid view.
+import type { GridStyle } from '@shared/types'
 
 export function gridColumns(n: number): number {
   if (n <= 1) return 1
@@ -41,4 +42,19 @@ export function paneMode(opts: { inActiveGroup: boolean; gridMode: boolean }): P
 // (non-hidden) set.
 export function paneTerminals<T extends { id: string }>(terminals: T[], hidden: string[], gridMode: boolean): T[] {
   return gridMode ? terminals : terminals.filter((t) => !hidden.includes(t.id))
+}
+
+// gridLayout shaped by the feature's GridStyle. `spanFirst` says which pane
+// gets the `lastSpan` gap-filler: the FIRST one ('auto-left' — under
+// column-major flow it spans the whole first, leftmost column) or the LAST one
+// ('auto' — big pane bottom-right). 'rows'/'cols' are plain strips, no spanning.
+export function styledGridLayout(
+  n: number,
+  style: GridStyle
+): { cols: number; rows: number; lastSpan: number; spanFirst: boolean } {
+  const count = Math.max(1, n)
+  if (style === 'rows') return { cols: 1, rows: count, lastSpan: 1, spanFirst: false }
+  if (style === 'cols') return { cols: count, rows: 1, lastSpan: 1, spanFirst: false }
+  const base = gridLayout(count)
+  return { ...base, spanFirst: style === 'auto-left' && base.lastSpan > 1 }
 }
