@@ -8,7 +8,10 @@ const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 export type IntentErrorKind = 'network' | 'auth' | 'rate-limit' | 'timeout'
 export class VoiceIntentError extends Error {
-  constructor(public kind: IntentErrorKind, message: string) { super(message) }
+  constructor(public kind: IntentErrorKind, message: string) {
+    super(message)
+    this.name = 'VoiceIntentError'
+  }
 }
 
 export interface ChatMessage { role: 'system' | 'user'; content: string }
@@ -30,6 +33,7 @@ Rules:
 - Resolve spoken names fuzzily against the snapshot names (they may be mangled by speech-to-text, e.g. "fajl pejns" = "file-panes") and answer with the matching IDS from the snapshot, never names.
 - When no feature/terminal is named, use activeFeatureId / activeTerminalId.
 - Ordinal tab references ("drugi tab", "third tab") count only terminals WITHOUT "hidden": true, in snapshot order, within the active feature. The app may also show open file panes as tabs AFTER the terminals — those are not in the snapshot and cannot be voice targets; if an ordinal exceeds the visible terminal count, use action "unknown".
+- "close/zatvori tab N" or "close the Nth tab" HIDES that terminal (hide_terminal — tabs are hidden, not killed); "zatvori/ugasi terminal X" by name kills it (close_terminal).
 - add_terminal: "kind" defaults to "claude" when an agent is implied or nothing is said; "prompt" is the task the user dictated for the agent, verbatim, cleaned of filler words.
 - rename_*: "name" is the new name.
 - If the utterance is not one of these commands, or you are genuinely unsure which target is meant, use action "unknown" or set confidence "low".
@@ -49,7 +53,7 @@ Examples:
 
 // Whisper biasing prompt: latinica (nudges the output script) + command verbs
 // + the workspace names the user is likely to say. Whisper caps the initial
-// prompt at 224 tokens — names are joined until a ~700-char budget runs out.
+// prompt at 224 tokens — names are joined until a ~600-char budget runs out.
 export function whisperInitialPrompt(snapshot: WorkspaceSnapshot): string {
   const names: string[] = []
   for (const g of snapshot.groups) {
