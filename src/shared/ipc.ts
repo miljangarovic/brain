@@ -21,5 +21,6 @@ export const IPC = {
   ptyBusy: 'pty:busy',
   agentCaptureSession: 'agent:captureSession',
   notifyShow: 'notify:show',
-  notificationClick: 'notification:click'
+  notificationClick: 'notification:click',
+  linksResolve: 'links:resolve'
 } as const

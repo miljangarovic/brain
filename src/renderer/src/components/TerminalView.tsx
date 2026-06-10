@@ -8,6 +8,7 @@ import { agentResumeCommand } from '../agents'
 import { getXtermTheme, MONO_FONT } from '../theme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { registerTail, unregisterTail, readXtermTail } from '../attention/tailRegistry'
+import { findPathCandidates } from '../termLinks'
 import { markTouched } from '../attention/touched'
 import { classifyKeyEvent } from './termKeys'
 
@@ -68,6 +69,31 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     // Let attention routing read this terminal's recent output (to tell a
     // permission prompt from a finished turn) when it goes idle.
     registerTail(terminal.id, () => readXtermTail(term, 20))
+
+    // Ctrl+click on a printed file path opens it with the system default app.
+    // Plain click stays with the TUI — claude/codex run with mouse tracking on.
+    // Links are offered only for paths that actually exist on disk, resolved
+    // against this terminal's cwd in the main process.
+    const linkProvider = term.registerLinkProvider({
+      provideLinks: (lineNo, cb) => {
+        const lineText = term.buffer.active.getLine(lineNo - 1)?.translateToString(true) ?? ''
+        const cands = findPathCandidates(lineText)
+        if (cands.length === 0) { cb(undefined); return }
+        void window.brain.resolvePathLinks({ cwd: terminal.cwd, candidates: cands.map((c) => c.path) }).then((resolved) => {
+          const links = cands.flatMap((c, i) => {
+            const target = resolved[i]
+            if (!target) return []
+            return [{
+              // xterm link ranges are 1-based with an INCLUSIVE end column.
+              range: { start: { x: c.start + 1, y: lineNo }, end: { x: c.end, y: lineNo } },
+              text: c.text,
+              activate: (e: MouseEvent) => { if (e.ctrlKey || e.metaKey) window.brain.openPath(target) }
+            }]
+          })
+          cb(links.length > 0 ? links : undefined)
+        })
+      }
+    })
 
     window.brain.createPty({
       id: terminal.id,
@@ -133,6 +159,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
       offData()
       offExit()
       inputDisposable.dispose()
+      linkProvider.dispose()
       ro.disconnect()
       unregisterTail(terminal.id)
       term.dispose()

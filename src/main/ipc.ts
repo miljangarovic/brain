@@ -11,6 +11,7 @@ import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { createReviewWatcher } from './reviewWatcher'
 import { createNotifier } from './notifications'
 import { resolveTranscript } from './transcript'
+import { resolveExistingPaths } from './pathLinks'
 import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
 
@@ -98,6 +99,11 @@ export function registerIpc(opts: {
 
   ipcMain.handle(IPC.reviewResolveTranscript, (_e, p: { cwd: string; kind?: string }) =>
     resolveTranscript({ cwd: p.cwd || os.homedir(), kind: p.kind }))
+
+  // Ctrl+click file links: resolve printed path candidates against the
+  // terminal's cwd and report which actually exist (null = offer no link).
+  ipcMain.handle(IPC.linksResolve, (_e, p: { cwd: string; candidates: string[] }) =>
+    resolveExistingPaths(p?.cwd ?? '', p?.candidates ?? []))
 
   // Best-effort utf8 read for the renderer (e.g. parsing a review file's verdict).
   // Returns null on any error (missing/unreadable) — the caller treats that as "no content".

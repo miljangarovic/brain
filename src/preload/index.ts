@@ -60,6 +60,7 @@ const api: BrainApi = {
     ipcRenderer.on(IPC.notificationClick, listener)
     return () => ipcRenderer.removeListener(IPC.notificationClick, listener)
   },
+  resolvePathLinks: (opts) => ipcRenderer.invoke(IPC.linksResolve, opts) as Promise<(string | null)[]>,
 }
 
 contextBridge.exposeInMainWorld('brain', api)

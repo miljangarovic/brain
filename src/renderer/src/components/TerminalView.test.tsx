@@ -10,11 +10,22 @@ vi.mock('@xterm/xterm', () => {
   class Terminal {
     cols = 80
     rows = 24
+    buffer = {
+      active: {
+        getLine: (_i: number) => ({
+          translateToString: () => (globalThis as unknown as { __termLine?: string }).__termLine ?? ''
+        })
+      }
+    }
     loadAddon(): void {}
     open(): void {}
     write(): void {}
     onData(): { dispose(): void } { return { dispose() {} } }
     attachCustomKeyEventHandler(): void {}
+    registerLinkProvider(p: unknown): { dispose(): void } {
+      ;(globalThis as unknown as { __linkProvider?: unknown }).__linkProvider = p
+      return { dispose() {} }
+    }
     getSelection(): string { return '' }
     paste(): void {}
     selectAll(): void {}
@@ -42,6 +53,8 @@ const api = {
   resizePty: vi.fn(),
   onPtyData: vi.fn(() => vi.fn()),
   onPtyExit: vi.fn(() => vi.fn()),
+  openPath: vi.fn(),
+  resolvePathLinks: vi.fn(async (): Promise<(string | null)[]> => []),
 }
 
 beforeEach(() => {
@@ -106,5 +119,40 @@ describe('TerminalView PTY lifecycle', () => {
     const codex: TerminalModel = { id: 't5', name: 'codex', cwd: '/x', startupCommand: 'codex', kind: 'codex', sessionId: 'sess-5' }
     render(<TerminalView terminal={codex} active resume />)
     expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't5', startupCommand: 'codex resume sess-5' }))
+  })
+})
+
+describe('TerminalView file links', () => {
+  type Link = {
+    range: { start: { x: number; y: number }; end: { x: number; y: number } }
+    text: string
+    activate: (e: MouseEvent, text: string) => void
+  }
+  type Provider = { provideLinks: (y: number, cb: (links: Link[] | undefined) => void) => void }
+  const provider = () => (globalThis as unknown as { __linkProvider?: Provider }).__linkProvider!
+  const setLine = (s: string) => { (globalThis as unknown as { __termLine?: string }).__termLine = s }
+
+  it('underlines only paths that exist and opens them on Ctrl+click', async () => {
+    setLine('vidi src/a.ts:12 i src/missing.ts')
+    api.resolvePathLinks.mockResolvedValue(['/x/src/a.ts', null])
+    render(<TerminalView terminal={term} active />)
+    const links = await new Promise<Link[] | undefined>((r) => provider().provideLinks(1, r))
+    expect(api.resolvePathLinks).toHaveBeenCalledWith({ cwd: '/x', candidates: ['src/a.ts', 'src/missing.ts'] })
+    expect(links).toHaveLength(1)
+    // 'vidi ' is 5 chars → 1-based start x=6; 'src/a.ts:12' is 11 chars → inclusive end x=16.
+    expect(links![0].range).toEqual({ start: { x: 6, y: 1 }, end: { x: 16, y: 1 } })
+
+    links![0].activate({ ctrlKey: false, metaKey: false } as MouseEvent, links![0].text)
+    expect(api.openPath).not.toHaveBeenCalled() // plain click belongs to the TUI
+    links![0].activate({ ctrlKey: true, metaKey: false } as MouseEvent, links![0].text)
+    expect(api.openPath).toHaveBeenCalledWith('/x/src/a.ts')
+  })
+
+  it('offers no links for a line without existing paths', async () => {
+    setLine('obican tekst bez putanja')
+    render(<TerminalView terminal={term} active />)
+    const links = await new Promise<Link[] | undefined>((r) => provider().provideLinks(1, r))
+    expect(links).toBeUndefined()
+    expect(api.resolvePathLinks).not.toHaveBeenCalled()
   })
 })

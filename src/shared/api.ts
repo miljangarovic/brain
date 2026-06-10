@@ -29,4 +29,7 @@ export interface BrainApi {
   captureAgentSession(opts: { kind: string; cwd: string; exclude?: string[] }): Promise<string | null>
   showNotification(opts: { key: string; title: string; body: string }): void
   onNotificationClick(cb: (key: string) => void): () => void
+  // Resolve printed path candidates against a terminal's cwd; index-aligned
+  // result, null where no such file exists (no link is offered).
+  resolvePathLinks(opts: { cwd: string; candidates: string[] }): Promise<(string | null)[]>
 }
