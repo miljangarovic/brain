@@ -6,7 +6,7 @@ import { PtyManager } from './ptyManager'
 import { createBusyTracker } from './busyTracker'
 import { createDebouncedSaver } from './persistence'
 import type { Workspace, ReviewPhase } from '@shared/types'
-import type { PtyCreateOptions } from '@shared/pty'
+import { AGENT_IDLE_MS, type PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { createReviewWatcher } from './reviewWatcher'
 import { createNotifier } from './notifications'
@@ -43,8 +43,8 @@ export function registerIpc(opts: {
   // pauses (model latency, tool use, sparse TUI redraws while generating code), so
   // a short idle window would flicker the spinner off mid-answer — wait longer
   // before declaring idle. (Only agent terminals show the spinner, gated in the
-  // renderer, so this longer tail is invisible on plain shells.)
-  const AGENT_IDLE_MS = 1500
+  // renderer, so this longer tail is invisible on plain shells. The constant
+  // lives in shared/pty.ts — attention's blip filter must subtract it.)
   const busy = createBusyTracker((id, isBusy) => send(IPC.ptyBusy, { id, busy: isBusy }), AGENT_IDLE_MS)
   ptyManager.onData((id, data) => { send(IPC.ptyData, { id, data }); busy.touch(id) })
   ptyManager.onExit((id, code) => { send(IPC.ptyExit, { id, code }); busy.end(id) })
@@ -54,7 +54,13 @@ export function registerIpc(opts: {
   ipcMain.handle(IPC.workspaceLoad, () => saver.loadLatest())
   ipcMain.on(IPC.workspaceSave, (_e, ws: Workspace) => saver.save(ws))
   ipcMain.on(IPC.ptyCreate, (_e, o: PtyCreateOptions) => ptyManager.create(o))
-  ipcMain.on(IPC.ptyInput, (_e, p: { id: string; data: string }) => { ptyManager.write(p.id, p.data); busy.input(p.id) })
+  // Only the user's own typing/paste suppresses busy — synthetic data (xterm
+  // auto-replies, mouse-tracking reports) must not kill the spinner mid-answer
+  // or fake an "origin went idle" for the review loop.
+  ipcMain.on(IPC.ptyInput, (_e, p: { id: string; data: string; user?: boolean }) => {
+    ptyManager.write(p.id, p.data)
+    if (p.user !== false) busy.input(p.id)
+  })
   ipcMain.on(IPC.ptyResize, (_e, p: { id: string; cols: number; rows: number }) => ptyManager.resize(p.id, p.cols, p.rows))
   ipcMain.on(IPC.ptyKill, (_e, p: { id: string }) => ptyManager.kill(p.id))
 

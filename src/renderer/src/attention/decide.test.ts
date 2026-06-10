@@ -1,6 +1,20 @@
 // src/renderer/src/attention/decide.test.ts
 import { describe, it, expect } from 'vitest'
-import { decideOnIdle, decideOnExit, MIN_WORK_MS } from './decide'
+import { decideOnIdle, decideOnExit, outputSpanMs, MIN_WORK_MS } from './decide'
+
+describe('outputSpanMs', () => {
+  it('measures output duration, excluding the trailing idle window', () => {
+    // busy at t=1000, idle emitted at t=2700 with a 1500ms quiet window:
+    // the agent actually produced output for ~200ms — a redraw blip.
+    expect(outputSpanMs(1000, 2700, 1500)).toBe(200)
+  })
+  it('is zero when no busy start was observed', () => {
+    expect(outputSpanMs(undefined, 5000, 1500)).toBe(0)
+  })
+  it('never goes negative', () => {
+    expect(outputSpanMs(4000, 5000, 1500)).toBe(0)
+  })
+})
 
 const ctx = (over: Partial<Parameters<typeof decideOnExit>[1]> = {}) =>
   ({ isAgent: true, underReview: false, activeAndFocused: false, ...over })
@@ -24,13 +38,16 @@ describe('decideOnIdle', () => {
   })
 
   // A resize/SIGWINCH redraw flips busy on and off in well under MIN_WORK_MS —
-  // that is not a turn ending, so it must not alert.
-  it('ignores busy blips shorter than MIN_WORK_MS (redraws, not work)', () => {
+  // that is not a turn ending, so it must not report 'done'.
+  it('ignores done blips shorter than MIN_WORK_MS (redraws, not work)', () => {
     expect(decideOnIdle('done', idleCtx({ workSpanMs: 800 }))).toBeNull()
-    expect(decideOnIdle('waiting-input', idleCtx({ workSpanMs: 0 }))).toBeNull()
-  })
-  it('ignores idle with no busy start observed (workSpanMs 0)', () => {
     expect(decideOnIdle('done', idleCtx({ workSpanMs: 0 }))).toBeNull()
+  })
+  // A permission prompt can appear immediately after submit (claude asks before
+  // doing anything) — the agent is blocked on the user, span is irrelevant.
+  it('reports waiting-input regardless of the busy span', () => {
+    expect(decideOnIdle('waiting-input', idleCtx({ workSpanMs: 0 }))).toBe('waiting-input')
+    expect(decideOnIdle('waiting-input', idleCtx({ workSpanMs: 200 }))).toBe('waiting-input')
   })
 
   // Idle signals only fire for a terminal the user has typed in since the last

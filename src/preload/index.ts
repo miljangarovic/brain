@@ -23,7 +23,7 @@ const api: BrainApi = {
   loadWorkspace: () => ipcRenderer.invoke(IPC.workspaceLoad) as Promise<Workspace>,
   saveWorkspace: (ws: Workspace) => ipcRenderer.send(IPC.workspaceSave, ws),
   createPty: (opts: PtyCreateOptions) => ipcRenderer.send(IPC.ptyCreate, opts),
-  writePty: (id, data) => ipcRenderer.send(IPC.ptyInput, { id, data }),
+  writePty: (id, data, user) => ipcRenderer.send(IPC.ptyInput, { id, data, user }),
   resizePty: (id, cols, rows) => ipcRenderer.send(IPC.ptyResize, { id, cols, rows }),
   killPty: (id) => ipcRenderer.send(IPC.ptyKill, { id }),
   onPtyData: (cb) => { ptyDataSubs.add(cb); return () => { ptyDataSubs.delete(cb) } },

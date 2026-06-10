@@ -1,3 +1,9 @@
+// How long a PTY must stay silent before the busy tracker calls an agent
+// terminal idle. Shared because the renderer needs it too: busy=false arrives
+// this long AFTER the last output chunk, so honest output-span math (attention's
+// blip filter) must subtract it.
+export const AGENT_IDLE_MS = 1500
+
 export interface PtyCreateOptions {
   id: string
   cwd: string

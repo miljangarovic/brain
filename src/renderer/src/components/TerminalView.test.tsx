@@ -1,7 +1,8 @@
 // src/renderer/src/components/TerminalView.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, fireEvent } from '@testing-library/react'
 import type { Terminal as TerminalModel } from '@shared/types'
+import { isTouched, clearTouched } from '../attention/touched'
 
 // xterm needs a real canvas/DOM and ResizeObserver, neither of which jsdom
 // provides — stub them so we can exercise the component's PTY lifecycle wiring.
@@ -20,8 +21,13 @@ vi.mock('@xterm/xterm', () => {
     loadAddon(): void {}
     open(): void {}
     write(): void {}
-    onData(): { dispose(): void } { return { dispose() {} } }
-    attachCustomKeyEventHandler(): void {}
+    onData(cb: (d: string) => void): { dispose(): void } {
+      ;(globalThis as unknown as { __onData?: (d: string) => void }).__onData = cb
+      return { dispose() {} }
+    }
+    attachCustomKeyEventHandler(h: (e: KeyboardEvent) => boolean): void {
+      ;(globalThis as unknown as { __keyHandler?: (e: KeyboardEvent) => boolean }).__keyHandler = h
+    }
     registerLinkProvider(p: unknown): { dispose(): void } {
       ;(globalThis as unknown as { __linkProvider?: unknown }).__linkProvider = p
       return { dispose() {} }
@@ -119,6 +125,38 @@ describe('TerminalView PTY lifecycle', () => {
     const codex: TerminalModel = { id: 't5', name: 'codex', cwd: '/x', startupCommand: 'codex', kind: 'codex', sessionId: 'sess-5' }
     render(<TerminalView terminal={codex} active resume />)
     expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't5', startupCommand: 'codex resume sess-5' }))
+  })
+})
+
+describe('TerminalView engagement & input flags', () => {
+  const keyHandler = () => (globalThis as unknown as { __keyHandler: (e: unknown) => boolean }).__keyHandler
+  const termData = () => (globalThis as unknown as { __onData: (d: string) => void }).__onData
+  const key = (code: string, over: Record<string, unknown> = {}) =>
+    ({ type: 'keydown', code, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, ...over })
+
+  it('arms attention on a real keypress but NOT on a pure modifier key', () => {
+    clearTouched('t1')
+    render(<TerminalView terminal={term} active />)
+    keyHandler()(key('ControlLeft', { ctrlKey: true })) // lone Ctrl (e.g. before Ctrl+click)
+    expect(isTouched('t1')).toBe(false)
+    keyHandler()(key('KeyA'))
+    expect(isTouched('t1')).toBe(true)
+  })
+
+  it('arms attention on mousedown (answering an agent menu with the mouse)', () => {
+    clearTouched('t1')
+    const { container } = render(<TerminalView terminal={term} active />)
+    fireEvent.mouseDown(container.firstChild as HTMLElement)
+    expect(isTouched('t1')).toBe(true)
+  })
+
+  it('flags terminal data as user input only right after a real key', () => {
+    render(<TerminalView terminal={term} active />)
+    termData()('\x1b[M !!') // synthetic: mouse report / TUI auto-reply, no key pressed
+    expect(api.writePty).toHaveBeenCalledWith('t1', '\x1b[M !!', false)
+    keyHandler()(key('KeyA'))
+    termData()('a')
+    expect(api.writePty).toHaveBeenCalledWith('t1', 'a', true)
   })
 })
 

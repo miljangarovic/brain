@@ -7,7 +7,10 @@ export interface BrainApi {
   loadWorkspace(): Promise<Workspace>
   saveWorkspace(ws: Workspace): void
   createPty(opts: PtyCreateOptions): void
-  writePty(id: string, data: string): void
+  // `user` distinguishes the user's own typing/paste from synthetic terminal
+  // data (xterm auto-replies, mouse-tracking reports). Only user input feeds
+  // the busy tracker's typing suppression; default (undefined) counts as user.
+  writePty(id: string, data: string, user?: boolean): void
   resizePty(id: string, cols: number, rows: number): void
   killPty(id: string): void
   onPtyData(cb: (id: string, data: string) => void): () => void

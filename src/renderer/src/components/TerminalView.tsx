@@ -10,7 +10,14 @@ import { ContextMenu, type MenuItem } from './ContextMenu'
 import { registerTail, unregisterTail, readXtermTail } from '../attention/tailRegistry'
 import { findPathCandidates } from '../termLinks'
 import { markTouched } from '../attention/touched'
-import { classifyKeyEvent } from './termKeys'
+import { classifyKeyEvent, isModifierKey } from './termKeys'
+
+// How recently a real key/paste must have happened for terminal data to count
+// as the user's own input. Data outside this window is synthetic — xterm's
+// auto-replies to TUI queries and mouse-tracking reports — and must not feed
+// the busy tracker's typing suppression (it would kill the spinner mid-answer
+// and make the review loop think the origin went idle).
+const USER_INPUT_WINDOW_MS = 150
 
 // `resume` is set only for agent terminals restored after an app restart: their
 // PTY spawns resuming the terminal's own prior conversation (by session id when
@@ -30,10 +37,13 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     const sel = xtermRef.current?.getSelection()
     if (sel) void navigator.clipboard.writeText(sel)
   }, [])
+  // Last real user key/paste — see USER_INPUT_WINDOW_MS.
+  const lastRealInputAt = useRef(0)
   const paste = useCallback(() => {
     const term = xtermRef.current
     if (!term) return
     markTouched(terminal.id) // right-click paste also counts as engaging the terminal
+    lastRealInputAt.current = Date.now()
     // term.paste() (not raw writePty) so bracketed-paste mode is honoured — agents
     // like claude/codex rely on it to receive multi-line pastes as a single block.
     void navigator.clipboard.readText().then((text) => {
@@ -108,14 +118,19 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     const offExit = window.brain.onPtyExit((id) => {
       if (id === terminal.id) term.write('\r\n\x1b[33m[process exited]\x1b[0m\r\n')
     })
-    const inputDisposable = term.onData((data) => window.brain.writePty(terminal.id, data))
+    const inputDisposable = term.onData((data) =>
+      window.brain.writePty(terminal.id, data, Date.now() - lastRealInputAt.current < USER_INPUT_WINDOW_MS))
 
     term.attachCustomKeyEventHandler((e) => {
       // A real keypress in this terminal marks it "engaged" — attention's idle
       // signals only fire for terminals you've actually worked in. (Must be a key
       // event, NOT term.onData: xterm auto-replies to TUI queries via onData,
-      // which would falsely mark every agent touched on startup.)
-      if (e.type === 'keydown') markTouched(terminal.id)
+      // which would falsely mark every agent touched on startup. Pure modifiers
+      // — a lone Ctrl before Ctrl+click — don't count as typing either.)
+      if (e.type === 'keydown' && !isModifierKey(e.code)) {
+        markTouched(terminal.id)
+        lastRealInputAt.current = Date.now()
+      }
 
       switch (classifyKeyEvent(e)) {
         case 'newline':
@@ -193,6 +208,10 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
   return (
     <div
       className="relative h-full w-full"
+      // Engaging the terminal with the mouse counts too: claude/codex menus are
+      // answered by clicking, and without this the NEXT permission prompt would
+      // find the terminal disarmed and never notify.
+      onMouseDownCapture={() => markTouched(terminal.id)}
       onContextMenuCapture={(e) => {
         e.preventDefault()
         const hasSelection = (xtermRef.current?.getSelection()?.length ?? 0) > 0
