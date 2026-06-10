@@ -53,9 +53,17 @@ archive:
 - sidebar drag-drop, selection, attention routing, review lookups, and the tab bar all
   keep operating on `group.features` only.
 
-Restore moves the feature back to the **end** of `group.features`. Its terminals mount
-fresh, exactly like after an app restart: shells start clean, agent terminals resume
-their conversation via the persisted `sessionId` (existing behavior).
+Restore moves the feature back to the **end** of `group.features`. Its terminals must
+behave exactly like terminals present at first load: shells start clean, agent terminals
+resume their conversation via the persisted `sessionId`, and every restored terminal
+stays **cold** (no PTY) until the user opens it — restoring a feature with many
+terminals must not launch everything at once.
+
+This does NOT come for free: `App.tsx` seeds `resumeIdsRef` (agent terminals that resume)
+and `bootIdsRef` (terminals that stay cold) **once, at initial load** — a feature restored
+mid-session would otherwise auto-spawn all its terminals with their plain startup commands.
+Restore therefore also appends the restored ids to both refs: agent terminal ids
+(claude/codex with a `sessionId`) to `resumeIdsRef`, all restored ids to `bootIdsRef`.
 
 `migrateWorkspace` sanitizes both new fields: `archivedFeatures` entries go through the
 same `sanitizeFeature` as active ones; `documents` entries missing an id/name/path are
@@ -63,16 +71,22 @@ dropped. Absent fields stay absent (undefined === []).
 
 ## Store operations (`src/renderer/src/store.ts`)
 
-- `archiveFeature(state, featureId)` — move active → archived. If it was the active
-  feature, selection falls to the group's first remaining feature (same rule as
-  `deleteFeature`). Its terminals' ids are pruned from `hidden`.
+- `archiveFeature(state, featureId)` — move active → archived. Archiving a non-active
+  feature changes no selection. Archiving the active feature reselects within its group
+  by the same `selectFeature` rule `deleteFeature` uses: first remaining feature and its
+  first visible terminal, or `activeFeatureId`/`activeTerminalId` = null when the group
+  has no active features left. `activeGroupId` is untouched — by the existing selection
+  invariant the active feature's group is already the active group. Its terminals' ids
+  are pruned from `hidden`.
 - `restoreFeature(state, featureId)` — move archived → end of active. Does **not** change
   the active selection (the modal stays open for batch operations).
 - `deleteArchivedFeature(state, featureId)` — permanently remove a feature from the
   archive (UI confirms first).
 - `addDocument(state, featureId, { name, path })`, `renameDocument(state, featureId, docId, name)`,
-  `removeDocument(state, featureId, docId)` — manage `feature.documents`. Removing a
-  document removes the reference only; the file on disk is untouched.
+  `removeDocument(state, featureId, docId)` — manage `feature.documents`. These operate
+  on **active features only**; an archived feature's documents are carried along untouched
+  and become editable again after restore. Removing a document removes the reference only;
+  the file on disk is untouched.
 
 ## Sidebar (`src/renderer/src/components/Sidebar.tsx`)
 
@@ -96,7 +110,10 @@ Inside an expanded feature, **after all terminal rows**, one row per document:
 - hover trash → remove the reference
 - if the file does not exist on disk the row renders muted/“broken” with a warning title
 
-File existence uses a new IPC `fs:pathsExist(paths: string[]) → boolean[]`, checked when
+File existence uses the already-reserved `IPC.fsExists` channel (`'fs:exists'` in
+`src/shared/ipc.ts`, currently unused): an `invoke` handler in `src/main/ipc.ts` takes
+`{ paths: string[] }` and returns `boolean[]`, exposed to the renderer as
+`BrainApi.pathsExist(paths: string[]): Promise<boolean[]>` via the preload. Checked when
 the docs section renders and re-checked on window focus.
 
 ### Archive row
@@ -113,7 +130,9 @@ Modeled on the existing dialog components; operates on a single group. Two secti
   button (permanent delete behind a `ConfirmDialog`)
 
 The dialog stays open after each action so several features can be moved in one visit.
-It closes on X, Escape, or a click outside.
+It closes on X, Escape, or a click outside — the same inline pattern `ConfirmDialog` and
+`NewGroupDialog` already implement (fixed backdrop with `onClick` cancel + window Escape
+listener); no new modal primitive is needed.
 
 ## Add document flow
 
@@ -123,6 +142,24 @@ and the sidebar immediately opens its inline rename (reusing the pending-rename 
 used for fresh terminals). Cancelling the picker adds nothing. Picking a path the feature
 already references is a no-op (no duplicate rows).
 
+## App ↔ Sidebar wiring
+
+`App.tsx` owns the new state and passes handlers down, following the existing
+prop-driven pattern:
+
+- App state: `archiveDialogGroupId: string | null` (which group's ArchiveDialog is open),
+  `pendingRenameDocId: string | null` (mirrors `pendingRenameTerminalId` for the
+  add-document inline rename).
+- New `Sidebar` props: `onOpenArchive(groupId)`, `onArchiveFeature(featureId)`,
+  `onAddDocument(featureId)` (App runs the `pickFile` flow), `onRenameDocument(featureId, docId, name)`,
+  `onRemoveDocument(featureId, docId)`, `onOpenDocument(path)`, plus
+  `pendingRenameDocId` / `onPendingRenameDocConsumed`.
+- `ArchiveDialog` is rendered by App (like the other dialogs) with the group's active +
+  archived features and `onArchive` / `onRestore` / `onDeleteArchived` handlers; permanent
+  delete goes through the existing `ConfirmDialog`.
+- Restore wiring in App appends restored terminal ids to `resumeIdsRef` / `bootIdsRef`
+  (see Data model above).
+
 ## Interaction with export/import
 
 The export manifest carries full `Group`/`Feature` objects, so `archivedFeatures` and
@@ -131,15 +168,26 @@ The export manifest carries full `Group`/`Feature` objects, so `archivedFeatures
 another machine they will typically not exist — the broken-file indicator covers that;
 no special import handling.
 
+One real gap: `collectAgentSessions` in `src/main/exportImport.ts` iterates only
+`group.features`, so archived agent terminals would appear in the manifest but get no
+session summary — and after import on another machine (where `sessionId` is useless)
+a restored feature's agents would wake with no context. For group-scope exports it must
+also walk `group.archivedFeatures ?? []`.
+
 ## Testing
 
 Vitest, mirroring existing suites:
 
-- `store.test.ts` — archive/restore/permanent-delete (including active-selection and
-  `hidden` pruning), document add/rename/remove
+- `store.test.ts` — archive/restore/permanent-delete (including active-selection rules,
+  empty-group selection, and `hidden` pruning), document add/rename/remove/duplicate-path
 - `migrate.test.ts` — sanitizing `archivedFeatures` and `documents`, garbage entries
 - `Sidebar.test.tsx` — feature context menu items and handlers, docs section rendering,
-  broken-doc state, archive row count and click
-- `ArchiveDialog.test.tsx` — both sections, archive/restore/delete-with-confirm flows
+  broken-doc state (mocked `pathsExist`), archive row count and click
+- `ArchiveDialog.test.tsx` — both sections, archive/restore/delete-with-confirm flows,
+  Escape and outside-click close
+- `exportImport.test.ts` — group-scope session collection includes archived features;
+  manifest round-trips `archivedFeatures` and `documents`
+- App-level test for restore: restored agent terminals resume (ids land in the
+  resume/boot sets) rather than cold-launching their startup command
 
 UI labels are English, consistent with the rest of the sidebar.
