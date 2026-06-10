@@ -42,8 +42,10 @@ fallback when Groq is unreachable, non-Linux platform testing.
   trigger if registration ever fails (e.g. a future Wayland move).
 - **Hybrid confirmation:** navigation and reversible actions execute
   immediately with a toast; creating/destructive actions (new terminal with
-  prompt, close terminal, rename) show a confirm overlay with an editable
-  prompt field.
+  prompt, close terminal) show a confirm overlay with an editable prompt
+  field. Renames also confirm — not because they are destructive, but because
+  the new name is free-form text, the payload most likely to be silently
+  garbled by STT.
 - **Main process owns the pipeline** (approach A): the renderer only records
   audio and renders UI; whisper and the Groq call live in main. The Groq API
   key never enters the renderer, and the split matches the existing
@@ -89,8 +91,9 @@ export type VoiceAction =
   | 'switch_tab'       // → setActiveTerminal(terminalId)
   | 'set_grid_style'   // → setFeatureGridStyle(featureId ?? active, gridStyle)
   | 'hide_terminal'    // → hideTerminal(terminalId ?? active)
-  | 'add_terminal'     // → addTerminal(featureId, { name, kind, startupCommand })
-  | 'close_terminal'   // → existing close flow (removeTerminal + pty kill)
+  | 'add_terminal'     // → quick-launch path (extracted launchAgent), featureId ?? active
+  | 'close_terminal'   // → same branch as App's onDeleteTerminal:
+                       //   reviewer → review.stopLoop(id), else removeTerminal(id)
   | 'rename_feature'   // → renameFeature(featureId, name)
   | 'rename_terminal'  // → renameTerminal(terminalId, name)
   | 'unknown'
@@ -112,18 +115,26 @@ export interface VoiceCommand {
   ids exist in the live state (the workspace may have changed since the
   snapshot); a missing id downgrades to the confirm overlay with an error note.
 - **Immediate** (toast): `switch_feature`, `toggle_grid`, `switch_tab`,
-  `set_grid_style`, `hide_terminal` (reversible via `showTerminal`).
+  `set_grid_style`, `hide_terminal` (reversible via `showTerminal`). Note:
+  entering the grid un-hides the feature's X-ed terminals
+  (`toggleFeatureViewMode`'s existing "fresh survey" semantics) — the toast
+  text mentions it so it is not mistaken for a voice bug.
 - **Confirm overlay:** `add_terminal`, `close_terminal` (kills a PTY),
   `rename_feature`, `rename_terminal`. Also forced for `confidence: 'low'`,
   invalid ids, and `unknown` (overlay then shows only the transcript and an
   explanation).
-- `add_terminal` launch command reuses the existing pattern from
-  `agentContinueCommand` (`src/renderer/src/agents.ts`): for agents,
-  `agentLaunchCommand(kind, sessionId) + ' ' + shellSingleQuote(prompt)`; for
-  `kind: 'shell'`, the spoken prompt (if any) becomes the `startupCommand`
-  verbatim — always behind the confirm overlay. When no name is spoken, the
-  terminal name defaults to the agent's `defaultName` (`claude`/`codex`) or
-  `'shell'`, same as the existing quick-launch buttons.
+- `add_terminal` reuses the EXACT creation path of the quick-launch buttons:
+  App's `launchAgent` handler (`App.tsx`) is extracted so voice and buttons
+  share it, extended with an optional prompt. That path generates
+  `sessionId = createId()` for claude and passes it to both
+  `agentLaunchCommand` and the `addTerminal` input (preserving the resume
+  pin), and for codex captures the session id post-launch via
+  `captureAgentSession`. The spoken prompt is appended as
+  `' ' + shellSingleQuote(prompt)` (the `agentContinueCommand` pattern in
+  `src/renderer/src/agents.ts`); for `kind: 'shell'`, the spoken prompt (if
+  any) becomes the `startupCommand` verbatim — always behind the confirm
+  overlay. When no name is spoken, the terminal name defaults to the agent's
+  `defaultName` (`claude`/`codex`) or `'shell'`, same as the existing buttons.
 
 ## Components
 
@@ -138,7 +149,7 @@ export interface VoiceCommand {
 | `src/main/voice/index.ts` | orchestration + `globalShortcut` registration + config load |
 | `src/preload/index.ts` | `BrainApi` additions: `onVoiceStart`, `sendVoiceAudio`, `onVoiceState`, `onVoiceResult`, `cancelVoice`, `startVoice` (mic button path) |
 | `src/renderer/src/voice/recorder.ts` | `getUserMedia` + AudioWorklet downsample to 16 kHz mono; RMS silence detector (pure function over PCM chunks) |
-| `src/renderer/src/voice/executor.ts` | pure functions: `VoiceCommand` + `AppState` → `{ run: (s) => AppState } \| { confirm: ... } \| { error: ... }` |
+| `src/renderer/src/voice/executor.ts` | pure functions: `VoiceCommand` + `AppState` → `{ run: (s) => AppState } \| { confirm: ... } \| { delegate: ... } \| { error: ... }`. Pure store actions carry `run`; `close_terminal` and `add_terminal` return `delegate` descriptors that App-level glue routes through the existing handlers (`onDeleteTerminal`'s reviewer branch, extracted `launchAgent`) — those flows are effectful and cannot be expressed as pure state transforms |
 | `src/renderer/src/voice/useVoice.ts` | state machine hook: idle → listening → transcribing → parsing → confirm → done/error |
 | `src/renderer/src/voice/VoiceOverlay.tsx` | overlay UI: mic indicator, live state, transcript, parsed command summary, editable prompt textarea, Enter/Esc |
 | `Sidebar` (existing) | small mic button as secondary trigger |
@@ -202,16 +213,20 @@ export interface VoiceCommand {
   defaults with `enabled: true`.
 - Models live in `userData/voice-models/` (gitignored territory, ~0.5–1.1 GB).
 - electron-builder: add the whisper addon to `asarUnpack` (same pattern as
-  `node-pty`).
+  `node-pty`). Confirm the addon ships Electron-compatible N-API prebuilds
+  (its README claims so); otherwise add it to the `rebuild` script alongside
+  node-pty.
 
 ## Testing
 
 Vitest, following the existing `X.test.ts`-next-to-module pattern:
 
 - `translit.test.ts` — ćirilica→latinica incl. nj/lj/dž digraphs.
-- `executor.test.ts` — every action maps to the right store call; the
-  immediate-vs-confirm classification table; invalid id and `unknown`
-  downgrade paths; live-state validation against a changed workspace.
+- `executor.test.ts` — every action maps to the right store call or
+  `delegate` descriptor; the immediate-vs-confirm classification table;
+  `close_terminal` on a reviewer terminal delegates to the `review.stopLoop`
+  branch (never bare `removeTerminal`); invalid id and `unknown` downgrade
+  paths; live-state validation against a changed workspace.
 - `intent.test.ts` — prompt builder (snapshot serialization, schema), response
   validation (malformed JSON, unknown action, missing required fields), Groq
   mocked at the fetch layer.
@@ -219,5 +234,7 @@ Vitest, following the existing `X.test.ts`-next-to-module pattern:
 - Snapshot builder — names/ids/active flags from a fixture `AppState`.
 
 Not in CI: the audio path itself (microphone → whisper). Covered by a manual
-E2E checklist (Serbian, English, mixed commands; all v1 actions; cancel paths)
-and by the model benchmark script over fixture WAVs.
+E2E checklist (Serbian, English, mixed commands; all v1 actions; cancel
+paths; voice "toggle grid" on a feature with hidden terminals — verify the
+un-hide is communicated, not surprising) and by the model benchmark script
+over fixture WAVs.
