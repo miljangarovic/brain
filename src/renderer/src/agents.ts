@@ -47,6 +47,13 @@ export function agentLaunchCommand(kind: AgentKind, sessionId?: string): string 
   return AGENTS[kind].command
 }
 
+// Fresh launch with an optional first message — the voice add_terminal path.
+// Same quoting as agentContinueCommand: the prompt rides as ONE shell argument.
+export function agentLaunchCommandWithPrompt(kind: AgentKind, sessionId?: string, prompt?: string): string {
+  const base = agentLaunchCommand(kind, sessionId)
+  return prompt ? `${base} ${shellSingleQuote(prompt)}` : base
+}
+
 // Launch command for an IMPORTED agent terminal: a fresh conversation (id
 // pinned when the agent supports it) whose first message points the agent at
 // the handoff summary that was written when the terminal was exported.

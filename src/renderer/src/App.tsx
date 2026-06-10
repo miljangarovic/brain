@@ -20,7 +20,7 @@ import type { ExportProgress, ExportRunResult } from '@shared/exportTypes'
 import { useAttention } from './attention/useAttention'
 import { migrateWorkspace } from './migrate'
 import { createId } from '@shared/id'
-import { AGENTS, detectAgent, agentLaunchCommand, type AgentKind } from './agents'
+import { AGENTS, detectAgent, agentLaunchCommand, agentLaunchCommandWithPrompt, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
 import { styledGridLayout } from './layout'
@@ -33,6 +33,8 @@ import { NewGroupDialog, NewGroupInput } from './components/NewGroupDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
 import { ArchiveDialog } from './components/ArchiveDialog'
+import { useVoice } from './voice/useVoice'
+import { VoiceOverlay } from './components/VoiceOverlay'
 
 export default function App() {
   const { state, setState, apply } = useStore()
@@ -289,14 +291,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [state, apply])
 
-  const launchAgent = (featureId: string, kind: AgentKind) => {
+  const launchAgent = (featureId: string, kind: AgentKind, opts?: { prompt?: string; name?: string }) => {
     const a = AGENTS[kind]
     const id = createId()
     // claude lets us pin the conversation id up front (--session-id), so a restart
     // resumes THIS terminal's session, not the cwd's most-recent one. codex can't,
     // so it launches plain and we detect its session id from the rollout it writes.
     const sessionId = kind === 'claude' ? createId() : undefined
-    apply((s) => addTerminal(s, featureId, { id, name: a.defaultName, startupCommand: agentLaunchCommand(kind, sessionId), kind, sessionId }))
+    apply((s) => addTerminal(s, featureId, { id, name: opts?.name ?? a.defaultName, startupCommand: agentLaunchCommandWithPrompt(kind, sessionId, opts?.prompt), kind, sessionId }))
     if (kind === 'codex') {
       const cwd = state.workspace.groups.find((g) => g.features.some((f) => f.id === featureId))?.cwd ?? ''
       // Exclude ids already on other terminals so a fresh codex never re-grabs a
@@ -307,6 +309,11 @@ export default function App() {
       })
     }
   }
+  const voice = useVoice({
+    state, apply, markStarted,
+    stopReviewLoop: (id) => review.stopLoop(id),
+    launchAgent
+  })
   const finishExport = (res: ExportRunResult) => {
     transferRef.current = false
     setExportProgress(null)
@@ -487,6 +494,7 @@ export default function App() {
         onAttentionClear={attention.clear}
         onAttentionClearAll={attention.clearAll}
         onToggleAttentionMute={attention.toggleMute}
+        onVoice={voice.toggle}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -641,6 +649,7 @@ export default function App() {
         )
       })()}
       <ExportToast progress={exportProgress} notice={exportNotice} onDismiss={() => setExportNotice(null)} />
+      <VoiceOverlay state={voice.ui} onConfirm={voice.confirm} onCancel={voice.cancel} />
     </div>
   )
 }

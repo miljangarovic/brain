@@ -46,6 +46,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onExportGroup: noop,
     onExportFeature: noop,
     onImport: noop,
+    onVoice: noop,
     onArchiveFeature: noop,
     onOpenArchive: noop,
     onAddDocument: noop,

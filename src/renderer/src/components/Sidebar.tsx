@@ -126,6 +126,7 @@ export function Sidebar(props: {
   onExportGroup: (groupId: string) => void
   onExportFeature: (featureId: string) => void
   onImport: () => void
+  onVoice: () => void
   reviewStatus: Record<string, ReviewStatus | undefined>
   onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
   pendingRenameTerminalId?: string | null
@@ -153,7 +154,7 @@ export function Sidebar(props: {
     groups, activeTerminalId, activeFeatureId, activeGroupId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveGroup, onMoveFeature, onMoveTerminal,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onArchiveFeature, onOpenArchive, onAddDocument, onOpenInFiles,
-    onExportGroup, onExportFeature, onImport,
+    onExportGroup, onExportFeature, onImport, onVoice,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
     onSelectFile, onCloseFile, onRenameFilePane, onMoveFile, onOpenDocumentExternally,
     onOpenDocument, onRenameDocument, onRemoveDocument, docExists, pendingRenameDocId, onPendingRenameDocConsumed,
@@ -571,6 +572,10 @@ export function Sidebar(props: {
         <button aria-label="Import project or feature" title="Import an exported project/feature zip" onClick={onImport}
           className="rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
           Import…
+        </button>
+        <button aria-label="Voice command" title="Voice command (Ctrl+Alt+Space)" onClick={onVoice}
+          className="rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
+          🎤
         </button>
       </div>
 
