@@ -10,6 +10,7 @@ import {
   addDocument, renameDocument, removeDocument,
   openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane
 } from './store'
+
 import type { Group, Feature } from '@shared/types'
 import { migrateWorkspace } from './migrate'
 
@@ -813,5 +814,67 @@ describe('file panes', () => {
     const archived = archiveFeature(s, fid)
     expect(findFilePane(archived, 'p1')).toBeNull() // active features only
     expect(archived.workspace.groups[0].archivedFeatures![0].files).toHaveLength(1)
+  })
+})
+
+describe('file panes — uniform selection fallback', () => {
+  const setupWithFile = () => {
+    let s = addGroup(createInitialState(), 'proj', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 'term' })
+    const tid = s.workspace.groups[0].features[0].terminals[0].id
+    s = openFile(s, fid, { id: 'p1', path: '/p/readme.md' })
+    s = setActiveTerminal(s, tid)
+    return { s, fid, tid }
+  }
+
+  it('hiding the last visible terminal selects the first file pane', () => {
+    const { s, tid } = setupWithFile()
+    const out = hideTerminal(s, tid)
+    expect(out.activeTerminalId).toBe('p1')
+  })
+
+  it('hideTerminal is a no-op for file pane ids — they never enter hidden', () => {
+    const { s } = setupWithFile()
+    const active = setActiveTerminal(s, 'p1')
+    const out = hideTerminal(active, 'p1')
+    expect(out.hidden).toEqual([])
+    expect(out.activeTerminalId).toBe('p1')
+  })
+
+  it('removing the last terminal selects the first file pane', () => {
+    const { s, tid } = setupWithFile()
+    const out = removeTerminal(s, tid)
+    expect(out.activeTerminalId).toBe('p1')
+  })
+
+  // Two panes with p2 active: the stale-selection fallback in the CURRENT code
+  // would keep p2, so this is genuinely red before the fix and pins the rule.
+  it('grid→tabs collapse on a terminal-less feature focuses the FIRST file pane', () => {
+    let s = addGroup(createInitialState(), 'proj', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = openFile(s, fid, { id: 'p1', path: '/p/a.md' })
+    s = openFile(s, fid, { id: 'p2', path: '/p/b.md' }) // active: p2
+    s = toggleFeatureViewMode(s, fid)                   // tabs → grid
+    expect(toggleFeatureViewMode(s, fid).activeTerminalId).toBe('p1')
+  })
+
+  it('setActiveFeature on a terminal-less feature selects its first file pane', () => {
+    let s = addGroup(createInitialState(), 'proj', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = openFile(s, fid, { id: 'p1', path: '/p/a.md' })
+    s = addFeature(s, s.workspace.groups[0].id, 'extra') // selection moves away
+    expect(setActiveFeature(s, fid).activeTerminalId).toBe('p1')
+  })
+
+  it('selectFeature (via deleteFeature of the active feature) lands on a file-pane-only sibling', () => {
+    let s = addGroup(createInitialState(), 'proj', '/p')
+    const gid = s.workspace.groups[0].id
+    const generalId = s.workspace.groups[0].features[0].id
+    s = openFile(s, generalId, { id: 'p1', path: '/p/a.md' })
+    s = addFeature(s, gid, 'extra') // active now: 'extra'
+    s = deleteFeature(s, s.workspace.groups[0].features[1].id)
+    expect(s.activeFeatureId).toBe(generalId)
+    expect(s.activeTerminalId).toBe('p1')
   })
 })

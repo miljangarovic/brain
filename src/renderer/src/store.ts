@@ -45,7 +45,7 @@ const firstVisiblePane = (f: Feature | null, hidden: string[]): { id: string } |
 
 const selectFeature = (g: Group | null, hidden: string[]): { featureId: string | null; terminalId: string | null } => {
   const f = g?.features[0] ?? null
-  return { featureId: f?.id ?? null, terminalId: firstVisibleTerminal(f, hidden)?.id ?? null }
+  return { featureId: f?.id ?? null, terminalId: firstVisiblePane(f, hidden)?.id ?? null }
 }
 
 // ---- init ----------------------------------------------------------------
@@ -167,7 +167,7 @@ export function toggleFeatureViewMode(state: AppState, featureId: string): AppSt
   // so focus the feature's first (visible) terminal — exactly one stays on, no
   // matter which pane happened to be active in the grid.
   if (nextMode === 'tabs' && feature) {
-    const first = feature.terminals.find((t) => !state.hidden.includes(t.id)) ?? feature.terminals[0] ?? null
+    const first = feature.terminals.find((t) => !state.hidden.includes(t.id)) ?? feature.terminals[0] ?? feature.files?.[0] ?? null
     return {
       ...state,
       workspace,
@@ -467,7 +467,7 @@ export function removeTerminal(state: AppState, terminalId: string): AppState {
       if (activeTerminalId === terminalId) {
         const cand = terminals[idx] ?? terminals[idx - 1]
         const pick = cand && !hidden.includes(cand.id) ? cand : terminals.find((t) => !hidden.includes(t.id))
-        activeTerminalId = pick?.id ?? null
+        activeTerminalId = pick?.id ?? f.files?.[0]?.id ?? null
       }
       return { ...f, terminals }
     })
@@ -478,13 +478,14 @@ export function removeTerminal(state: AppState, terminalId: string): AppState {
 // Hide a terminal from the tab bar — its shell keeps running (the TerminalView
 // stays mounted). If it was the active one, move selection to a visible sibling.
 export function hideTerminal(state: AppState, terminalId: string): AppState {
+  const loc = featureOfTerminal(state.workspace, terminalId)
+  if (!loc) return state // not a terminal (e.g. a file pane id) — hide is a terminal concept
   if (state.hidden.includes(terminalId)) return state
   const hidden = [...state.hidden, terminalId]
   let activeTerminalId = state.activeTerminalId
   if (activeTerminalId === terminalId) {
-    const loc = featureOfTerminal(state.workspace, terminalId)
-    const sib = loc?.feature.terminals.find((t) => t.id !== terminalId && !hidden.includes(t.id))
-    activeTerminalId = sib?.id ?? null
+    const sib = loc.feature.terminals.find((t) => t.id !== terminalId && !hidden.includes(t.id))
+    activeTerminalId = sib?.id ?? loc.feature.files?.[0]?.id ?? null
   }
   return { ...state, hidden, activeTerminalId }
 }
@@ -521,7 +522,7 @@ export function setActiveFeature(state: AppState, featureId: string): AppState {
     ...state,
     activeGroupId: group?.id ?? state.activeGroupId,
     activeFeatureId: featureId,
-    activeTerminalId: firstVisibleTerminal(feature, state.hidden)?.id ?? null
+    activeTerminalId: firstVisiblePane(feature, state.hidden)?.id ?? null
   }
 }
 
