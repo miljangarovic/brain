@@ -52,10 +52,15 @@ describe('ExportToast', () => {
 
   it('notice with a path offers Show in folder', async () => {
     const showItem = vi.fn()
+    const original = (window as { brain?: unknown }).brain
     ;(window as unknown as { brain: { showItemInFolder: (p: string) => void } }).brain = { showItemInFolder: showItem }
-    render(<ExportToast progress={null} notice={{ text: 'Exported to /tmp/x.zip', path: '/tmp/x.zip' }} onDismiss={() => {}} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Show in folder' }))
-    expect(showItem).toHaveBeenCalledWith('/tmp/x.zip')
+    try {
+      render(<ExportToast progress={null} notice={{ text: 'Exported to /tmp/x.zip', path: '/tmp/x.zip' }} onDismiss={() => {}} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Show in folder' }))
+      expect(showItem).toHaveBeenCalledWith('/tmp/x.zip')
+    } finally {
+      ;(window as { brain?: unknown }).brain = original
+    }
   })
 
   it('text-only notice has no folder button', () => {

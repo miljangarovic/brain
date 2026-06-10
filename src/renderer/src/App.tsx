@@ -250,7 +250,7 @@ export default function App() {
       window.brain.showNotification({
         key: `export:${path}`,
         title: 'Export finished',
-        body: path.split('/').pop() || path
+        body: path.split(/[\\/]/).pop() || path
       })
     } else {
       setExportNotice({ text: `Export failed: ${res.warnings.join('; ') || 'unknown error'}` })

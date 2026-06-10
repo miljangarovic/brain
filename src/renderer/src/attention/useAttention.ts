@@ -119,7 +119,9 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
 
   const handleNotificationClick = useCallback((key: string) => {
     // showTerminal both un-hides (no-op when visible) and activates the terminal,
-    // so a click on the alert always reveals it.
+    // so a click on the alert always reveals it. Non-terminal keys (e.g. the
+    // export-finished notification's 'export:<path>') are harmless no-ops here —
+    // the window focus they want is handled in the main process before this runs.
     apply((s) => showTerminal(s, key))
     clearInternal(key)
   }, [apply, clearInternal])
