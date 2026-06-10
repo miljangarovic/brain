@@ -2,6 +2,7 @@
 // flight at a time (whisper saturates the machine anyway); a dead child is
 // respawned lazily on the next request. forkImpl is injectable for tests.
 import { utilityProcess } from 'electron'
+import { dirname, join } from 'path'
 
 export interface ChildLike {
   postMessage(msg: unknown): void
@@ -15,8 +16,24 @@ interface Pending { resolve: (text: string) => void; reject: (err: Error) => voi
 // A queued (not yet dispatched) request: dispatch fn + its reject for early rejection.
 interface Queued { dispatch: () => void; reject: (err: Error) => void }
 
+// whisper.node dynamically links libwhisper/libggml shared libs that ship
+// NEXT to it inside the addon package (dist/<platform>-<arch>/). The loader
+// honors LD_LIBRARY_PATH only from process start, so it must be set on the
+// CHILD's env at fork time — setting it inside the child is too late for
+// dlopen. (macOS would need DYLD_LIBRARY_PATH instead; Linux-only for now.)
+const addonLibDir = () =>
+  join(dirname(require.resolve('@kutalia/whisper-node-addon')), '..', `${process.platform}-${process.arch}`)
+
 export function createTranscriber(opts: { childPath: string; forkImpl?: (path: string) => ChildLike }) {
-  const fork = opts.forkImpl ?? ((p: string) => utilityProcess.fork(p) as unknown as ChildLike)
+  const fork = opts.forkImpl ?? ((p: string) => {
+    const libDir = addonLibDir()
+    return utilityProcess.fork(p, [], {
+      env: {
+        ...process.env,
+        LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH ? `${libDir}:${process.env.LD_LIBRARY_PATH}` : libDir
+      }
+    }) as unknown as ChildLike
+  })
   let child: ChildLike | null = null
   let nextId = 1
   const pending = new Map<number, Pending>()
