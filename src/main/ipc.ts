@@ -8,6 +8,7 @@ import { createDebouncedSaver } from './persistence'
 import type { Workspace, ReviewPhase } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
+import { pathsExist } from './pathsExist'
 import { createReviewWatcher } from './reviewWatcher'
 import { createNotifier } from './notifications'
 import { resolveTranscript } from './transcript'
@@ -154,8 +155,6 @@ export function registerIpc(opts: {
     return null
   })
 
-  const pathExists = (p: string): Promise<boolean> => fsp.access(p).then(() => true, () => false)
-
   // Export a project/feature: ask where to save FIRST (cancel costs nothing),
   // then summarize each agent session headlessly and write the archive.
   ipcMain.handle(IPC.exportRun, async (_e, input: ExportScopeInput) => {
@@ -191,7 +190,7 @@ export function registerIpc(opts: {
       const out = await extractImportArchive(res.filePaths[0], join(userDataDir, 'imports', randomUUID()))
       if ('error' in out) return { error: out.error }
       const root = out.manifest.group.cwd
-      return { manifest: out.manifest, dir: out.dir, cwdExists: root === '' ? true : await pathExists(root) }
+      return { manifest: out.manifest, dir: out.dir, cwdExists: root === '' ? true : (await pathsExist([root]))[0] }
     } catch (err) {
       // fs failures during extraction (EACCES, ENOSPC, ...) must surface as a
       // result, not a rejected invoke — the renderer only handles { error }.
@@ -199,7 +198,7 @@ export function registerIpc(opts: {
     }
   })
 
-  ipcMain.handle(IPC.fsExists, (_e, p: { paths: string[] }) => Promise.all((p?.paths ?? []).map(pathExists)))
+  ipcMain.handle(IPC.fsExists, (_e, p: { paths: string[] }) => pathsExist(p?.paths ?? []))
 
   return saver
 }
