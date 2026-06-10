@@ -10,7 +10,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "rebuild": "electron-rebuild -f -w node-pty",
+    "rebuild": "electron-rebuild -f -w node-pty,@kutalia/whisper-node-addon",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "dist": "electron-vite build && electron-builder",
@@ -62,7 +62,8 @@
       "package.json"
     ],
     "asarUnpack": [
-      "**/node_modules/node-pty/**"
+      "**/node_modules/node-pty/**",
+      "**/node_modules/@kutalia/whisper-node-addon/**"
     ],
     "extraResources": [
       {
