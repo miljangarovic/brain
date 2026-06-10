@@ -1,6 +1,5 @@
 import type { ReviewPhase } from '@shared/types'
 
-export { shellSingleQuote } from '../shellQuote'
 import { shellSingleQuote } from '../shellQuote'
 
 /** `<agent> '<prompt>'` — launches the agent with the prompt as its first message. */
