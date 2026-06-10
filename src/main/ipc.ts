@@ -49,7 +49,9 @@ export function registerIpc(opts: {
   ipcMain.on(IPC.workspaceSave, (_e, ws: Workspace) => saver.save(ws))
   ipcMain.on(IPC.ptyCreate, (_e, o: PtyCreateOptions) => ptyManager.create(o))
   ipcMain.on(IPC.ptyInput, (_e, p: { id: string; data: string }) => { ptyManager.write(p.id, p.data); busy.input(p.id) })
-  ipcMain.on(IPC.ptyResize, (_e, p: { id: string; cols: number; rows: number }) => ptyManager.resize(p.id, p.cols, p.rows))
+  // resize also opens the busy tracker's quiet window: the SIGWINCH repaint
+  // burst that follows (e.g. toggling grid view) must not light the spinner.
+  ipcMain.on(IPC.ptyResize, (_e, p: { id: string; cols: number; rows: number }) => { ptyManager.resize(p.id, p.cols, p.rows); busy.resize(p.id) })
   ipcMain.on(IPC.ptyKill, (_e, p: { id: string }) => ptyManager.kill(p.id))
 
   ipcMain.handle(IPC.dialogPickDirectory, async () => {

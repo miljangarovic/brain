@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest'
-import { gridColumns, gridDimensions, gridLayout, paneMode } from './layout'
+import { gridColumns, gridDimensions, gridLayout, paneMode, paneTerminals } from './layout'
+
+describe('paneTerminals', () => {
+  const terms = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+
+  it('grid mode surveys the whole feature — tab-hidden terminals included', () => {
+    expect(paneTerminals(terms, ['b'], true)).toEqual(terms)
+  })
+  it('tabs mode shows only the visible (non-hidden) terminals', () => {
+    expect(paneTerminals(terms, ['b'], false)).toEqual([{ id: 'a' }, { id: 'c' }])
+  })
+  it('is the identity when nothing is hidden', () => {
+    expect(paneTerminals(terms, [], false)).toEqual(terms)
+    expect(paneTerminals(terms, [], true)).toEqual(terms)
+  })
+})
 
 describe('gridColumns', () => {
   it('uses ceil(sqrt(n)) with a floor of 1', () => {

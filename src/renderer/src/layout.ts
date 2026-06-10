@@ -34,3 +34,11 @@ export function paneMode(opts: { inActiveGroup: boolean; gridMode: boolean }): P
   if (!opts.inActiveGroup) return 'hidden'
   return opts.gridMode ? 'grid' : 'stacked'
 }
+
+// Which terminals the main area shows for the active feature: grid surveys the
+// WHOLE feature — tab-hidden terminals included (their shells keep running and
+// the grid is the feature's overview) — while tabs mode shows only the visible
+// (non-hidden) set.
+export function paneTerminals<T extends { id: string }>(terminals: T[], hidden: string[], gridMode: boolean): T[] {
+  return gridMode ? terminals : terminals.filter((t) => !hidden.includes(t.id))
+}
