@@ -2,12 +2,13 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import { removedIds, pruneRecord } from './ptyReaper'
+import { shouldSpawn } from './spawnGate'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview
 } from './store'
 import { useAttention } from './attention/useAttention'
 import { migrateWorkspace } from './migrate'
@@ -88,12 +89,21 @@ export default function App() {
   // this set, so they launch normally. Held in a ref (it never changes after the
   // initial load and must not trigger re-renders).
   const resumeIdsRef = useRef<Set<string>>(new Set())
+  // Terminals present at first load stay cold (no PTY, no agent resume) until
+  // the user explicitly opens one — booting a big workspace must not launch
+  // everything at once. Terminals created later auto-start (see shouldSpawn).
+  const bootIdsRef = useRef<Set<string>>(new Set())
+  const [startedIds, setStartedIds] = useState<ReadonlySet<string>>(new Set())
+  const markStarted = useCallback((id: string) => {
+    setStartedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+  }, [])
   useEffect(() => {
     window.orchestrix.loadWorkspace().then((ws) => {
       const initial = createInitialState(migrateWorkspace(ws))
       resumeIdsRef.current = new Set(
         allTerminals(initial).filter((t) => t.kind === 'claude' || t.kind === 'codex').map((t) => t.id)
       )
+      bootIdsRef.current = new Set(allTerminals(initial).map((t) => t.id))
       setState(initial)
       setLoaded(true)
     }).catch((err) => {
@@ -146,6 +156,7 @@ export default function App() {
   }
   const startReview = (args: ReviewStartArgs) => {
     if (!reviewReq) return
+    markStarted(reviewReq.id) // the loop relays into the origin's PTY — it must be running
     void review.startReview({ originTerminalId: reviewReq.id, ...args })
     setReviewReq(null)
   }
@@ -170,6 +181,7 @@ export default function App() {
       if (visible.length === 0) return
       const idx = visible.findIndex((t) => t.id === state.activeTerminalId)
       const next = visible[(idx + dir + visible.length) % visible.length]
+      markStarted(next.id)
       apply((s) => setActiveTerminal(s, next.id))
     }
     window.addEventListener('keydown', onKey)
@@ -222,7 +234,7 @@ export default function App() {
         activeGroupId={state.activeGroupId}
         liveAgents={liveAgents}
         busy={busy}
-        onSelectTerminal={(id) => apply((s) => showTerminal(s, id))}
+        onSelectTerminal={(id) => { markStarted(id); apply((s) => showTerminal(s, id)) }}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
         onAddGroup={() => setGroupDialogOpen(true)}
@@ -262,7 +274,7 @@ export default function App() {
         attention={attention.attention}
         attentionItems={attentionItems}
         attentionMuted={attention.muted}
-        onAttentionSelect={(id) => { apply((s) => showTerminal(s, id)); attention.clear(id) }}
+        onAttentionSelect={(id) => { markStarted(id); apply((s) => showTerminal(s, id)); attention.clear(id) }}
         onAttentionClear={attention.clear}
         onAttentionClearAll={attention.clearAll}
         onToggleAttentionMute={attention.toggleMute}
@@ -288,7 +300,7 @@ export default function App() {
           activeId={state.activeTerminalId}
           liveAgents={liveAgents}
           busy={busy}
-          onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
+          onSelect={(id) => { markStarted(id); apply((s) => setActiveTerminal(s, id)) }}
           onClose={(id) => apply((s) => hideTerminal(s, id))}
           reviewStatus={reviewStatus}
           attention={attention.attention}
@@ -337,6 +349,10 @@ export default function App() {
                 clearGridDrag()
               }
             } : undefined
+            // Review-linked terminals are exempt from cold start: the loop's
+            // relay writes into the origin's PTY and the reviewer must run to
+            // produce its verdict, so a restored mid-review pair stays live.
+            const started = shouldSpawn(t.id, bootIdsRef.current, startedIds) || isUnderReview(state, t.id)
             return (
               <TerminalPane
                 key={t.id}
@@ -348,9 +364,11 @@ export default function App() {
                 busy={!!busy[t.id]}
                 liveAgent={liveAgents[t.id]}
                 reviewStatus={reviewStatus[t.id]}
-                onActivate={() => apply((s) => setActiveTerminal(s, t.id))}
+                onActivate={() => { markStarted(t.id); apply((s) => setActiveTerminal(s, t.id)) }}
                 dnd={dnd}
                 resume={resumeIdsRef.current.has(t.id)}
+                started={started}
+                onStart={() => markStarted(t.id)}
               />
             )
           })}

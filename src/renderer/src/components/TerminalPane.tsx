@@ -27,7 +27,7 @@ export interface PaneDnd {
 }
 
 export function TerminalPane({
-  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume
+  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume, started, onStart
 }: {
   terminal: Terminal
   active: boolean
@@ -40,6 +40,8 @@ export function TerminalPane({
   onActivate: () => void
   dnd?: PaneDnd             // grid reorder handlers (present only for gridded panes)
   resume?: boolean          // restored agent terminal → spawn with its resume command
+  started: boolean          // false → boot-restored and never opened: render a cold placeholder, no PTY
+  onStart: () => void
 }) {
   const gridStyle = gridded
     ? {
@@ -78,7 +80,24 @@ export function TerminalPane({
         </div>
       )}
       <div className={gridded ? 'relative flex-1 min-h-0' : 'absolute inset-0'}>
-        <TerminalView terminal={terminal} active={active} resume={resume} />
+        {started ? (
+          <TerminalView terminal={terminal} active={active} resume={resume} />
+        ) : (
+          // Cold pane: the shell/agent spawns only when the user opens it.
+          // Mounting TerminalView is what creates the PTY, so we render this
+          // stand-in instead until then.
+          <button
+            type="button"
+            onClick={onStart}
+            className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface text-fg-muted hover:text-fg transition-colors"
+          >
+            <TerminalKindIcon kind={liveAgent ?? terminal.kind ?? 'shell'} className="opacity-60" />
+            {!gridded && <span className="text-sm font-medium" style={{ fontFamily: MONO_FONT }}>{terminal.name}</span>}
+            <span className="text-xs">
+              Click to start{resume && (terminal.kind === 'claude' || terminal.kind === 'codex') ? ' — resumes its session' : ''}
+            </span>
+          </button>
+        )}
       </div>
       {gridded && dnd?.isDropTarget && (
         <div
