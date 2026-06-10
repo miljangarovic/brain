@@ -1,9 +1,10 @@
-import type { Feature, Group } from './types'
+import type { Feature, Group, TerminalKind } from './types'
 
 export const EXPORT_FORMAT = 'brain-export' as const
 export const EXPORT_VERSION = 1 as const
 
-export type AgentSessionKind = 'claude' | 'codex'
+// Only agent terminals have sessions to summarize; shells are structure-only.
+export type AgentSessionKind = Exclude<TerminalKind, 'shell'>
 
 export interface SessionEntry {
   kind: AgentSessionKind
@@ -27,10 +28,10 @@ interface ManifestCommon {
 
 export type ExportManifest = ManifestCommon & ExportScopeInput
 
-export interface ExportProgress { done: number; total: number; current: string }
+export interface ExportProgress { done: number; total: number; current: string /* "feature/terminal" label */ }
 
 export interface ExportRunResult {
-  ok: boolean
+  ok: boolean          // false + canceled: user closed the dialog; false alone: export failed (warnings carry why)
   canceled?: boolean
   path?: string
   warnings: string[]   // one entry per session that exported without a summary
