@@ -4,7 +4,7 @@ import { ReviewDialog } from './ReviewDialog'
 
 beforeEach(() => {
   // @ts-expect-error test stub
-  window.orchestrix = {
+  window.brain = {
     suggestSpec: vi.fn().mockResolvedValue('/p/docs/spec.md'),
     pickFile: vi.fn().mockResolvedValue('/p/other.md')
   }

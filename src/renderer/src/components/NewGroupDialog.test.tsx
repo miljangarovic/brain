@@ -38,7 +38,7 @@ describe('NewGroupDialog', () => {
   })
 
   it('fills cwd from the native folder picker', async () => {
-    ;(window as unknown as { orchestrix: { pickDirectory: () => Promise<string | null> } }).orchestrix = {
+    ;(window as unknown as { brain: { pickDirectory: () => Promise<string | null> } }).brain = {
       pickDirectory: vi.fn().mockResolvedValue('/picked/dir')
     }
     const onCreate = vi.fn()

@@ -39,7 +39,7 @@ export function useReview(
   const armReviewWatch = useCallback((reviewerId: string, reviewFile: string, phase: ReviewPhase, round: number) => {
     const watchId = watchIdFor(reviewerId, phase, round)
     watching.current.set(watchId, { reviewerId, reviewFile })
-    window.orchestrix.watchFile(watchId, reviewFile)
+    window.brain.watchFile(watchId, reviewFile)
   }, [])
 
   // Send a review request for (phase, round) into the existing reviewer PTY and
@@ -61,7 +61,7 @@ export function useReview(
   const finalizeApproved = useCallback((reviewerId: string, originId: string) => {
     awaiting.current.delete(originId)
     for (const [watchId, w] of [...watching.current]) {
-      if (w.reviewerId === reviewerId) { window.orchestrix.unwatchFile(watchId); watching.current.delete(watchId) }
+      if (w.reviewerId === reviewerId) { window.brain.unwatchFile(watchId); watching.current.delete(watchId) }
     }
     apply((s) => removeTerminal(s, reviewerId))
     setStatus(reviewerId, undefined)
@@ -74,8 +74,8 @@ export function useReview(
     if (!featureId) return
     const origin = getTerminalById(state, a.originTerminalId)
     const round = 1
-    const paths = await window.orchestrix.resolveReviewDir(a.originTerminalId, a.phase, round)
-    const transcriptPath = await window.orchestrix.resolveTranscript(origin?.cwd ?? '', origin?.kind)
+    const paths = await window.brain.resolveReviewDir(a.originTerminalId, a.phase, round)
+    const transcriptPath = await window.brain.resolveTranscript(origin?.cwd ?? '', origin?.kind)
     const link: ReviewLink = {
       originTerminalId: a.originTerminalId,
       phase: a.phase, round, maxRounds: a.maxRounds,
@@ -107,17 +107,17 @@ export function useReview(
     if (!reviewer || !link) {
       // Reviewer vanished (deleted along with its feature/group) — release the watch.
       watching.current.delete(watchId)
-      window.orchestrix.unwatchFile(watchId)
+      window.brain.unwatchFile(watchId)
       return
     }
-    const text = (await window.orchestrix.readTextFile(w.reviewFile)) ?? ''
+    const text = (await window.brain.readTextFile(w.reviewFile)) ?? ''
     const verdict = parseVerdictStrict(text)
     // No VERDICT line yet — the reviewer is still writing (empty create, partial
     // flush). Keep the watch armed: acting now would misread APPROVED as
     // needs-work and tear the watch down before the real verdict ever lands.
     if (!verdict) return
     watching.current.delete(watchId)
-    window.orchestrix.unwatchFile(watchId)
+    window.brain.unwatchFile(watchId)
     if (verdict === 'approved') {
       finalizeApproved(reviewer.id, link.originTerminalId) // reviewer closes; origin goes green
       return
@@ -151,7 +151,7 @@ export function useReview(
       setStatus(id, undefined)
       return
     }
-    const paths = await window.orchestrix.resolveReviewDir(id, link.phase, decision.round)
+    const paths = await window.brain.resolveReviewDir(id, link.phase, decision.round)
     apply((s) => patchReviewLink(s, reviewer.id, { round: decision.round }))
     requestReview(link, reviewer.id, link.phase, decision.round, paths.reviewFile)
   }, [state, apply, setStatus, requestReview])
@@ -168,7 +168,7 @@ export function useReview(
     for (const [watchId, w] of [...watching.current]) {
       if (!getTerminalById(state, w.reviewerId)) {
         watching.current.delete(watchId)
-        window.orchestrix.unwatchFile(watchId)
+        window.brain.unwatchFile(watchId)
       }
     }
     for (const t of allTerminals(state)) {
@@ -197,7 +197,7 @@ export function useReview(
     if (!reviewer || !link) return
     const round = link.round + 1
     const maxRounds = link.maxRounds + 3
-    const paths = await window.orchestrix.resolveReviewDir(link.originTerminalId, link.phase, round)
+    const paths = await window.brain.resolveReviewDir(link.originTerminalId, link.phase, round)
     apply((s) => patchReviewLink(s, reviewer.id, { round, maxRounds }))
     requestReview({ ...link, maxRounds }, reviewer.id, link.phase, round, paths.reviewFile)
   }, [state, apply, requestReview])
@@ -216,7 +216,7 @@ export function useReview(
     if (!reviewer || !link) return
     awaiting.current.delete(link.originTerminalId)
     for (const [watchId, w] of [...watching.current]) {
-      if (w.reviewerId === reviewer.id) { window.orchestrix.unwatchFile(watchId); watching.current.delete(watchId) }
+      if (w.reviewerId === reviewer.id) { window.brain.unwatchFile(watchId); watching.current.delete(watchId) }
     }
     apply((s) => removeTerminal(s, reviewer.id))
     setStatus(reviewer.id, undefined)

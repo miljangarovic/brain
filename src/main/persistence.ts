@@ -55,7 +55,7 @@ export function createDebouncedSaver(
       try {
         await write(path, ws)
       } catch (err) {
-        console.error('[orchestrix] failed to save workspace:', err)
+        console.error('[brain] failed to save workspace:', err)
       }
     })
     return chain

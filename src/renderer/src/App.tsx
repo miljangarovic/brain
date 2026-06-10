@@ -51,7 +51,7 @@ export default function App() {
 
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
-    return window.orchestrix.onPtyProc((id, process) => {
+    return window.brain.onPtyProc((id, process) => {
       setLiveAgents((m) => ({ ...m, [id]: detectAgent(process) ?? undefined }))
     })
   }, [])
@@ -63,7 +63,7 @@ export default function App() {
   // busy also clears its green 'approved' review dot — its next request has started.
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   useEffect(() => {
-    return window.orchestrix.onPtyBusy((id, b) => {
+    return window.brain.onPtyBusy((id, b) => {
       setBusy((m) => ({ ...m, [id]: b }))
       if (b) setReviewStatus((m) => (m[id] === 'approved' ? { ...m, [id]: undefined } : m))
     })
@@ -75,13 +75,13 @@ export default function App() {
     []
   )
   const review = useReview(state, apply, setStatus, reviewStatus)
-  useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
-  useEffect(() => window.orchestrix.onPtyBusy(review.handleBusy), [review.handleBusy])
+  useEffect(() => window.brain.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
+  useEffect(() => window.brain.onPtyBusy(review.handleBusy), [review.handleBusy])
 
   const attention = useAttention(state, apply)
-  useEffect(() => window.orchestrix.onPtyBusy(attention.handleBusy), [attention.handleBusy])
-  useEffect(() => window.orchestrix.onPtyExit(attention.handleExit), [attention.handleExit])
-  useEffect(() => window.orchestrix.onNotificationClick(attention.handleNotificationClick), [attention.handleNotificationClick])
+  useEffect(() => window.brain.onPtyBusy(attention.handleBusy), [attention.handleBusy])
+  useEffect(() => window.brain.onPtyExit(attention.handleExit), [attention.handleExit])
+  useEffect(() => window.brain.onNotificationClick(attention.handleNotificationClick), [attention.handleNotificationClick])
 
   // Agent terminals present at first load are "restored" — their PTYs should
   // spawn with the agent's resume command so the previous session continues
@@ -98,7 +98,7 @@ export default function App() {
     setStartedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
   }, [])
   useEffect(() => {
-    window.orchestrix.loadWorkspace().then((ws) => {
+    window.brain.loadWorkspace().then((ws) => {
       const initial = createInitialState(migrateWorkspace(ws))
       resumeIdsRef.current = new Set(
         allTerminals(initial).filter((t) => t.kind === 'claude' || t.kind === 'codex').map((t) => t.id)
@@ -109,14 +109,14 @@ export default function App() {
     }).catch((err) => {
       // `loaded` stays false, keeping the save effect gated off — a failed load
       // must never let an empty in-memory workspace overwrite the file on disk.
-      console.error('[orchestrix] failed to load workspace:', err)
+      console.error('[brain] failed to load workspace:', err)
       setLoadError(true)
     })
   }, [setState])
 
   useEffect(() => {
     if (!loaded) return
-    window.orchestrix.saveWorkspace(state.workspace)
+    window.brain.saveWorkspace(state.workspace)
   }, [state.workspace, loaded])
 
   // Kill a terminal's PTY only when it actually leaves the workspace (delete
@@ -127,7 +127,7 @@ export default function App() {
     const ids = new Set(allTerminals(state).map((t) => t.id))
     if (prevTermIds.current) {
       const removed = removedIds(prevTermIds.current, ids)
-      for (const id of removed) window.orchestrix.killPty(id)
+      for (const id of removed) window.brain.killPty(id)
       if (removed.length > 0) {
         // Drop the dead terminals' per-id UI state so these Records don't grow
         // for the whole session (and a future id reuse can't inherit stale state).
@@ -201,7 +201,7 @@ export default function App() {
       // Exclude ids already on other terminals so a fresh codex never re-grabs a
       // session that's merely being resumed (its rollout looks recent on disk).
       const exclude = allTerminals(state).map((t) => t.sessionId).filter((s): s is string => !!s)
-      void window.orchestrix.captureAgentSession({ kind, cwd, exclude }).then((sid) => {
+      void window.brain.captureAgentSession({ kind, cwd, exclude }).then((sid) => {
         if (sid) apply((s) => setTerminalSessionId(s, id, sid))
       })
     }
@@ -265,7 +265,7 @@ export default function App() {
         }}
         onOpenInFiles={(gid) => {
           const g = state.workspace.groups.find((x) => x.id === gid)
-          window.orchestrix.openPath(g?.cwd ?? '')
+          window.brain.openPath(g?.cwd ?? '')
         }}
         reviewStatus={reviewStatus}
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}

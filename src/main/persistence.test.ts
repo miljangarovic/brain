@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { loadWorkspace, writeWorkspace, createDebouncedSaver } from './persistence'
 import { createWorkspace, Workspace } from '@shared/types'
 
-const tmpFile = () => join(tmpdir(), `orchestrix-test-${Math.random().toString(36).slice(2)}.json`)
+const tmpFile = () => join(tmpdir(), `brain-test-${Math.random().toString(36).slice(2)}.json`)
 
 const wsWithId = (id: string): Workspace => ({ groups: [{ id, name: id, cwd: '', collapsed: false, features: [] }] })
 

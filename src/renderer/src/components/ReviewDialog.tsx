@@ -36,12 +36,12 @@ export function ReviewDialog({
   useEffect(() => {
     if (phase === 'intent' || specPath) return
     let cancelled = false
-    window.orchestrix.suggestSpec(cwd).then((p) => { if (!cancelled && p) setSpecPath(p) })
+    window.brain.suggestSpec(cwd).then((p) => { if (!cancelled && p) setSpecPath(p) })
     return () => { cancelled = true }
   }, [phase, cwd, specPath])
 
   const browse = async () => {
-    const p = await window.orchestrix.pickFile({ defaultPath: specPath || cwd })
+    const p = await window.brain.pickFile({ defaultPath: specPath || cwd })
     if (p) setSpecPath(p)
   }
 

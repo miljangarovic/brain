@@ -67,7 +67,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     // permission prompt from a finished turn) when it goes idle.
     registerTail(terminal.id, () => readXtermTail(term, 20))
 
-    window.orchestrix.createPty({
+    window.brain.createPty({
       id: terminal.id,
       cwd: terminal.cwd,
       shell: terminal.shell ?? '',
@@ -76,11 +76,11 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
       startupCommand: agentStartupCommand({ kind: terminal.kind, sessionId: terminal.sessionId, resume }) ?? terminal.startupCommand
     })
 
-    const offData = window.orchestrix.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
-    const offExit = window.orchestrix.onPtyExit((id) => {
+    const offData = window.brain.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
+    const offExit = window.brain.onPtyExit((id) => {
       if (id === terminal.id) term.write('\r\n\x1b[33m[process exited]\x1b[0m\r\n')
     })
-    const inputDisposable = term.onData((data) => window.orchestrix.writePty(terminal.id, data))
+    const inputDisposable = term.onData((data) => window.brain.writePty(terminal.id, data))
 
     term.attachCustomKeyEventHandler((e) => {
       // A real keypress in this terminal marks it "engaged" — attention's idle
@@ -91,7 +91,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
 
       switch (classifyKeyEvent(e)) {
         case 'newline':
-          window.orchestrix.writePty(terminal.id, '\n')
+          window.brain.writePty(terminal.id, '\n')
           return false
         case 'copy':
           copySelection()
@@ -115,7 +115,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
       if (!rect || rect.width === 0 || rect.height === 0) return
       try {
         fit.fit()
-        window.orchestrix.resizePty(terminal.id, term.cols, term.rows)
+        window.brain.resizePty(terminal.id, term.cols, term.rows)
       } catch { /* ignore */ }
     })
     ro.observe(host)
@@ -148,7 +148,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     if (!term || !fit) return
     try {
       fit.fit()
-      window.orchestrix.resizePty(terminal.id, term.cols, term.rows)
+      window.brain.resizePty(terminal.id, term.cols, term.rows)
       term.focus()
     } catch { /* ignore */ }
   }, [active, terminal.id])

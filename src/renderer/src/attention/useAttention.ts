@@ -56,7 +56,7 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
     setAttentionMap(next)
     setQueue((q) => upsertItem(q, { terminalId: id, state: st, lastLine, ts: Date.now() }))
     const t = getTerminalById(stateRef.current, id)
-    window.orchestrix.showNotification({ key: id, title: notifTitle(st, t?.name ?? 'terminal'), body: lastLine })
+    window.brain.showNotification({ key: id, title: notifTitle(st, t?.name ?? 'terminal'), body: lastLine })
     beep(st)
   }, [])
 

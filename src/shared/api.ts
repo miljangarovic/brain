@@ -2,7 +2,7 @@ import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
 import type { ReviewPhase } from './types'
 
-export interface OrchestrixApi {
+export interface BrainApi {
   loadWorkspace(): Promise<Workspace>
   saveWorkspace(ws: Workspace): void
   createPty(opts: PtyCreateOptions): void

@@ -21,13 +21,13 @@ const api = {
 beforeEach(() => {
   vi.clearAllMocks()
   api.readTextFile.mockResolvedValue(null)
-  ;(window as unknown as { orchestrix: typeof api }).orchestrix = api
+  ;(window as unknown as { brain: typeof api }).brain = api
 })
 afterEach(() => {
   unregisterTail('origin')
 })
 
-// Import after the window.orchestrix shape is established.
+// Import after the window.brain shape is established.
 import { useReview } from './useReview'
 
 // A workspace restored from disk: an origin agent plus its reviewer terminal

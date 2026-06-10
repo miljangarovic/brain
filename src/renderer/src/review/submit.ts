@@ -7,6 +7,6 @@ export const SUBMIT_DELAY_MS = 100
 
 // Write `text` into the PTY, then submit it with a lone CR after SUBMIT_DELAY_MS.
 export function submitToPty(id: string, text: string): void {
-  window.orchestrix.writePty(id, text)
-  setTimeout(() => window.orchestrix.writePty(id, '\r'), SUBMIT_DELAY_MS)
+  window.brain.writePty(id, text)
+  setTimeout(() => window.brain.writePty(id, '\r'), SUBMIT_DELAY_MS)
 }
