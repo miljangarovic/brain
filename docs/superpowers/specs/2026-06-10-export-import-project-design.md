@@ -95,8 +95,9 @@ terminal continues from its summary via a startup prompt.
        mirroring `agentLaunchCommand`).
      - Codex: `codex "Read <abs-md-path> — …"` plus the existing post-launch session
        capture (`agentCaptureSession`).
-   - Terminals without a summary (shells, or agents whose summarization failed) import
-     fresh with their exported `startupCommand`.
+   - Shell terminals import with their exported `startupCommand`. Agent terminals
+     without a summary (summarization failed) get a REBUILT fresh launch command —
+     their exported one may embed a dead `--session-id` or a stale review prompt.
    - Nothing spawns at import time; a session starts when the user opens the terminal.
 4. A feature-scope zip imports into the active group; if no group exists, one is created
    from the manifest's `group.name`/`group.cwd`.

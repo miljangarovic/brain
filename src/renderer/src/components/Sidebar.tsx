@@ -95,6 +95,9 @@ export function Sidebar(props: {
   onDeleteFeature: (id: string) => void
   onDeleteTerminal: (id: string) => void
   onOpenInFiles: (groupId: string) => void
+  onExportGroup: (groupId: string) => void
+  onExportFeature: (featureId: string) => void
+  onImport: () => void
   reviewStatus: Record<string, ReviewStatus | undefined>
   onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
   pendingRenameTerminalId?: string | null
@@ -111,12 +114,14 @@ export function Sidebar(props: {
     groups, activeTerminalId, activeFeatureId, activeGroupId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveGroup, onMoveFeature, onMoveTerminal,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
+    onExportGroup, onExportFeature, onImport,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
     attention, attentionItems, attentionMuted, onAttentionSelect, onAttentionClear, onAttentionClearAll, onToggleAttentionMute
   } = props
 
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; terminalId: string } | null>(null)
+  const [featMenu, setFeatMenu] = useState<{ x: number; y: number; featureId: string } | null>(null)
 
   // Drag-and-drop reorder for projects, features, and terminals — each within its
   // own container only. The whole row is draggable. The active drag lives in a ref
@@ -302,6 +307,7 @@ export function Sidebar(props: {
                       draggable={!isEditing('feature', f.id)}
                       onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'feature', id: f.id, groupId: g.id }; setDrag({ kind: 'feature', id: f.id, groupId: g.id }) }}
                       onDragEnd={clearDrag}
+                      onContextMenu={(e) => { e.preventDefault(); setFeatMenu({ x: e.clientX, y: e.clientY, featureId: f.id }) }}
                     >
                       {featureActive && (
                         <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
@@ -399,10 +405,14 @@ export function Sidebar(props: {
         })}
       </div>
 
-      <div className="p-2 border-t border-line">
+      <div className="p-2 border-t border-line flex gap-2">
         <button aria-label="New Project" onClick={onAddGroup}
-          className="w-full rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
+          className="flex-1 rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
           + New Project
+        </button>
+        <button aria-label="Import project or feature" title="Import an exported project/feature zip" onClick={onImport}
+          className="rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
+          Import…
         </button>
       </div>
 
@@ -412,6 +422,7 @@ export function Sidebar(props: {
         return (
           <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
             { label: 'Rename', onSelect: () => startRename('group', g.id, g.name) },
+            { label: 'Export project…', onSelect: () => onExportGroup(g.id) },
             { label: 'Open in Files', onSelect: () => onOpenInFiles(g.id) }
           ]} />
         )
@@ -421,6 +432,12 @@ export function Sidebar(props: {
         <ContextMenu x={termMenu.x} y={termMenu.y} onClose={() => setTermMenu(null)} items={[
           { label: 'Review', onSelect: () => onReviewTerminal(termMenu.terminalId, 'codex') },
           { label: 'Delete', onSelect: () => onDeleteTerminal(termMenu.terminalId) }
+        ]} />
+      )}
+
+      {featMenu && (
+        <ContextMenu x={featMenu.x} y={featMenu.y} onClose={() => setFeatMenu(null)} items={[
+          { label: 'Export feature…', onSelect: () => onExportFeature(featMenu.featureId) }
         ]} />
       )}
 

@@ -3,6 +3,7 @@ import { IPC } from '../shared/ipc'
 import type { BrainApi } from '../shared/api'
 import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
+import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from '../shared/exportTypes'
 
 // pty:data / pty:exit are consumed by EVERY mounted terminal, and all terminals
 // stay mounted — so one ipcRenderer listener per terminal trips the default
@@ -61,6 +62,14 @@ const api: BrainApi = {
     return () => ipcRenderer.removeListener(IPC.notificationClick, listener)
   },
   resolvePathLinks: (opts) => ipcRenderer.invoke(IPC.linksResolve, opts) as Promise<(string | null)[]>,
+  exportArchive: (input: ExportScopeInput) => ipcRenderer.invoke(IPC.exportRun, input) as Promise<ExportRunResult>,
+  onExportProgress: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: ExportProgress) => cb(p)
+    ipcRenderer.on(IPC.exportProgress, listener)
+    return () => ipcRenderer.removeListener(IPC.exportProgress, listener)
+  },
+  importArchive: () => ipcRenderer.invoke(IPC.importRun) as Promise<ImportRunResult>,
+  pathsExist: (paths: string[]) => ipcRenderer.invoke(IPC.fsExists, { paths }) as Promise<boolean[]>,
 }
 
 contextBridge.exposeInMainWorld('brain', api)

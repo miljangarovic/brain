@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AGENTS, agentResumeCommand, agentLaunchCommand } from './agents'
+import { AGENTS, agentResumeCommand, agentLaunchCommand, agentContinueCommand } from './agents'
 
 describe('AGENTS', () => {
   it('defines claude and codex with label, command and default name', () => {
@@ -46,5 +46,23 @@ describe('agentLaunchCommand', () => {
   it('always starts codex plainly — its id is detected after launch', () => {
     expect(agentLaunchCommand('codex')).toBe('codex')
     expect(agentLaunchCommand('codex', 'ignored')).toBe('codex')
+  })
+})
+
+describe('agentContinueCommand', () => {
+  it('claude: pins a fresh session id and opens with the summary prompt', () => {
+    const cmd = agentContinueCommand('claude', '/data/imports/abc/sessions/auth-claude-aaaa.md', 'sid-9')
+    expect(cmd).toBe(
+      `claude --session-id sid-9 'Read /data/imports/abc/sessions/auth-claude-aaaa.md — it is a handoff summary of a previous session. Continue the work from where it left off.'`
+    )
+  })
+
+  it('codex: plain launch with the summary prompt (no id pinning)', () => {
+    const cmd = agentContinueCommand('codex', '/data/s.md')
+    expect(cmd).toBe(`codex 'Read /data/s.md — it is a handoff summary of a previous session. Continue the work from where it left off.'`)
+  })
+
+  it('single quotes in the path are shell-escaped', () => {
+    expect(agentContinueCommand('codex', "/data/it's.md")).toContain(`'Read /data/it'\\''s.md`)
   })
 })

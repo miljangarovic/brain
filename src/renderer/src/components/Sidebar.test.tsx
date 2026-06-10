@@ -40,6 +40,9 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onDeleteFeature: noop,
     onDeleteTerminal: noop,
     onOpenInFiles: noop,
+    onExportGroup: noop,
+    onExportFeature: noop,
+    onImport: noop,
     liveAgents: {},
     busy: {},
     reviewStatus: {},
@@ -366,6 +369,31 @@ describe('Sidebar (3-level)', () => {
       fireEvent.dragOver(termZone(container, 'f2'))
       fireEvent.drop(termZone(container, 'f2'))
       expect(onMoveTerminal).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('export / import entry points', () => {
+    it('group context menu offers Export project…', async () => {
+      const onExportGroup = vi.fn()
+      const { container } = renderSidebar({ onExportGroup })
+      fireEvent.contextMenu(container.querySelector('[data-group-id="g1"]')!)
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Export project…' }))
+      expect(onExportGroup).toHaveBeenCalledWith('g1')
+    })
+
+    it('feature row opens a context menu with Export feature…', async () => {
+      const onExportFeature = vi.fn()
+      const { container } = renderSidebar({ onExportFeature })
+      fireEvent.contextMenu(container.querySelector('[data-feature-id="f1"]')!)
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Export feature…' }))
+      expect(onExportFeature).toHaveBeenCalledWith('f1')
+    })
+
+    it('footer has an Import button', async () => {
+      const onImport = vi.fn()
+      renderSidebar({ onImport })
+      await userEvent.click(screen.getByRole('button', { name: 'Import project or feature' }))
+      expect(onImport).toHaveBeenCalled()
     })
   })
 

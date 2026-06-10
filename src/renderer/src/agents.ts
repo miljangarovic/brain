@@ -1,5 +1,6 @@
 // Quick-launch agent definitions. `command` is assumed to be on PATH.
 import type { TerminalKind } from '@shared/types'
+import { shellSingleQuote } from './shellQuote'
 
 export type AgentKind = 'claude' | 'codex'
 
@@ -44,6 +45,14 @@ export function agentResumeCommand(opts: {
 export function agentLaunchCommand(kind: AgentKind, sessionId?: string): string {
   if (kind === 'claude' && sessionId) return `claude --session-id ${sessionId}`
   return AGENTS[kind].command
+}
+
+// Launch command for an IMPORTED agent terminal: a fresh conversation (id
+// pinned when the agent supports it) whose first message points the agent at
+// the handoff summary that was written when the terminal was exported.
+export function agentContinueCommand(kind: AgentKind, summaryPath: string, sessionId?: string): string {
+  const prompt = `Read ${summaryPath} — it is a handoff summary of a previous session. Continue the work from where it left off.`
+  return `${agentLaunchCommand(kind, sessionId)} ${shellSingleQuote(prompt)}`
 }
 
 export function detectAgent(processName: string | null | undefined): AgentKind | null {
