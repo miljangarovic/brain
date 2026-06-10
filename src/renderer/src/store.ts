@@ -106,6 +106,8 @@ export function addImportedGroup(state: AppState, group: Group): AppState {
 // empty workspace gets a group built from the export's own name/cwd).
 export function addImportedFeature(state: AppState, feature: Feature, fallback: { name: string; cwd: string }): AppState {
   const target = getActiveGroup(state) ?? state.workspace.groups[0] ?? null
+  // Fresh import: no terminal id can be in state.hidden yet, so terminals[0]
+  // is always visible — no need for the hidden-aware selectFeature here.
   const first = feature.terminals[0]?.id ?? null
   if (!target) {
     const group: Group = { id: createId(), name: fallback.name, cwd: fallback.cwd, collapsed: false, features: [feature] }

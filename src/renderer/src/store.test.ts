@@ -542,9 +542,10 @@ describe('addImportedGroup / addImportedFeature', () => {
   }
 
   it('addImportedGroup appends the group and activates its first feature/terminal', () => {
-    const s0 = createInitialState()
+    let s0 = createInitialState()
+    s0 = addGroup(s0, 'existing', '/e')
     const s1 = addImportedGroup(s0, importedGroup)
-    expect(s1.workspace.groups.map((g) => g.id)).toContain('ig')
+    expect(s1.workspace.groups.map((g) => g.name)).toEqual(['existing', 'imported'])
     expect(s1.activeGroupId).toBe('ig')
     expect(s1.activeFeatureId).toBe('if')
     expect(s1.activeTerminalId).toBe('it')
@@ -566,6 +567,7 @@ describe('addImportedGroup / addImportedFeature', () => {
     expect(s1.workspace.groups).toHaveLength(1)
     expect(s1.workspace.groups[0]).toMatchObject({ name: 'fallback', cwd: '/fb' })
     expect(s1.workspace.groups[0].features.map((f) => f.id)).toEqual(['xf'])
+    expect(s1.activeGroupId).toBe(s1.workspace.groups[0].id)
     expect(s1.activeFeatureId).toBe('xf')
   })
 })
