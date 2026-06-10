@@ -17,8 +17,11 @@ export function ExportToast({ progress, notice, onDismiss }: {
 }) {
   if (!progress && !notice) return null
   const pct = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+  // No aria-atomic: with 2N snapshot updates per export, atomically
+  // re-announcing the whole session list would flood screen readers —
+  // role="status" alone (polite, incremental) is the right verbosity.
   return (
-    <div role="status" aria-live="polite" aria-atomic="true" className="fixed bottom-3 right-3 z-50 w-80 max-w-[90vw] rounded-md border border-line bg-elevated px-3 py-2 text-sm text-fg shadow-xl shadow-black/50">
+    <div role="status" aria-live="polite" className="fixed bottom-3 right-3 z-50 w-80 max-w-[90vw] rounded-md border border-line bg-elevated px-3 py-2 text-sm text-fg shadow-xl shadow-black/50">
       {progress ? (
         progress.total === 0 ? (
           <div className="flex items-center gap-2">
@@ -35,6 +38,7 @@ export function ExportToast({ progress, notice, onDismiss }: {
               <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
             </div>
             <ul className="mt-1.5 max-h-36 overflow-y-auto">
+              {/* items keep a stable order for the whole export — index key is safe */}
               {progress.items.map((it, i) => (
                 <li key={i} className="flex items-center gap-2 py-0.5 text-xs">
                   {it.state === 'running'

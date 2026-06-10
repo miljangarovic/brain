@@ -24,6 +24,13 @@ describe('ExportToast', () => {
     expect(status).toHaveTextContent('feat/term3')
   })
 
+  it('renders the finished state at 100%', () => {
+    render(<ExportToast progress={prog(3, 3, ['done', 'done', 'error'])} notice={null} onDismiss={() => {}} />)
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('Exporting — 100%')
+    expect(status).toHaveTextContent('3/3')
+  })
+
   it('shows a writing-archive line when there are no sessions', () => {
     render(<ExportToast progress={prog(0, 0, [])} notice={null} onDismiss={() => {}} />)
     expect(screen.getByRole('status')).toHaveTextContent('Writing archive…')
