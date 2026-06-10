@@ -26,7 +26,7 @@ const USER_INPUT_WINDOW_MS = 150
 // created terminals — a fresh mount always uses the terminal's saved
 // startupCommand verbatim (it embeds any --session-id pin, and for reviewers
 // the whole review prompt).
-export function TerminalView({ terminal, active, resume }: { terminal: TerminalModel; active: boolean; resume?: boolean }) {
+export function TerminalView({ terminal, active, resume, onOpenFile }: { terminal: TerminalModel; active: boolean; resume?: boolean; onOpenFile?: (path: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -97,7 +97,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
               // xterm link ranges are 1-based with an INCLUSIVE end column.
               range: { start: { x: c.start + 1, y: lineNo }, end: { x: c.end, y: lineNo } },
               text: c.text,
-              activate: (e: MouseEvent) => { if (e.ctrlKey || e.metaKey) window.brain.openPath(target) }
+              activate: (e: MouseEvent) => { if (e.ctrlKey || e.metaKey) (onOpenFile ?? window.brain.openPath)(target) }
             }]
           })
           cb(links.length > 0 ? links : undefined)
