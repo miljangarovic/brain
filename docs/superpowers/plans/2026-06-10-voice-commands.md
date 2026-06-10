@@ -16,6 +16,7 @@
 3. "Model kept warm after first use" may not hold: the addon's documented API is stateless (`transcribe({ model: path, … })` per call), which likely reloads the model each command. Task 9 Step 1 checks the `.d.ts` for a persistent-context API and uses it if present; otherwise the benchmark's ≤ ~2.5 s latency rule governs the model choice with the reload cost included honestly.
 4. The spec's middle benchmark candidate `Sagicc/whisper-medium-sr-combined` is substituted with `Sagicc` **small**-sr — the Sagicc/Whisper.cpp HF repo only ships large + small GGML. If small loses on accuracy while large misses the latency bar, converting medium with whisper.cpp's conversion script is the follow-up candidate.
 5. Invalid/stale ids surface as the error toast (with the transcript), not the spec's "confirm overlay with an error note" — functionally equivalent (nothing executable to confirm, never silent), and simpler.
+6. Download integrity is a content-length size check with discard-on-failure (no resume, no checksum) — single-flight prevents the concurrent-corruption case the spec's checksum targeted.
 
 **⚠ Before starting:** `App.tsx`, `Sidebar.tsx`, `Sidebar.test.tsx` carry uncommitted user changes in the working tree (`git status`). Ask the user to commit/stash them first — Tasks 15–16 modify those files.
 
