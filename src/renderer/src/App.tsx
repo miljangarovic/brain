@@ -73,7 +73,7 @@ export default function App() {
     (id: string, status: ReviewStatus | undefined) => setReviewStatus((m) => ({ ...m, [id]: status })),
     []
   )
-  const review = useReview(state, apply, setStatus)
+  const review = useReview(state, apply, setStatus, reviewStatus)
   useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
   useEffect(() => window.orchestrix.onPtyBusy(review.handleBusy), [review.handleBusy])
 

@@ -1,4 +1,11 @@
-import type { ReviewPhase } from '@shared/types'
+import type { ReviewLink, ReviewPhase } from '@shared/types'
+
+// The file the reviewer writes for (phase, round), rebuilt renderer-side from a
+// persisted link — used to re-arm verdict watches after a reload. Mirrors main's
+// reviewFilePath (reviewFs.ts); forward slashes work on every supported platform.
+export function reviewFileFor(link: Pick<ReviewLink, 'reviewDir' | 'phase' | 'round'>): string {
+  return `${link.reviewDir}/review-${link.phase}-${link.round}.md`
+}
 
 export const PHASE_ORDER: ReviewPhase[] = ['intent', 'spec', 'impl']
 
