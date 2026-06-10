@@ -62,4 +62,23 @@ describe('VoiceOverlay', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onCancel).toHaveBeenCalled()
   })
+
+  it('Enter on the focused Cancel button does NOT confirm (native button activation guard)', () => {
+    const { onConfirm } = renderState({
+      kind: 'confirm', transcript: 'zatvori', summary: 'Close terminal',
+      descriptor: { type: 'closeTerminal', terminalId: 't1' }
+    })
+    const cancelButton = screen.getByRole('button', { name: /Cancel/ })
+    fireEvent.keyDown(cancelButton, { key: 'Enter' })
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  it('Run button has focus when confirm modal has no textarea (promptless focus parking)', () => {
+    renderState({
+      kind: 'confirm', transcript: 'zatvori', summary: 'Close terminal',
+      descriptor: { type: 'closeTerminal', terminalId: 't1' }
+    })
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.getByRole('button', { name: /Run/ })).toHaveFocus()
+  })
 })

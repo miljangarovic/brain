@@ -16,9 +16,15 @@ export function VoiceOverlay({ state, onConfirm, onCancel }: {
   const hasPrompt = isConfirm && state.editablePrompt !== undefined
   const [prompt, setPrompt] = useState('')
   const promptRef = useRef('')
+  const runBtnRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (isConfirm) { setPrompt(state.editablePrompt ?? ''); promptRef.current = state.editablePrompt ?? '' }
   }, [isConfirm]) // eslint-disable-line react-hooks/exhaustive-deps -- reset only when the confirm opens
+  // When the confirm modal has no textarea, park focus on the Run button so typed
+  // keys (including Enter) activate it natively rather than leaking into the terminal.
+  useEffect(() => {
+    if (isConfirm && !hasPrompt) runBtnRef.current?.focus()
+  }, [isConfirm, hasPrompt])
 
   useEffect(() => {
     // Spec: Esc cancels at ANY stage — listening, processing, downloading,
@@ -29,7 +35,10 @@ export function VoiceOverlay({ state, onConfirm, onCancel }: {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onCancel() }
       // Shift+Enter keeps inserting newlines into the prompt textarea.
+      // Guard: if a button has focus, let the browser activate it natively (e.g.
+      // pressing Enter on the focused Cancel button must NOT run the command).
       else if (e.key === 'Enter' && !e.shiftKey && confirmable) {
+        if ((e.target as HTMLElement)?.tagName === 'BUTTON') return
         e.preventDefault(); e.stopPropagation()
         onConfirm(withPrompt ? promptRef.current : undefined)
       }
@@ -81,7 +90,7 @@ export function VoiceOverlay({ state, onConfirm, onCancel }: {
           )}
           <div className="flex justify-end gap-2">
             <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-fg hover:bg-hover transition-colors">Cancel (Esc)</button>
-            <button onClick={() => onConfirm(hasPrompt ? prompt : undefined)}
+            <button ref={runBtnRef} onClick={() => onConfirm(hasPrompt ? prompt : undefined)}
               className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90 transition">
               Run (Enter)
             </button>
