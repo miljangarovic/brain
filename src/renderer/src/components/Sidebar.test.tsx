@@ -43,6 +43,8 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onExportGroup: noop,
     onExportFeature: noop,
     onImport: noop,
+    onArchiveFeature: noop,
+    onAddDocument: noop,
     liveAgents: {},
     busy: {},
     reviewStatus: {},
@@ -400,6 +402,35 @@ describe('Sidebar (3-level)', () => {
   // Dropping outside the dragged kind's own container must still reorder, clamped
   // to the nearest end — aiming the exact half-row at the container's edge was a
   // needle-threading exercise (most of the sidebar was a dead zone for the drop).
+  describe('feature context menu', () => {
+    it('right-click on a feature opens Rename / New agents / Add document / Archive', () => {
+      renderSidebar()
+      fireEvent.contextMenu(screen.getByText('auth'))
+      for (const label of ['Rename', 'New Claude', 'New Codex', 'New Terminal', 'Add document…', 'Archive'])
+        expect(screen.getByRole('menuitem', { name: new RegExp(label.replace('…', '')) })).toBeInTheDocument()
+    })
+
+    it('Archive calls onArchiveFeature with the feature id', async () => {
+      const onArchiveFeature = vi.fn()
+      renderSidebar({ onArchiveFeature })
+      fireEvent.contextMenu(screen.getByText('auth'))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Archive' }))
+      expect(onArchiveFeature).toHaveBeenCalledWith('f1')
+    })
+
+    it('New Codex launches an agent; Add document calls onAddDocument', async () => {
+      const onLaunchAgent = vi.fn()
+      const onAddDocument = vi.fn()
+      renderSidebar({ onLaunchAgent, onAddDocument })
+      fireEvent.contextMenu(screen.getByText('auth'))
+      await userEvent.click(screen.getByRole('menuitem', { name: /New Codex/ }))
+      expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
+      fireEvent.contextMenu(screen.getByText('auth'))
+      await userEvent.click(screen.getByRole('menuitem', { name: /Add document/ }))
+      expect(onAddDocument).toHaveBeenCalledWith('f1')
+    })
+  })
+
   describe('forgiving drop zones (clamp to nearest position)', () => {
     const groupsZone = (c: HTMLElement) => c.querySelector('[data-groups]') as HTMLElement
     const termRow = (c: HTMLElement, id: string) => c.querySelector(`[data-term-id="${id}"]`) as HTMLElement

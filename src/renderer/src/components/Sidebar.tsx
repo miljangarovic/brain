@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon } from './icons'
+import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon, ClaudeIcon, CodexIcon, ShellIcon, DocIcon, ArchiveIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
@@ -94,6 +94,8 @@ export function Sidebar(props: {
   onDeleteGroup: (id: string) => void
   onDeleteFeature: (id: string) => void
   onDeleteTerminal: (id: string) => void
+  onArchiveFeature: (id: string) => void
+  onAddDocument: (featureId: string) => void
   onOpenInFiles: (groupId: string) => void
   onExportGroup: (groupId: string) => void
   onExportFeature: (featureId: string) => void
@@ -113,7 +115,7 @@ export function Sidebar(props: {
   const {
     groups, activeTerminalId, activeFeatureId, activeGroupId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveGroup, onMoveFeature, onMoveTerminal,
-    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
+    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onArchiveFeature, onAddDocument, onOpenInFiles,
     onExportGroup, onExportFeature, onImport,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
     attention, attentionItems, attentionMuted, onAttentionSelect, onAttentionClear, onAttentionClearAll, onToggleAttentionMute
@@ -435,11 +437,21 @@ export function Sidebar(props: {
         ]} />
       )}
 
-      {featMenu && (
-        <ContextMenu x={featMenu.x} y={featMenu.y} onClose={() => setFeatMenu(null)} items={[
-          { label: 'Export feature…', onSelect: () => onExportFeature(featMenu.featureId) }
-        ]} />
-      )}
+      {featMenu && (() => {
+        const f = groups.flatMap((g) => g.features).find((x) => x.id === featMenu.featureId)
+        if (!f) return null
+        return (
+          <ContextMenu x={featMenu.x} y={featMenu.y} onClose={() => setFeatMenu(null)} items={[
+            { label: 'Rename', onSelect: () => startRename('feature', f.id, f.name) },
+            { label: 'New Claude', icon: <ClaudeIcon />, onSelect: () => onLaunchAgent(f.id, 'claude') },
+            { label: 'New Codex', icon: <CodexIcon />, onSelect: () => onLaunchAgent(f.id, 'codex') },
+            { label: 'New Terminal', icon: <ShellIcon className="text-fg-muted" />, onSelect: () => onAddTerminal(f.id) },
+            { label: 'Export feature…', onSelect: () => onExportFeature(f.id) },
+            { label: 'Add document…', icon: <DocIcon />, onSelect: () => onAddDocument(f.id) },
+            { label: 'Archive', icon: <ArchiveIcon />, onSelect: () => onArchiveFeature(f.id) }
+          ]} />
+        )
+      })()}
 
       <div
         role="separator" aria-label="Resize sidebar"
