@@ -1,4 +1,6 @@
 import AdmZip from 'adm-zip'
+import { promises as fsp } from 'fs'
+import { join } from 'path'
 import type { Feature } from '@shared/types'
 import {
   EXPORT_FORMAT, EXPORT_VERSION,
@@ -83,4 +85,53 @@ export async function runExport(opts: {
     .filter((r) => sessions[r.terminalId]?.error)
     .map((r) => `${r.featureName}/${r.terminalName}: ${sessions[r.terminalId].error}`)
   return { warnings }
+}
+
+// Only paths this exporter itself generates are accepted — also the zip-slip guard.
+const SESSION_FILE_RE = /^sessions\/[a-z0-9][a-z0-9-]*\.md$/
+
+export function validateManifest(raw: unknown): ExportManifest | null {
+  const m = raw as Record<string, unknown> | null
+  if (!m || m['format'] !== EXPORT_FORMAT || m['version'] !== EXPORT_VERSION) return null
+  const group = m['group'] as Record<string, unknown> | undefined
+  if (!group || typeof m['sessions'] !== 'object' || m['sessions'] === null) return null
+  if (m['scope'] === 'group')
+    return Array.isArray(group['features']) ? (m as unknown as ExportManifest) : null
+  if (m['scope'] === 'feature') {
+    const feature = m['feature'] as Record<string, unknown> | undefined
+    return feature && Array.isArray(feature['terminals']) && typeof group['name'] === 'string' && typeof group['cwd'] === 'string'
+      ? (m as unknown as ExportManifest)
+      : null
+  }
+  return null
+}
+
+// Read + validate the manifest, then extract ONLY the session files it names
+// (each checked against SESSION_FILE_RE — nothing can escape destDir). A bad or
+// missing session entry degrades to an error on that entry, like at export.
+export async function extractImportArchive(zipPath: string, destDir: string): Promise<{ manifest: ExportManifest; dir: string } | { error: string }> {
+  let zip: AdmZip
+  try { zip = new AdmZip(zipPath) } catch { return { error: 'Not a readable zip archive' } }
+  const manifestEntry = zip.getEntry('manifest.json')
+  if (!manifestEntry) return { error: 'Not a Brain export: manifest.json is missing' }
+  let manifest: ExportManifest | null = null
+  try { manifest = validateManifest(JSON.parse(manifestEntry.getData().toString('utf8'))) } catch { /* invalid JSON */ }
+  if (!manifest) return { error: 'Unsupported or invalid manifest' }
+  await fsp.mkdir(join(destDir, 'sessions'), { recursive: true })
+  for (const entry of Object.values(manifest.sessions)) {
+    if (!entry.file) continue
+    if (!SESSION_FILE_RE.test(entry.file)) {
+      delete entry.file
+      entry.error = 'invalid session file path'
+      continue
+    }
+    const fileEntry = zip.getEntry(entry.file)
+    if (!fileEntry) {
+      delete entry.file
+      entry.error = 'session file missing from archive'
+      continue
+    }
+    await fsp.writeFile(join(destDir, entry.file), fileEntry.getData())
+  }
+  return { manifest, dir: destDir }
 }
