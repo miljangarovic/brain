@@ -5,6 +5,7 @@ import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon, ClaudeIcon, CodexIc
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
+import { statusDot } from '../review/status'
 import { AttentionDot } from './AttentionDot'
 import { AttentionBell, type AttentionBellItem } from './AttentionBell'
 import type { AttentionState } from '../attention/detect'
@@ -389,7 +390,9 @@ export function Sidebar(props: {
                                 {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === f.terminals.length && ti === f.terminals.length - 1 && (
                                   <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
                                 )}
-                                {busy[t.id] && liveAgents[t.id]
+                                {/* While the review dot is already spinning, keep the kind icon
+                                    here — two spinners on one row read as noise. */}
+                                {busy[t.id] && liveAgents[t.id] && statusDot(reviewStatus[t.id]) !== 'spinner'
                                   ? <SpinnerIcon className="shrink-0 text-accent" />
                                   : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className={`shrink-0 ${active ? 'text-accent' : 'text-fg-muted'}`} />}
                                 <ReviewStatusDot status={reviewStatus[t.id]} />

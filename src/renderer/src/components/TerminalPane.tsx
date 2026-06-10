@@ -6,6 +6,7 @@
 import type { Terminal, ReviewStatus } from '@shared/types'
 import { TerminalKindIcon, SpinnerIcon } from './icons'
 import { ReviewStatusDot } from './ReviewStatusDot'
+import { statusDot } from '../review/status'
 import { TerminalView } from './TerminalView'
 import { MONO_FONT } from '../theme'
 
@@ -70,7 +71,9 @@ export function TerminalPane({
           className={`flex items-center gap-2 h-7 shrink-0 px-2.5 border-b border-line text-xs select-none transition-colors ${
           dnd ? 'cursor-grab active:cursor-grabbing' : ''} ${
           active ? 'bg-elevated text-fg-bright' : 'bg-panel text-fg-muted'}`}>
-          {busy
+          {/* While the review dot is already spinning, keep the kind icon here —
+              two spinners in one header read as noise. */}
+          {busy && statusDot(reviewStatus) !== 'spinner'
             ? <SpinnerIcon className="shrink-0 text-accent" />
             : <TerminalKindIcon kind={liveAgent ?? terminal.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
           <span className="truncate font-medium tracking-wide" style={{ fontFamily: MONO_FONT }}>{terminal.name}</span>
