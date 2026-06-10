@@ -45,6 +45,22 @@ function rowMidpoints(container: Element, selector: string): number[] {
   })
 }
 
+// Insertion point for the dragged kind, measured against ITS OWN container's
+// rows but accepting the cursor anywhere in the tree: a cursor above/below that
+// container clamps to first/last. This makes the whole sidebar a valid drop
+// surface — without it, placing an item first/last required hovering the exact
+// half-row at the container's edge, and one pixel past it was a dead zone.
+function insertionFor(root: Element, d: Drag, y: number): DropAt | null {
+  if (d.kind === 'group')
+    return { kind: 'group', index: insertionFromMidpoints(rowMidpoints(root, '[data-group-id]'), y) }
+  if (d.kind === 'feature') {
+    const c = root.querySelector(`[data-group-features="${CSS.escape(d.groupId)}"]`)
+    return c ? { kind: 'feature', groupId: d.groupId, index: insertionFromMidpoints(rowMidpoints(c, '[data-feature-id]'), y) } : null
+  }
+  const c = root.querySelector(`[data-feature-terminals="${CSS.escape(d.featureId)}"]`)
+  return c ? { kind: 'terminal', featureId: d.featureId, index: insertionFromMidpoints(rowMidpoints(c, '[data-term-id]'), y) } : null
+}
+
 const SIDEBAR_MIN = 180
 const SIDEBAR_MAX = 560
 const SIDEBAR_DEFAULT = 256
@@ -192,7 +208,40 @@ export function Sidebar(props: {
   const hoverBtn = 'opacity-0 group-hover:opacity-100 px-1 text-fg-muted transition'
 
   return (
-    <div style={{ width }} className="relative shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
+    <div
+      style={{ width }}
+      className="relative shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg"
+      // Drag reorder is handled here, on the WHOLE sidebar: the bell header and
+      // footer sit outside the tree container, and dragging a row past the top/
+      // bottom edge of the tree must still drop (clamped to first/last position).
+      onDragOver={(e) => {
+        const d = dragRef.current
+        if (!d) return
+        e.preventDefault()
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+        setDropAt(insertionFor(e.currentTarget, d, e.clientY))
+      }}
+      onDrop={(e) => {
+        const d = dragRef.current
+        if (!d) return
+        e.preventDefault()
+        const at = insertionFor(e.currentTarget, d, e.clientY)
+        if (at?.kind === 'group' && d.kind === 'group') {
+          const from = groups.findIndex((x) => x.id === d.id)
+          const to = reorderToIndex(at.index, from)
+          if (to !== from) onMoveGroup(d.id, to)
+        } else if (at?.kind === 'feature' && d.kind === 'feature') {
+          const from = groups.find((x) => x.id === d.groupId)?.features.findIndex((x) => x.id === d.id) ?? -1
+          const to = reorderToIndex(at.index, from)
+          if (from !== -1 && to !== from) onMoveFeature(d.id, to)
+        } else if (at?.kind === 'terminal' && d.kind === 'terminal') {
+          const from = groups.flatMap((x) => x.features).find((x) => x.id === d.featureId)?.terminals.findIndex((x) => x.id === d.id) ?? -1
+          const to = reorderToIndex(at.index, from)
+          if (from !== -1 && to !== from) onMoveTerminal(d.id, to)
+        }
+        clearDrag()
+      }}
+    >
       <div className="p-2 border-b border-line">
         <AttentionBell
           items={attentionItems}
@@ -203,26 +252,7 @@ export function Sidebar(props: {
           onToggleMute={onToggleAttentionMute}
         />
       </div>
-      <div
-        className="flex-1 overflow-y-auto py-1"
-        data-groups
-        onDragOver={(e) => {
-          const d = dragRef.current
-          if (!d || d.kind !== 'group') return
-          e.preventDefault()
-          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-          setDropAt({ kind: 'group', index: insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-group-id]'), e.clientY) })
-        }}
-        onDrop={(e) => {
-          const d = dragRef.current
-          if (!d || d.kind !== 'group') return
-          e.preventDefault()
-          const from = groups.findIndex((x) => x.id === d.id)
-          const to = reorderToIndex(insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-group-id]'), e.clientY), from)
-          if (to !== from) onMoveGroup(d.id, to)
-          clearDrag()
-        }}
-      >
+      <div className="flex-1 overflow-y-auto py-1" data-groups>
         {groups.map((g, gi) => {
           const groupActive = g.id === activeGroupId
           return (
@@ -260,23 +290,6 @@ export function Sidebar(props: {
               <div
                 className="ml-3 border-l border-divider pl-0.5"
                 data-group-features={g.id}
-                onDragOver={(e) => {
-                  const d = dragRef.current
-                  if (!d || d.kind !== 'feature') return                // not a feature drag — let the matching zone own it
-                  if (d.groupId !== g.id) { setDropAt(null); return }    // hovering another project — clear stale line
-                  e.preventDefault()
-                  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-                  setDropAt({ kind: 'feature', groupId: g.id, index: insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-feature-id]'), e.clientY) })
-                }}
-                onDrop={(e) => {
-                  const d = dragRef.current
-                  if (!d || d.kind !== 'feature' || d.groupId !== g.id) return
-                  e.preventDefault()
-                  const from = g.features.findIndex((x) => x.id === d.id)
-                  const to = reorderToIndex(insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-feature-id]'), e.clientY), from)
-                  if (to !== from) onMoveFeature(d.id, to)
-                  clearDrag()
-                }}
               >
                 {g.features.map((f, i) => {
                   const featureActive = f.id === activeFeatureId
@@ -324,23 +337,6 @@ export function Sidebar(props: {
                       <div
                         className="ml-[18px] border-l border-divider pl-0.5"
                         data-feature-terminals={f.id}
-                        onDragOver={(e) => {
-                          const d = dragRef.current
-                          if (!d || d.kind !== 'terminal') return       // not a terminal drag — let the matching zone own it
-                          if (d.featureId !== f.id) { setDropAt(null); return }   // a different feature — no cross-feature move
-                          e.preventDefault()
-                          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-                          setDropAt({ kind: 'terminal', featureId: f.id, index: insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-term-id]'), e.clientY) })
-                        }}
-                        onDrop={(e) => {
-                          const d = dragRef.current
-                          if (!d || d.kind !== 'terminal' || d.featureId !== f.id) return
-                          e.preventDefault()
-                          const from = f.terminals.findIndex((x) => x.id === d.id)
-                          const to = reorderToIndex(insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-term-id]'), e.clientY), from)
-                          if (to !== from) onMoveTerminal(d.id, to)
-                          clearDrag()
-                        }}
                       >
                         {f.terminals.map((t, ti) => {
                           const active = t.id === activeTerminalId
