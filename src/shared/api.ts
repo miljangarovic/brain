@@ -1,6 +1,7 @@
 import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
 import type { ReviewPhase } from './types'
+import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from './exportTypes'
 
 export interface BrainApi {
   loadWorkspace(): Promise<Workspace>
@@ -32,4 +33,11 @@ export interface BrainApi {
   // Resolve printed path candidates against a terminal's cwd; index-aligned
   // result, null where no such file exists (no link is offered).
   resolvePathLinks(opts: { cwd: string; candidates: string[] }): Promise<(string | null)[]>
+  // Export a project/feature to a zip: save dialog first, then headless session
+  // summarization in the main process; progress arrives via onExportProgress.
+  exportArchive(input: ExportScopeInput): Promise<ExportRunResult>
+  onExportProgress(cb: (p: ExportProgress) => void): () => void
+  // Pick an exported zip, extract it under userData/imports/, return the manifest.
+  importArchive(): Promise<ImportRunResult>
+  pathsExist(paths: string[]): Promise<boolean[]>
 }

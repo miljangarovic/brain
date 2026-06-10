@@ -14,6 +14,11 @@ import { resolveTranscript } from './transcript'
 import { resolveExistingPaths } from './pathLinks'
 import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
+import { runExport, extractImportArchive, slugify } from './exportImport'
+import { summarizeSession } from './sessionSummary'
+import type { ExportScopeInput } from '@shared/exportTypes'
+import { randomUUID } from 'crypto'
+import { join } from 'path'
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -148,6 +153,47 @@ export function registerIpc(opts: {
     }
     return null
   })
+
+  const pathExists = (p: string): Promise<boolean> => fsp.access(p).then(() => true, () => false)
+
+  // Export a project/feature: ask where to save FIRST (cancel costs nothing),
+  // then summarize each agent session headlessly and write the archive.
+  ipcMain.handle(IPC.exportRun, async (_e, input: ExportScopeInput) => {
+    const win = getWin()
+    const name = input.scope === 'group' ? input.group.name : input.feature.name
+    const options: Electron.SaveDialogOptions = {
+      defaultPath: `${slugify(name)}-${new Date().toISOString().slice(0, 10)}.zip`,
+      filters: [{ name: 'Zip', extensions: ['zip'] }]
+    }
+    const res = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+    if (res.canceled || !res.filePath) return { ok: false, canceled: true, warnings: [] }
+    try {
+      const { warnings } = await runExport({
+        input,
+        outPath: res.filePath,
+        summarize: (ref) => summarizeSession({ kind: ref.kind, sessionId: ref.sessionId, cwd: ref.cwd }),
+        onProgress: (p) => send(IPC.exportProgress, p)
+      })
+      return { ok: true, path: res.filePath, warnings }
+    } catch (err) {
+      return { ok: false, warnings: [String(err)] }
+    }
+  })
+
+  // Import an exported zip: extract under userData/imports/<uuid>/ (the session
+  // .md files live there permanently — imported startup prompts reference them).
+  ipcMain.handle(IPC.importRun, async () => {
+    const win = getWin()
+    const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters: [{ name: 'Zip', extensions: ['zip'] }] }
+    const res = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (res.canceled || res.filePaths.length === 0) return { canceled: true }
+    const out = await extractImportArchive(res.filePaths[0], join(userDataDir, 'imports', randomUUID()))
+    if ('error' in out) return { error: out.error }
+    const root = out.manifest.group.cwd
+    return { manifest: out.manifest, dir: out.dir, cwdExists: root === '' ? true : await pathExists(root) }
+  })
+
+  ipcMain.handle(IPC.fsExists, (_e, p: { paths: string[] }) => Promise.all((p?.paths ?? []).map(pathExists)))
 
   return saver
 }
