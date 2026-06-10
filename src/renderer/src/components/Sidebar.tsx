@@ -309,7 +309,7 @@ export function Sidebar(props: {
                       draggable={!isEditing('feature', f.id)}
                       onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'feature', id: f.id, groupId: g.id }; setDrag({ kind: 'feature', id: f.id, groupId: g.id }) }}
                       onDragEnd={clearDrag}
-                      onContextMenu={(e) => { e.preventDefault(); setFeatMenu({ x: e.clientX, y: e.clientY, featureId: f.id }) }}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setFeatMenu({ x: e.clientX, y: e.clientY, featureId: f.id }) }}
                     >
                       {featureActive && (
                         <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
