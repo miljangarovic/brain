@@ -37,6 +37,12 @@ describe('TerminalPane', () => {
     expect(screen.queryByTestId('icon-claude')).not.toBeInTheDocument()
   })
 
+  it('keeps the kind icon while the review spinner runs (no double spinner)', () => {
+    render(<TerminalPane {...base} gridded busy reviewStatus="reviewing" />)
+    expect(screen.getAllByTestId('icon-spinner')).toHaveLength(1) // the review dot only
+    expect(screen.getByTestId('icon-claude')).toBeInTheDocument()
+  })
+
   it('activates on mousedown when gridded', () => {
     const onActivate = vi.fn()
     render(<TerminalPane {...base} gridded onActivate={onActivate} />)

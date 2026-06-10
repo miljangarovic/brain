@@ -156,6 +156,13 @@ describe('Sidebar (3-level)', () => {
     expect(within(item).getByTestId('icon-claude')).toBeInTheDocument() // static kind icon, not the spinner
   })
 
+  it('keeps the kind icon while the review spinner runs (no double spinner)', () => {
+    renderSidebar({ busy: { t1: true }, liveAgents: { t1: 'claude' }, reviewStatus: { t1: 'reviewing' } })
+    const item = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
+    expect(within(item).getAllByTestId('icon-spinner')).toHaveLength(1) // the review dot only
+    expect(within(item).getByTestId('icon-claude')).toBeInTheDocument()
+  })
+
   it('a live agent wins over the static kind on a visible terminal', () => {
     // t1 has static kind 'claude'; a live 'codex' detection must override the icon.
     renderSidebar({ liveAgents: { t1: 'codex' } })

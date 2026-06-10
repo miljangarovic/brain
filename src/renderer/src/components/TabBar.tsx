@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { Terminal, ReviewStatus } from '@shared/types'
 import { TerminalKindIcon, SpinnerIcon } from './icons'
 import { ReviewStatusDot } from './ReviewStatusDot'
+import { statusDot } from '../review/status'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { AttentionDot } from './AttentionDot'
 import type { AttentionState } from '../attention/detect'
@@ -37,7 +38,9 @@ export function TabBar({
             }`}
           >
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" />}
-            {busy[t.id] && liveAgents[t.id]
+            {/* While the review dot is already spinning, keep the kind icon here —
+                two spinners on one tab read as noise. */}
+            {busy[t.id] && liveAgents[t.id] && statusDot(reviewStatus[t.id]) !== 'spinner'
               ? <SpinnerIcon className="shrink-0 text-accent" />
               : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
             <ReviewStatusDot status={reviewStatus[t.id]} />

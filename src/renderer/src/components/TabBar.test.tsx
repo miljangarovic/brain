@@ -57,6 +57,14 @@ describe('TabBar', () => {
     expect(within(tab).getByTestId('icon-spinner')).toBeInTheDocument()
   })
 
+  it('keeps the kind icon while the review spinner runs (no double spinner)', () => {
+    render(<TabBar terminals={terms} activeId="a" liveAgents={{ a: 'claude' }}
+      onSelect={noop} onClose={noop} {...reviewProps} busy={{ a: true }} reviewStatus={{ a: 'reviewing' }} />)
+    const tab = screen.getAllByRole('tab')[0]
+    expect(within(tab).getAllByTestId('icon-spinner')).toHaveLength(1) // the review dot only
+    expect(within(tab).getByTestId('icon-claude')).toBeInTheDocument()
+  })
+
   it('does not show a spinner on a busy tab with no live agent (plain shell output)', () => {
     render(<TabBar terminals={terms} activeId="a" liveAgents={{}}
       onSelect={noop} onClose={noop} {...reviewProps} busy={{ a: true }} />)
