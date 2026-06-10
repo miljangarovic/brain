@@ -530,10 +530,10 @@ import { createInitialState, addGroup, addFeature, addTerminal, hideTerminal } f
 
 function fixture() {
   let s = createInitialState()
-  s = addGroup(s, 'mappit', '/code/mappit')
+  s = addGroup(s, 'mappit', '/code/mappit')   // addGroup auto-creates a 'general' feature at [0]
   const gid = s.workspace.groups[0].id
-  s = addFeature(s, gid, 'file-panes')
-  const fid = s.workspace.groups[0].features[0].id
+  s = addFeature(s, gid, 'file-panes')        // → lands at [1]
+  const fid = s.workspace.groups[0].features[1].id
   s = addTerminal(s, fid, { name: 'claude', kind: 'claude' })
   s = addTerminal(s, fid, { name: 'shell' })
   return s
@@ -545,7 +545,7 @@ describe('buildSnapshot', () => {
     const snap = buildSnapshot(s)
     expect(snap.groups).toHaveLength(1)
     expect(snap.groups[0].name).toBe('mappit')
-    const f = snap.groups[0].features[0]
+    const f = snap.groups[0].features[1]
     expect(f.name).toBe('file-panes')
     expect(f.terminals.map((t) => t.kind)).toEqual(['claude', 'shell'])
     expect(f.terminals.every((t) => typeof t.id === 'string' && t.id.length > 0)).toBe(true)
@@ -558,9 +558,9 @@ describe('buildSnapshot', () => {
   })
   it('flags hidden terminals (and only them)', () => {
     let s = fixture()
-    const tid = s.workspace.groups[0].features[0].terminals[1].id
+    const tid = s.workspace.groups[0].features[1].terminals[1].id
     s = hideTerminal(s, tid)
-    const terms = buildSnapshot(s).groups[0].features[0].terminals
+    const terms = buildSnapshot(s).groups[0].features[1].terminals
     expect(terms.find((t) => t.id === tid)?.hidden).toBe(true)
     expect(terms.find((t) => t.id !== tid)?.hidden).toBeUndefined()
   })
@@ -1477,15 +1477,15 @@ import type { VoiceCommand } from '@shared/voice'
 
 function fixture() {
   let s = createInitialState()
-  s = addGroup(s, 'mappit', '/code/mappit')
+  s = addGroup(s, 'mappit', '/code/mappit')   // addGroup auto-creates a 'general' feature at [0]
   const gid = s.workspace.groups[0].id
-  s = addFeature(s, gid, 'file-panes')
-  s = addFeature(s, gid, 'voice')
-  const f1 = s.workspace.groups[0].features[0]
-  const f2 = s.workspace.groups[0].features[1]
+  s = addFeature(s, gid, 'file-panes')        // → [1]
+  s = addFeature(s, gid, 'voice')             // → [2]
+  const f1 = s.workspace.groups[0].features[1]
+  const f2 = s.workspace.groups[0].features[2]
   s = addTerminal(s, f1.id, { name: 'claude', kind: 'claude' })
   s = addTerminal(s, f1.id, { name: 'shell' })
-  return { s, f1: f1.id, f2: f2.id, t1: s.workspace.groups[0].features[0].terminals[0].id, t2: s.workspace.groups[0].features[0].terminals[1].id }
+  return { s, f1: f1.id, f2: f2.id, t1: s.workspace.groups[0].features[1].terminals[0].id, t2: s.workspace.groups[0].features[1].terminals[1].id }
 }
 const cmd = (c: Partial<VoiceCommand> & { action: VoiceCommand['action'] }): VoiceCommand =>
   ({ confidence: 'high', ...c })
@@ -1506,7 +1506,7 @@ describe('planCommand — immediate actions', () => {
     if (p.type !== 'run') throw new Error('expected run')
     expect(p.descriptor.toast).toContain('restored')
     const after = p.descriptor.run(s)
-    expect(after.workspace.groups[0].features[0].viewMode).toBe('grid')
+    expect(after.workspace.groups[0].features[1].viewMode).toBe('grid')
   })
   it('toggle_grid leaving grid has no restored note', () => {
     let { s, f1 } = fixture()
@@ -1530,7 +1530,7 @@ describe('planCommand — immediate actions', () => {
     expect(planCommand(cmd({ action: 'set_grid_style' }), s).type).toBe('error')
     const p = planCommand(cmd({ action: 'set_grid_style', gridStyle: 'cols' }), s)
     if (p.type !== 'run') throw new Error('expected run')
-    expect(p.descriptor.run(s).workspace.groups[0].features[0].gridStyle).toBe('cols')
+    expect(p.descriptor.run(s).workspace.groups[0].features[1].gridStyle).toBe('cols')
   })
   it('hide_terminal defaults to the active terminal', () => {
     const { s, t2 } = fixture() // addTerminal activates the last-added → t2 active
@@ -1560,7 +1560,7 @@ describe('planCommand — confirm actions', () => {
     const p = planCommand(cmd({ action: 'rename_feature', featureId: f1, name: 'panes-v2' }), s)
     if (p.type !== 'confirm') throw new Error('expected confirm')
     if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
-    expect(p.descriptor.run(s).workspace.groups[0].features[0].name).toBe('panes-v2')
+    expect(p.descriptor.run(s).workspace.groups[0].features[1].name).toBe('panes-v2')
   })
   it('rename_terminal without a name → error', () => {
     const { s, t1 } = fixture()
@@ -1778,13 +1778,12 @@ Expected: PASS (14 tests)
 ```ts
 import { describe, it, expect, vi } from 'vitest'
 import { runDescriptor } from './run'
-import { createInitialState, addGroup, addFeature, addTerminal, type AppState } from '../store'
+import { createInitialState, addGroup, addTerminal, type AppState } from '../store'
 
 function fixture(withReviewer = false) {
   let s = createInitialState()
   s = addGroup(s, 'p', '/p')
-  const gid = s.workspace.groups[0].id
-  s = addFeature(s, gid, 'f')
+  // addGroup auto-creates a 'general' feature — use it directly.
   const fid = s.workspace.groups[0].features[0].id
   s = addTerminal(s, fid, { name: 'origin', kind: 'claude' })
   const originId = s.workspace.groups[0].features[0].terminals[0].id
