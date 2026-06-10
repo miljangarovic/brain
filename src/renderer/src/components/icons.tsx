@@ -205,3 +205,31 @@ export function LayoutBigBottomIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function DocIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-doc" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4" />
+      <path d="M9 12h6M9 16h6" />
+    </svg>
+  )
+}
+
+export function ArchiveIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-archive" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <rect x="3" y="4" width="18" height="5" rx="1" />
+      <path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9" />
+      <path d="M10 13h4" />
+    </svg>
+  )
+}

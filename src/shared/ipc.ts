@@ -9,6 +9,7 @@ export const IPC = {
   ptyExit: 'pty:exit',
   dialogPickDirectory: 'dialog:pickDirectory',
   shellOpenPath: 'shell:openPath',
+  shellShowItem: 'shell:showItem',
   ptyProc: 'pty:proc',
   dialogPickFile: 'dialog:pickFile',
   reviewSuggestSpec: 'review:suggestSpec',
@@ -22,5 +23,9 @@ export const IPC = {
   agentCaptureSession: 'agent:captureSession',
   notifyShow: 'notify:show',
   notificationClick: 'notification:click',
-  linksResolve: 'links:resolve'
+  linksResolve: 'links:resolve',
+  exportRun: 'export:run',
+  exportProgress: 'export:progress',
+  importRun: 'import:run',
+  fsExists: 'fs:exists'
 } as const

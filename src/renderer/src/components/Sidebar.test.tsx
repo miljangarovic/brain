@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within, fireEvent } from '@testing-library/react'
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Sidebar, insertionFromMidpoints, reorderToIndex } from './Sidebar'
 import type { Group } from '@shared/types'
@@ -8,6 +8,9 @@ const groups: Group[] = [
   { id: 'g1', name: 'proj', cwd: '/home/me/proj', collapsed: false, features: [
     { id: 'f1', name: 'auth', collapsed: false, terminals: [
       { id: 't1', name: 'claude', cwd: '/home/me/proj', kind: 'claude' }
+    ], documents: [
+      { id: 'd1', name: 'spec', path: '/docs/spec.md' },
+      { id: 'd2', name: 'plan', path: '/docs/plan.md' }
     ] },
     { id: 'f2', name: 'ui', collapsed: true, terminals: [
       { id: 't2', name: 'dev', cwd: '/home/me/proj' }
@@ -40,6 +43,16 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onDeleteFeature: noop,
     onDeleteTerminal: noop,
     onOpenInFiles: noop,
+    onExportGroup: noop,
+    onExportFeature: noop,
+    onImport: noop,
+    onArchiveFeature: noop,
+    onOpenArchive: noop,
+    onAddDocument: noop,
+    onOpenDocument: noop,
+    onRenameDocument: noop,
+    onRemoveDocument: noop,
+    docExists: {},
     liveAgents: {},
     busy: {},
     reviewStatus: {},
@@ -369,9 +382,133 @@ describe('Sidebar (3-level)', () => {
     })
   })
 
+  describe('export / import entry points', () => {
+    it('group context menu offers Export project…', async () => {
+      const onExportGroup = vi.fn()
+      const { container } = renderSidebar({ onExportGroup })
+      fireEvent.contextMenu(container.querySelector('[data-group-id="g1"]')!)
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Export project…' }))
+      expect(onExportGroup).toHaveBeenCalledWith('g1')
+    })
+
+    it('feature row opens a context menu with Export feature…', async () => {
+      const onExportFeature = vi.fn()
+      const { container } = renderSidebar({ onExportFeature })
+      fireEvent.contextMenu(container.querySelector('[data-feature-id="f1"]')!)
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Export feature…' }))
+      expect(onExportFeature).toHaveBeenCalledWith('f1')
+    })
+
+    it('footer has an Import button', async () => {
+      const onImport = vi.fn()
+      renderSidebar({ onImport })
+      await userEvent.click(screen.getByRole('button', { name: 'Import project or feature' }))
+      expect(onImport).toHaveBeenCalled()
+    })
+  })
+
   // Dropping outside the dragged kind's own container must still reorder, clamped
   // to the nearest end — aiming the exact half-row at the container's edge was a
   // needle-threading exercise (most of the sidebar was a dead zone for the drop).
+  describe('feature context menu', () => {
+    it('right-click on a feature opens Rename / New (submenu) / Add document / Archive; New Claude is not a top-level item', () => {
+      renderSidebar()
+      fireEvent.contextMenu(screen.getByText('auth'))
+      // top-level items
+      for (const label of ['Rename', 'New', 'Add document', 'Archive'])
+        expect(screen.getByRole('menuitem', { name: new RegExp(label) })).toBeInTheDocument()
+      // flat 'New Claude' must NOT exist at the top level
+      expect(screen.queryByRole('menuitem', { name: 'New Claude' })).not.toBeInTheDocument()
+      // hover 'New' to reveal the submenu
+      const newItem = screen.getByRole('menuitem', { name: 'New' })
+      fireEvent.mouseEnter(newItem.closest('.relative')!)
+      expect(screen.getByRole('menuitem', { name: 'Claude' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Codex' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Terminal' })).toBeInTheDocument()
+    })
+
+    it('Archive calls onArchiveFeature with the feature id', async () => {
+      const onArchiveFeature = vi.fn()
+      renderSidebar({ onArchiveFeature })
+      fireEvent.contextMenu(screen.getByText('auth'))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Archive' }))
+      expect(onArchiveFeature).toHaveBeenCalledWith('f1')
+    })
+
+    it('New > Codex launches an agent; Add document calls onAddDocument', async () => {
+      const onLaunchAgent = vi.fn()
+      const onAddDocument = vi.fn()
+      renderSidebar({ onLaunchAgent, onAddDocument })
+      // open menu, expand New submenu, click Codex
+      fireEvent.contextMenu(screen.getByText('auth'))
+      const newItem = screen.getByRole('menuitem', { name: 'New' })
+      fireEvent.mouseEnter(newItem.closest('.relative')!)
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
+      expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
+      // reopen and click Add document
+      fireEvent.contextMenu(screen.getByText('auth'))
+      await userEvent.click(screen.getByRole('menuitem', { name: /Add document/ }))
+      expect(onAddDocument).toHaveBeenCalledWith('f1')
+    })
+  })
+
+  describe('feature documents section', () => {
+    it('renders document rows after the terminals; click opens the file', async () => {
+      const onOpenDocument = vi.fn()
+      renderSidebar({ onOpenDocument })
+      const spec = screen.getByText('spec').closest('[data-doc-id]') as HTMLElement
+      expect(spec).toBeInTheDocument()
+      // docs come after the terminal rows in document order
+      const term = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
+      expect(term.compareDocumentPosition(spec) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      await userEvent.click(screen.getByText('spec'))
+      await waitFor(() => expect(onOpenDocument).toHaveBeenCalledWith('/docs/spec.md'))
+    })
+
+    it('a missing file renders broken and does not open', async () => {
+      const onOpenDocument = vi.fn()
+      renderSidebar({ onOpenDocument, docExists: { '/docs/spec.md': false, '/docs/plan.md': true } })
+      const row = screen.getByText('spec').closest('[data-doc-id]') as HTMLElement
+      expect(row.className).toContain('line-through')
+      await userEvent.click(screen.getByText('spec'))
+      await new Promise((r) => setTimeout(r, 150)) // outlast NAME_CLICK_DELAY_MS
+      expect(onOpenDocument).not.toHaveBeenCalled()
+    })
+
+    it('a rename double-click never opens the file', async () => {
+      const onOpenDocument = vi.fn()
+      renderSidebar({ onOpenDocument })
+      await userEvent.dblClick(screen.getByText('spec'))
+      await new Promise((r) => setTimeout(r, 150))
+      expect(onOpenDocument).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('Rename document spec')).toBeInTheDocument()
+    })
+
+    it('double-click renames; Enter commits via onRenameDocument', async () => {
+      const onRenameDocument = vi.fn()
+      renderSidebar({ onRenameDocument })
+      await userEvent.dblClick(screen.getByText('spec'))
+      const input = screen.getByLabelText('Rename document spec')
+      await userEvent.clear(input)
+      await userEvent.type(input, 'Spec v2{Enter}')
+      expect(onRenameDocument).toHaveBeenCalledWith('f1', 'd1', 'Spec v2')
+    })
+
+    it('the trash button removes the reference', async () => {
+      const onRemoveDocument = vi.fn()
+      renderSidebar({ onRemoveDocument })
+      await userEvent.click(screen.getByLabelText('Remove document spec'))
+      expect(onRemoveDocument).toHaveBeenCalledWith('f1', 'd1')
+    })
+
+    it('pendingRenameDocId opens the rename input and is consumed', () => {
+      const onPendingRenameDocConsumed = vi.fn()
+      renderSidebar({ pendingRenameDocId: 'd2', onPendingRenameDocConsumed })
+      expect(screen.getByLabelText('Rename document plan')).toBeInTheDocument()
+      expect(onPendingRenameDocConsumed).toHaveBeenCalled()
+    })
+  })
+
   describe('forgiving drop zones (clamp to nearest position)', () => {
     const groupsZone = (c: HTMLElement) => c.querySelector('[data-groups]') as HTMLElement
     const termRow = (c: HTMLElement, id: string) => c.querySelector(`[data-term-id="${id}"]`) as HTMLElement
@@ -434,6 +571,26 @@ describe('Sidebar (3-level)', () => {
       groupsZone(container).dispatchEvent(new MouseEvent('dragover', { bubbles: true, cancelable: true, clientY: 5 }))
       groupsZone(container).dispatchEvent(new MouseEvent('drop', { bubbles: true, cancelable: true, clientY: 5 }))
       expect(onMoveFeature).toHaveBeenCalledWith('fb', 0)
+    })
+  })
+
+  describe('archive row', () => {
+    it('shows the per-group archived count and opens the archive', async () => {
+      const onOpenArchive = vi.fn()
+      const withArchive: Group[] = [{
+        ...groups[0],
+        archivedFeatures: [{ id: 'fa', name: 'old', collapsed: false, terminals: [] }]
+      }]
+      renderSidebar({ groups: withArchive, onOpenArchive })
+      const row = screen.getByLabelText('Archive of proj')
+      expect(row).toHaveTextContent('Archive (1)')
+      await userEvent.click(row)
+      expect(onOpenArchive).toHaveBeenCalledWith('g1')
+    })
+
+    it('is visible with count 0 when nothing is archived', () => {
+      renderSidebar()
+      expect(screen.getByLabelText('Archive of proj')).toHaveTextContent('Archive (0)')
     })
   })
 })

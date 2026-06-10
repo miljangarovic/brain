@@ -5,8 +5,11 @@ import {
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
-  patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById
+  patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById,
+  addImportedGroup, addImportedFeature, archiveFeature, restoreFeature, deleteArchivedFeature, setTerminalSessionId,
+  addDocument, renameDocument, removeDocument
 } from './store'
+import type { Group, Feature } from '@shared/types'
 import { migrateWorkspace } from './migrate'
 
 const firstGroup = (s: ReturnType<typeof addGroup>) => s.workspace.groups[0]
@@ -364,6 +367,15 @@ describe('store reducers', () => {
     expect(s.activeTerminalId).toBe(tid)
   })
 
+  it('showTerminal with an unknown id leaves the state untouched', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'x' })
+    // e.g. an OS-notification key that is not a terminal ('export:<path>')
+    const s1 = showTerminal(s, 'export:/tmp/x.zip')
+    expect(s1).toBe(s)
+  })
+
   it('removeTerminal prunes the hidden set and skips hidden siblings when re-selecting', () => {
     let s = addGroup(createInitialState(), 'a', '')
     const fid = firstFeature(s).id
@@ -526,5 +538,195 @@ describe('attention store helpers', () => {
   })
   it('terminalPath is empty for an unknown id', () => {
     expect(terminalPath(createInitialState(), 'nope')).toBe('')
+  })
+})
+
+describe('addImportedGroup / addImportedFeature', () => {
+  const importedGroup: Group = {
+    id: 'ig', name: 'imported', cwd: '/p', collapsed: false, features: [
+      { id: 'if', name: 'auth', collapsed: false, terminals: [{ id: 'it', name: 'claude', cwd: '/p', kind: 'claude' }] }
+    ]
+  }
+  const importedFeature: Feature = {
+    id: 'xf', name: 'payments', collapsed: false, terminals: [{ id: 'xt', name: 'codex', cwd: '/p', kind: 'codex' }]
+  }
+
+  it('addImportedGroup appends the group and activates its first feature/terminal', () => {
+    let s0 = createInitialState()
+    s0 = addGroup(s0, 'existing', '/e')
+    const s1 = addImportedGroup(s0, importedGroup)
+    expect(s1.workspace.groups.map((g) => g.name)).toEqual(['existing', 'imported'])
+    expect(s1.activeGroupId).toBe('ig')
+    expect(s1.activeFeatureId).toBe('if')
+    expect(s1.activeTerminalId).toBe('it')
+  })
+
+  it('addImportedFeature inserts into the active group and activates it', () => {
+    let s = createInitialState()
+    s = addGroup(s, 'host', '/host')
+    const s1 = addImportedFeature(s, importedFeature, { name: 'fallback', cwd: '/fb' })
+    const host = s1.workspace.groups.find((g) => g.name === 'host')!
+    expect(host.features.map((f) => f.id)).toContain('xf')
+    expect(host.collapsed).toBe(false)
+    expect(s1.activeFeatureId).toBe('xf')
+    expect(s1.activeTerminalId).toBe('xt')
+  })
+
+  it('addImportedFeature creates a group from the fallback when the workspace is empty', () => {
+    const s1 = addImportedFeature(createInitialState(), importedFeature, { name: 'fallback', cwd: '/fb' })
+    expect(s1.workspace.groups).toHaveLength(1)
+    expect(s1.workspace.groups[0]).toMatchObject({ name: 'fallback', cwd: '/fb' })
+    expect(s1.workspace.groups[0].features.map((f) => f.id)).toEqual(['xf'])
+    expect(s1.activeGroupId).toBe(s1.workspace.groups[0].id)
+    expect(s1.activeFeatureId).toBe('xf')
+  })
+})
+
+describe('feature archive', () => {
+  // group with two features: f0 'general' (default) + 'auth'; one terminal in 'auth'
+  const setup = () => {
+    let s = addGroup(createInitialState(), 'proj', '/p')
+    const gid = s.workspace.groups[0].id
+    s = addFeature(s, gid, 'auth')
+    const fid = s.workspace.groups[0].features[1].id
+    s = addTerminal(s, fid, { name: 'term' })
+    return { s, gid, fid }
+  }
+
+  it('archiveFeature moves the feature into group.archivedFeatures', () => {
+    const { s, fid } = setup()
+    const out = archiveFeature(s, fid)
+    const g = out.workspace.groups[0]
+    expect(g.features.map((f) => f.name)).toEqual(['general'])
+    expect(g.archivedFeatures!.map((f) => f.name)).toEqual(['auth'])
+    expect(g.archivedFeatures![0].terminals).toHaveLength(1) // terminals ride along
+  })
+
+  it('archived terminals leave allTerminals (so the PTY reaper kills them)', () => {
+    const { s, fid } = setup()
+    expect(allTerminals(s)).toHaveLength(1)
+    expect(allTerminals(archiveFeature(s, fid))).toHaveLength(0)
+  })
+
+  it('archiving the active feature reselects within the group; activeGroupId untouched', () => {
+    const { s, gid, fid } = setup() // addTerminal made 'auth' + its terminal active
+    const out = archiveFeature(s, fid)
+    expect(out.activeGroupId).toBe(gid)
+    expect(out.activeFeatureId).toBe(out.workspace.groups[0].features[0].id) // 'general'
+    expect(out.activeTerminalId).toBeNull() // 'general' has no terminals
+  })
+
+  it('archiving the last active feature leaves null feature/terminal selection', () => {
+    let { s, fid } = setup()
+    const generalId = s.workspace.groups[0].features[0].id
+    s = archiveFeature(s, generalId)
+    const out = archiveFeature(s, fid)
+    expect(out.workspace.groups[0].features).toHaveLength(0)
+    expect(out.activeFeatureId).toBeNull()
+    expect(out.activeTerminalId).toBeNull()
+    expect(out.activeGroupId).toBe(out.workspace.groups[0].id)
+  })
+
+  it('archiving a non-active feature leaves selection untouched', () => {
+    const { s, fid } = setup()
+    const generalId = s.workspace.groups[0].features[0].id
+    const out = archiveFeature(s, generalId)
+    expect(out.activeFeatureId).toBe(fid)
+    expect(out.activeTerminalId).toBe(s.activeTerminalId)
+  })
+
+  it('archiveFeature prunes the feature terminals from hidden', () => {
+    let { s, fid } = setup()
+    const tid = s.workspace.groups[0].features[1].terminals[0].id
+    s = hideTerminal(s, tid)
+    expect(isHidden(s, tid)).toBe(true)
+    expect(isHidden(archiveFeature(s, fid), tid)).toBe(false)
+  })
+
+  it('restoreFeature appends to the END of active features and keeps selection', () => {
+    let { s, fid } = setup()
+    s = archiveFeature(s, fid)
+    const before = { f: s.activeFeatureId, t: s.activeTerminalId }
+    const out = restoreFeature(s, fid)
+    const g = out.workspace.groups[0]
+    expect(g.features.map((f) => f.name)).toEqual(['general', 'auth'])
+    expect(g.archivedFeatures).toHaveLength(0)
+    expect(g.features[1].terminals).toHaveLength(1)
+    expect(out.activeFeatureId).toBe(before.f)
+    expect(out.activeTerminalId).toBe(before.t)
+  })
+
+  it('deleteArchivedFeature removes it permanently', () => {
+    let { s, fid } = setup()
+    s = archiveFeature(s, fid)
+    const out = deleteArchivedFeature(s, fid)
+    expect(out.workspace.groups[0].archivedFeatures).toHaveLength(0)
+    expect(out.workspace.groups[0].features.map((f) => f.name)).toEqual(['general'])
+  })
+
+  it('archiveFeature / restoreFeature are no-ops for unknown ids', () => {
+    const { s } = setup()
+    expect(archiveFeature(s, 'nope')).toBe(s)
+    expect(restoreFeature(s, 'nope')).toBe(s)
+    expect(deleteArchivedFeature(s, 'nope')).toBe(s)
+  })
+
+  // launchAgent's captureAgentSession callback can resolve ~15s after launch; if
+  // the feature was archived meanwhile, the sessionId must still land — otherwise
+  // restore falls back to `codex resume --last` and may grab the wrong session.
+  it('setTerminalSessionId reaches archived terminals (codex capture racing an archive)', () => {
+    let { s, fid } = setup()
+    const tid = s.workspace.groups[0].features[1].terminals[0].id
+    s = archiveFeature(s, fid)
+    const out = setTerminalSessionId(s, tid, 'sid-late')
+    expect(out.workspace.groups[0].archivedFeatures![0].terminals[0].sessionId).toBe('sid-late')
+  })
+})
+
+describe('feature documents', () => {
+  const setup = () => {
+    const s = addGroup(createInitialState(), 'proj', '/p')
+    return { s, fid: s.workspace.groups[0].features[0].id }
+  }
+  const docsOf = (s: ReturnType<typeof addGroup>) => s.workspace.groups[0].features[0].documents
+
+  it('addDocument appends a doc with the given id/name/path', () => {
+    const { s, fid } = setup()
+    const out = addDocument(s, fid, { id: 'd1', name: 'spec.md', path: '/p/spec.md' })
+    expect(docsOf(out)).toEqual([{ id: 'd1', name: 'spec.md', path: '/p/spec.md' }])
+  })
+
+  it('addDocument generates an id when none is given', () => {
+    const { s, fid } = setup()
+    const out = addDocument(s, fid, { name: 'spec.md', path: '/p/spec.md' })
+    expect(docsOf(out)![0].id).toBeTruthy()
+  })
+
+  it('addDocument with an already-referenced path is a no-op', () => {
+    let { s, fid } = setup()
+    s = addDocument(s, fid, { name: 'spec.md', path: '/p/spec.md' })
+    const out = addDocument(s, fid, { name: 'again', path: '/p/spec.md' })
+    expect(out).toBe(s)
+  })
+
+  it('renameDocument / removeDocument target the doc by id; the path is untouched', () => {
+    let { s, fid } = setup()
+    s = addDocument(s, fid, { id: 'd1', name: 'spec.md', path: '/p/spec.md' })
+    s = addDocument(s, fid, { id: 'd2', name: 'plan.md', path: '/p/plan.md' })
+    s = renameDocument(s, fid, 'd1', 'Spec')
+    expect(docsOf(s)![0]).toEqual({ id: 'd1', name: 'Spec', path: '/p/spec.md' })
+    s = removeDocument(s, fid, 'd1')
+    expect(docsOf(s)!.map((d) => d.id)).toEqual(['d2'])
+  })
+
+  it('document ops on an archived feature are no-ops (active features only)', () => {
+    let { s, fid } = setup()
+    s = addDocument(s, fid, { id: 'd1', name: 'spec.md', path: '/p/spec.md' })
+    s = archiveFeature(s, fid)
+    expect(addDocument(s, fid, { name: 'x', path: '/x' })).toBe(s)
+    expect(renameDocument(s, fid, 'd1', 'X').workspace).toEqual(s.workspace)
+    expect(removeDocument(s, fid, 'd1').workspace).toEqual(s.workspace)
+    // the archived feature still carries its documents
+    expect(s.workspace.groups[0].archivedFeatures![0].documents).toHaveLength(1)
   })
 })

@@ -87,3 +87,45 @@ describe('migrateWorkspace', () => {
     expect(terms.find((t) => t.id === 'b')?.review?.phase).toBe('spec')
   })
 })
+
+describe('archive + documents migration', () => {
+  it('sanitizes archivedFeatures like active features and drops garbage entries', () => {
+    const ws = migrateWorkspace({ groups: [{ id: 'g', name: 'p', cwd: '', features: [], archivedFeatures: [
+      { id: 'af', name: 'old', collapsed: false, terminals: [{ id: 't', name: 's', cwd: '' }] },
+      'garbage', null
+    ] }] })
+    expect(ws.groups[0].archivedFeatures).toHaveLength(1)
+    expect(ws.groups[0].archivedFeatures![0].name).toBe('old')
+    expect(ws.groups[0].archivedFeatures![0].terminals).toHaveLength(1)
+  })
+
+  it('omits archivedFeatures when absent or empty after sanitizing', () => {
+    expect(migrateWorkspace({ groups: [{ id: 'g', name: 'p', cwd: '', features: [] }] })
+      .groups[0].archivedFeatures).toBeUndefined()
+    expect(migrateWorkspace({ groups: [{ id: 'g', name: 'p', cwd: '', features: [], archivedFeatures: ['x'] }] })
+      .groups[0].archivedFeatures).toBeUndefined()
+  })
+
+  it('sanitizes feature documents: fills ids/names, drops entries without a path', () => {
+    const ws = migrateWorkspace({ groups: [{ id: 'g', name: 'p', cwd: '', features: [
+      { id: 'f', name: 'auth', collapsed: false, terminals: [], documents: [
+        { name: 'spec', path: '/docs/spec.md' },
+        { path: '/docs/plan.md' },
+        { name: 'no-path' },
+        'garbage'
+      ] }
+    ] }] })
+    const docs = ws.groups[0].features[0].documents!
+    expect(docs).toHaveLength(2)
+    expect(docs[0]).toMatchObject({ name: 'spec', path: '/docs/spec.md' })
+    expect(docs[0].id).toBeTruthy()
+    expect(docs[1].name).toBe('plan.md') // basename fallback
+  })
+
+  it('omits documents when the sanitized list is empty', () => {
+    const ws = migrateWorkspace({ groups: [{ id: 'g', name: 'p', cwd: '', features: [
+      { id: 'f', name: 'auth', collapsed: false, terminals: [], documents: ['junk'] }
+    ] }] })
+    expect(ws.groups[0].features[0].documents).toBeUndefined()
+  })
+})

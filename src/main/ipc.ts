@@ -6,14 +6,20 @@ import { PtyManager } from './ptyManager'
 import { createBusyTracker } from './busyTracker'
 import { createDebouncedSaver } from './persistence'
 import type { Workspace, ReviewPhase } from '@shared/types'
-import type { PtyCreateOptions } from '@shared/pty'
+import { AGENT_IDLE_MS, type PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
+import { pathsExist } from './pathsExist'
 import { createReviewWatcher } from './reviewWatcher'
 import { createNotifier } from './notifications'
 import { resolveTranscript } from './transcript'
 import { resolveExistingPaths } from './pathLinks'
 import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
+import { runExport, extractImportArchive, exportFileName } from './exportImport'
+import { summarizeSession } from './sessionSummary'
+import type { ExportScopeInput } from '@shared/exportTypes'
+import { randomUUID } from 'crypto'
+import { join } from 'path'
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -38,8 +44,8 @@ export function registerIpc(opts: {
   // pauses (model latency, tool use, sparse TUI redraws while generating code), so
   // a short idle window would flicker the spinner off mid-answer — wait longer
   // before declaring idle. (Only agent terminals show the spinner, gated in the
-  // renderer, so this longer tail is invisible on plain shells.)
-  const AGENT_IDLE_MS = 1500
+  // renderer, so this longer tail is invisible on plain shells. The constant
+  // lives in shared/pty.ts — attention's blip filter must subtract it.)
   const busy = createBusyTracker((id, isBusy) => send(IPC.ptyBusy, { id, busy: isBusy }), AGENT_IDLE_MS)
   ptyManager.onData((id, data) => { send(IPC.ptyData, { id, data }); busy.touch(id) })
   ptyManager.onExit((id, code) => { send(IPC.ptyExit, { id, code }); busy.end(id) })
@@ -49,7 +55,13 @@ export function registerIpc(opts: {
   ipcMain.handle(IPC.workspaceLoad, () => saver.loadLatest())
   ipcMain.on(IPC.workspaceSave, (_e, ws: Workspace) => saver.save(ws))
   ipcMain.on(IPC.ptyCreate, (_e, o: PtyCreateOptions) => ptyManager.create(o))
-  ipcMain.on(IPC.ptyInput, (_e, p: { id: string; data: string }) => { ptyManager.write(p.id, p.data); busy.input(p.id) })
+  // Only the user's own typing/paste suppresses busy — synthetic data (xterm
+  // auto-replies, mouse-tracking reports) must not kill the spinner mid-answer
+  // or fake an "origin went idle" for the review loop.
+  ipcMain.on(IPC.ptyInput, (_e, p: { id: string; data: string; user?: boolean }) => {
+    ptyManager.write(p.id, p.data)
+    if (p.user !== false) busy.input(p.id)
+  })
   ipcMain.on(IPC.ptyResize, (_e, p: { id: string; cols: number; rows: number }) => ptyManager.resize(p.id, p.cols, p.rows))
   ipcMain.on(IPC.ptyKill, (_e, p: { id: string }) => ptyManager.kill(p.id))
 
@@ -61,6 +73,7 @@ export function registerIpc(opts: {
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
   })
   ipcMain.on(IPC.shellOpenPath, (_e, p: { path: string }) => { void shell.openPath(p.path || os.homedir()) })
+  ipcMain.on(IPC.shellShowItem, (_e, p: { path: string }) => { if (p?.path) shell.showItemInFolder(p.path) })
 
   // Poll each PTY's foreground process name; push changes so the renderer can
   // show a live agent icon (claude/codex) and revert it when the agent exits.
@@ -148,6 +161,50 @@ export function registerIpc(opts: {
     }
     return null
   })
+
+  // Export a project/feature: ask where to save FIRST (cancel costs nothing),
+  // then summarize each agent session headlessly and write the archive.
+  ipcMain.handle(IPC.exportRun, async (_e, input: ExportScopeInput) => {
+    const win = getWin()
+    const options: Electron.SaveDialogOptions = {
+      defaultPath: exportFileName(input),
+      filters: [{ name: 'Zip', extensions: ['zip'] }]
+    }
+    const res = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+    if (res.canceled || !res.filePath) return { ok: false, canceled: true, warnings: [] }
+    try {
+      const { warnings } = await runExport({
+        input,
+        outPath: res.filePath,
+        summarize: (ref) => summarizeSession({ kind: ref.kind, sessionId: ref.sessionId, cwd: ref.cwd }),
+        onProgress: (p) => send(IPC.exportProgress, p)
+      })
+      return { ok: true, path: res.filePath, warnings }
+    } catch (err) {
+      return { ok: false, warnings: [String(err)] }
+    }
+  })
+
+  // Import an exported zip: extract under userData/imports/<uuid>/ (the session
+  // .md files live there permanently — imported startup prompts reference them).
+  ipcMain.handle(IPC.importRun, async () => {
+    const win = getWin()
+    const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters: [{ name: 'Zip', extensions: ['zip'] }] }
+    const res = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (res.canceled || res.filePaths.length === 0) return { canceled: true }
+    try {
+      const out = await extractImportArchive(res.filePaths[0], join(userDataDir, 'imports', randomUUID()))
+      if ('error' in out) return { error: out.error }
+      const root = out.manifest.group.cwd
+      return { manifest: out.manifest, dir: out.dir, cwdExists: root === '' ? true : (await pathsExist([root]))[0] }
+    } catch (err) {
+      // fs failures during extraction (EACCES, ENOSPC, ...) must surface as a
+      // result, not a rejected invoke — the renderer only handles { error }.
+      return { error: String(err) }
+    }
+  })
+
+  ipcMain.handle(IPC.fsExists, (_e, p: { paths: string[] }) => pathsExist(p?.paths ?? []))
 
   return saver
 }

@@ -3,6 +3,7 @@ import { IPC } from '../shared/ipc'
 import type { BrainApi } from '../shared/api'
 import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
+import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from '../shared/exportTypes'
 
 // pty:data / pty:exit are consumed by EVERY mounted terminal, and all terminals
 // stay mounted — so one ipcRenderer listener per terminal trips the default
@@ -22,13 +23,14 @@ const api: BrainApi = {
   loadWorkspace: () => ipcRenderer.invoke(IPC.workspaceLoad) as Promise<Workspace>,
   saveWorkspace: (ws: Workspace) => ipcRenderer.send(IPC.workspaceSave, ws),
   createPty: (opts: PtyCreateOptions) => ipcRenderer.send(IPC.ptyCreate, opts),
-  writePty: (id, data) => ipcRenderer.send(IPC.ptyInput, { id, data }),
+  writePty: (id, data, user) => ipcRenderer.send(IPC.ptyInput, { id, data, user }),
   resizePty: (id, cols, rows) => ipcRenderer.send(IPC.ptyResize, { id, cols, rows }),
   killPty: (id) => ipcRenderer.send(IPC.ptyKill, { id }),
   onPtyData: (cb) => { ptyDataSubs.add(cb); return () => { ptyDataSubs.delete(cb) } },
   onPtyExit: (cb) => { ptyExitSubs.add(cb); return () => { ptyExitSubs.delete(cb) } },
   pickDirectory: () => ipcRenderer.invoke(IPC.dialogPickDirectory) as Promise<string | null>,
   openPath: (path: string) => ipcRenderer.send(IPC.shellOpenPath, { path }),
+  showItemInFolder: (path: string) => ipcRenderer.send(IPC.shellShowItem, { path }),
   onPtyProc: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, p: { id: string; process: string }) => cb(p.id, p.process)
     ipcRenderer.on(IPC.ptyProc, listener)
@@ -61,6 +63,14 @@ const api: BrainApi = {
     return () => ipcRenderer.removeListener(IPC.notificationClick, listener)
   },
   resolvePathLinks: (opts) => ipcRenderer.invoke(IPC.linksResolve, opts) as Promise<(string | null)[]>,
+  exportArchive: (input: ExportScopeInput) => ipcRenderer.invoke(IPC.exportRun, input) as Promise<ExportRunResult>,
+  onExportProgress: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: ExportProgress) => cb(p)
+    ipcRenderer.on(IPC.exportProgress, listener)
+    return () => ipcRenderer.removeListener(IPC.exportProgress, listener)
+  },
+  importArchive: () => ipcRenderer.invoke(IPC.importRun) as Promise<ImportRunResult>,
+  pathsExist: (paths: string[]) => ipcRenderer.invoke(IPC.fsExists, { paths }) as Promise<boolean[]>,
 }
 
 contextBridge.exposeInMainWorld('brain', api)

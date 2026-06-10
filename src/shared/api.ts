@@ -1,18 +1,24 @@
 import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
 import type { ReviewPhase } from './types'
+import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from './exportTypes'
 
 export interface BrainApi {
   loadWorkspace(): Promise<Workspace>
   saveWorkspace(ws: Workspace): void
   createPty(opts: PtyCreateOptions): void
-  writePty(id: string, data: string): void
+  // `user` distinguishes the user's own typing/paste from synthetic terminal
+  // data (xterm auto-replies, mouse-tracking reports). Only user input feeds
+  // the busy tracker's typing suppression; default (undefined) counts as user.
+  writePty(id: string, data: string, user?: boolean): void
   resizePty(id: string, cols: number, rows: number): void
   killPty(id: string): void
   onPtyData(cb: (id: string, data: string) => void): () => void
   onPtyExit(cb: (id: string, code: number) => void): () => void
   pickDirectory(): Promise<string | null>
   openPath(path: string): void
+  // Reveal a file in the OS file manager (folder opened, file selected).
+  showItemInFolder(path: string): void
   onPtyProc(cb: (id: string, process: string) => void): () => void
   onPtyBusy(cb: (id: string, busy: boolean) => void): () => void
   pickFile(opts?: { defaultPath?: string }): Promise<string | null>
@@ -32,4 +38,11 @@ export interface BrainApi {
   // Resolve printed path candidates against a terminal's cwd; index-aligned
   // result, null where no such file exists (no link is offered).
   resolvePathLinks(opts: { cwd: string; candidates: string[] }): Promise<(string | null)[]>
+  // Export a project/feature to a zip: save dialog first, then headless session
+  // summarization in the main process; progress arrives via onExportProgress.
+  exportArchive(input: ExportScopeInput): Promise<ExportRunResult>
+  onExportProgress(cb: (p: ExportProgress) => void): () => void
+  // Pick an exported zip, extract it under userData/imports/, return the manifest.
+  importArchive(): Promise<ImportRunResult>
+  pathsExist(paths: string[]): Promise<boolean[]>
 }

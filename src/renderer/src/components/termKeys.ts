@@ -18,6 +18,17 @@ export interface TermKeyEvent {
 
 export type TermKeyAction = 'newline' | 'copy' | 'paste' | 'swallow' | 'pass'
 
+// Pure modifier keydowns (a lone Ctrl before Ctrl+click, Shift for selection…)
+// are not "the user typed here" — they must not arm attention.
+const MODIFIER_CODES = new Set([
+  'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight',
+  'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight', 'CapsLock'
+])
+
+export function isModifierKey(code: string): boolean {
+  return MODIFIER_CODES.has(code)
+}
+
 export function classifyKeyEvent(e: TermKeyEvent): TermKeyAction {
   const shiftEnter = e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey &&
     (e.code === 'Enter' || e.code === 'NumpadEnter')

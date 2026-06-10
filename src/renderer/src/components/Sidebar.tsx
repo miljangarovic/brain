@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon } from './icons'
+import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon, ClaudeIcon, CodexIcon, ShellIcon, DocIcon, ArchiveIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
@@ -9,7 +9,7 @@ import { AttentionDot } from './AttentionDot'
 import { AttentionBell, type AttentionBellItem } from './AttentionBell'
 import type { AttentionState } from '../attention/detect'
 
-type RenameKind = 'group' | 'feature' | 'terminal'
+type RenameKind = 'group' | 'feature' | 'terminal' | 'doc'
 
 // A drag in progress: which kind of row, plus the container it reorders within
 // (group → workspace, feature → its group, terminal → its feature). Cross-
@@ -94,11 +94,23 @@ export function Sidebar(props: {
   onDeleteGroup: (id: string) => void
   onDeleteFeature: (id: string) => void
   onDeleteTerminal: (id: string) => void
+  onArchiveFeature: (id: string) => void
+  onOpenArchive: (groupId: string) => void
+  onAddDocument: (featureId: string) => void
   onOpenInFiles: (groupId: string) => void
+  onExportGroup: (groupId: string) => void
+  onExportFeature: (featureId: string) => void
+  onImport: () => void
   reviewStatus: Record<string, ReviewStatus | undefined>
   onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
   pendingRenameTerminalId?: string | null
   onPendingRenameConsumed?: () => void
+  onOpenDocument: (path: string) => void
+  onRenameDocument: (featureId: string, docId: string, name: string) => void
+  onRemoveDocument: (featureId: string, docId: string) => void
+  docExists: Record<string, boolean | undefined>
+  pendingRenameDocId?: string | null
+  onPendingRenameDocConsumed?: () => void
   attention: Record<string, AttentionState | undefined>
   attentionItems: AttentionBellItem[]
   attentionMuted: boolean
@@ -110,13 +122,16 @@ export function Sidebar(props: {
   const {
     groups, activeTerminalId, activeFeatureId, activeGroupId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveGroup, onMoveFeature, onMoveTerminal,
-    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
+    onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onArchiveFeature, onOpenArchive, onAddDocument, onOpenInFiles,
+    onExportGroup, onExportFeature, onImport,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
+    onOpenDocument, onRenameDocument, onRemoveDocument, docExists, pendingRenameDocId, onPendingRenameDocConsumed,
     attention, attentionItems, attentionMuted, onAttentionSelect, onAttentionClear, onAttentionClearAll, onToggleAttentionMute
   } = props
 
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; terminalId: string } | null>(null)
+  const [featMenu, setFeatMenu] = useState<{ x: number; y: number; featureId: string } | null>(null)
 
   // Drag-and-drop reorder for projects, features, and terminals — each within its
   // own container only. The whole row is draggable. The active drag lives in a ref
@@ -159,6 +174,10 @@ export function Sidebar(props: {
     if (name) {
       if (editing.kind === 'group') onRenameGroup(editing.id, name)
       else if (editing.kind === 'feature') onRenameFeature(editing.id, name)
+      else if (editing.kind === 'doc') {
+        const f = groups.flatMap((g) => g.features).find((f) => (f.documents ?? []).some((d) => d.id === editing.id))
+        if (f) onRenameDocument(f.id, editing.id, name)
+      }
       else onRenameTerminal(editing.id, name)
     }
     setEditing(null)
@@ -186,6 +205,17 @@ export function Sidebar(props: {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingRenameTerminalId])
+
+  // A freshly-added document asks (via prop) to immediately open its rename input.
+  useEffect(() => {
+    if (!pendingRenameDocId) return
+    const d = groups.flatMap((g) => g.features).flatMap((f) => f.documents ?? []).find((d) => d.id === pendingRenameDocId)
+    if (d) {
+      startRename('doc', d.id, d.name)
+      onPendingRenameDocConsumed?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRenameDocId])
 
   // Single click on a group/feature name collapses it; double click renames.
   // A short timer disambiguates the two so a dblclick doesn't also fire collapse.
@@ -302,6 +332,7 @@ export function Sidebar(props: {
                       draggable={!isEditing('feature', f.id)}
                       onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'feature', id: f.id, groupId: g.id }; setDrag({ kind: 'feature', id: f.id, groupId: g.id }) }}
                       onDragEnd={clearDrag}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setFeatMenu({ x: e.clientX, y: e.clientY, featureId: f.id }) }}
                     >
                       {featureActive && (
                         <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
@@ -334,51 +365,81 @@ export function Sidebar(props: {
                     </div>
 
                     {!f.collapsed && (
-                      <div
-                        className="ml-[18px] border-l border-divider pl-0.5"
-                        data-feature-terminals={f.id}
-                      >
-                        {f.terminals.map((t, ti) => {
-                          const active = t.id === activeTerminalId
-                          return (
-                            <div key={t.id} data-term-id={t.id} onClick={() => onSelectTerminal(t.id)}
-                              onContextMenu={(e) => { e.preventDefault(); setTermMenu({ x: e.clientX, y: e.clientY, terminalId: t.id }) }}
-                              draggable={!isEditing('terminal', t.id)}
-                              onDragStart={(e) => { e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'terminal', id: t.id, featureId: f.id }; setDrag({ kind: 'terminal', id: t.id, featureId: f.id }) }}
-                              onDragEnd={clearDrag}
-                              className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors ${drag?.kind === 'terminal' && drag.id === t.id ? 'opacity-40' : ''} ${
-                                active ? 'bg-accent-sel text-fg-bright' : 'text-fg hover:bg-hover hover:text-fg-bright'}`}>
-                              {active && (
-                                <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
-                              )}
-                              {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === ti && (
-                                <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
-                              )}
-                              {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === f.terminals.length && ti === f.terminals.length - 1 && (
-                                <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
-                              )}
-                              {busy[t.id] && liveAgents[t.id]
-                                ? <SpinnerIcon className="shrink-0 text-accent" />
-                                : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className={`shrink-0 ${active ? 'text-accent' : 'text-fg-muted'}`} />}
-                              <ReviewStatusDot status={reviewStatus[t.id]} />
-                              <AttentionDot state={attention[t.id]} />
-                              {isEditing('terminal', t.id)
-                                ? renameInput(`Rename terminal ${t.name}`)
-                                : (
-                                  <span className="flex-1 truncate"
-                                    onDoubleClick={(e) => { e.stopPropagation(); startRename('terminal', t.id, t.name) }}>
-                                    {t.name}
-                                  </span>
+                      <>
+                        <div
+                          className="ml-[18px] border-l border-divider pl-0.5"
+                          data-feature-terminals={f.id}
+                        >
+                          {f.terminals.map((t, ti) => {
+                            const active = t.id === activeTerminalId
+                            return (
+                              <div key={t.id} data-term-id={t.id} onClick={() => onSelectTerminal(t.id)}
+                                onContextMenu={(e) => { e.preventDefault(); setTermMenu({ x: e.clientX, y: e.clientY, terminalId: t.id }) }}
+                                draggable={!isEditing('terminal', t.id)}
+                                onDragStart={(e) => { e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'terminal', id: t.id, featureId: f.id }; setDrag({ kind: 'terminal', id: t.id, featureId: f.id }) }}
+                                onDragEnd={clearDrag}
+                                className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors ${drag?.kind === 'terminal' && drag.id === t.id ? 'opacity-40' : ''} ${
+                                  active ? 'bg-accent-sel text-fg-bright' : 'text-fg hover:bg-hover hover:text-fg-bright'}`}>
+                                {active && (
+                                  <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
                                 )}
-                              {!isEditing('terminal', t.id) && (
-                                <button aria-label={`Delete terminal ${t.name}`} title="Delete terminal"
-                                  onClick={(e) => { e.stopPropagation(); onDeleteTerminal(t.id) }}
-                                  className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
+                                {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === ti && (
+                                  <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
+                                )}
+                                {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === f.terminals.length && ti === f.terminals.length - 1 && (
+                                  <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
+                                )}
+                                {busy[t.id] && liveAgents[t.id]
+                                  ? <SpinnerIcon className="shrink-0 text-accent" />
+                                  : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className={`shrink-0 ${active ? 'text-accent' : 'text-fg-muted'}`} />}
+                                <ReviewStatusDot status={reviewStatus[t.id]} />
+                                <AttentionDot state={attention[t.id]} />
+                                {isEditing('terminal', t.id)
+                                  ? renameInput(`Rename terminal ${t.name}`)
+                                  : (
+                                    <span className="flex-1 truncate"
+                                      onDoubleClick={(e) => { e.stopPropagation(); startRename('terminal', t.id, t.name) }}>
+                                      {t.name}
+                                    </span>
+                                  )}
+                                {!isEditing('terminal', t.id) && (
+                                  <button aria-label={`Delete terminal ${t.name}`} title="Delete terminal"
+                                    onClick={(e) => { e.stopPropagation(); onDeleteTerminal(t.id) }}
+                                    className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {(f.documents ?? []).length > 0 && (
+                          <div className="ml-[18px] border-l border-divider pl-0.5">
+                            {(f.documents ?? []).map((d) => {
+                              const broken = docExists[d.path] === false
+                              return (
+                                <div key={d.id} data-doc-id={d.id}
+                                  onClick={() => { if (!broken) onNameClick(() => onOpenDocument(d.path)) }}
+                                  title={broken ? `${d.path} (missing)` : d.path}
+                                  className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors hover:bg-hover ${broken ? 'text-fg-muted line-through' : 'text-fg hover:text-fg-bright'}`}>
+                                  <DocIcon className="shrink-0 text-fg-muted" />
+                                  {isEditing('doc', d.id)
+                                    ? renameInput(`Rename document ${d.name}`)
+                                    : (
+                                      <span className="flex-1 truncate"
+                                        onDoubleClick={(e) => { e.stopPropagation(); onNameDblClick(() => startRename('doc', d.id, d.name)) }}>
+                                        {d.name}
+                                      </span>
+                                    )}
+                                  {!isEditing('doc', d.id) && (
+                                    <button aria-label={`Remove document ${d.name}`} title="Remove document"
+                                      onClick={(e) => { e.stopPropagation(); onRemoveDocument(f.id, d.id) }}
+                                      className={`${hoverBtn} text-base leading-none hover:text-danger`}><TrashIcon /></button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                   )
@@ -392,6 +453,14 @@ export function Sidebar(props: {
                     className="w-full rounded-md border border-dashed border-divider bg-transparent px-2 py-[3px] text-xs text-fg placeholder-fg-muted outline-none transition focus:border-solid focus:border-accent focus:bg-field"
                   />
                 </div>
+                <button
+                  aria-label={`Archive of ${g.name}`}
+                  onClick={() => onOpenArchive(g.id)}
+                  className="mx-1 mb-1 flex items-center gap-1.5 rounded-md px-2 py-[2px] text-xs text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+                >
+                  <ArchiveIcon className="shrink-0" />
+                  Archive ({(g.archivedFeatures ?? []).length})
+                </button>
               </div>
             )}
           </div>
@@ -399,10 +468,14 @@ export function Sidebar(props: {
         })}
       </div>
 
-      <div className="p-2 border-t border-line">
+      <div className="p-2 border-t border-line flex gap-2">
         <button aria-label="New Project" onClick={onAddGroup}
-          className="w-full rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
+          className="flex-1 rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
           + New Project
+        </button>
+        <button aria-label="Import project or feature" title="Import an exported project/feature zip" onClick={onImport}
+          className="rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
+          Import…
         </button>
       </div>
 
@@ -412,6 +485,7 @@ export function Sidebar(props: {
         return (
           <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
             { label: 'Rename', onSelect: () => startRename('group', g.id, g.name) },
+            { label: 'Export project…', onSelect: () => onExportGroup(g.id) },
             { label: 'Open in Files', onSelect: () => onOpenInFiles(g.id) }
           ]} />
         )
@@ -423,6 +497,24 @@ export function Sidebar(props: {
           { label: 'Delete', onSelect: () => onDeleteTerminal(termMenu.terminalId) }
         ]} />
       )}
+
+      {featMenu && (() => {
+        const f = groups.flatMap((g) => g.features).find((x) => x.id === featMenu.featureId)
+        if (!f) return null
+        return (
+          <ContextMenu x={featMenu.x} y={featMenu.y} onClose={() => setFeatMenu(null)} items={[
+            { label: 'Rename', onSelect: () => startRename('feature', f.id, f.name) },
+            { label: 'New', children: [
+              { label: 'Claude', icon: <ClaudeIcon />, onSelect: () => onLaunchAgent(f.id, 'claude') },
+              { label: 'Codex', icon: <CodexIcon />, onSelect: () => onLaunchAgent(f.id, 'codex') },
+              { label: 'Terminal', icon: <ShellIcon className="text-fg-muted" />, onSelect: () => onAddTerminal(f.id) }
+            ] },
+            { label: 'Export feature…', onSelect: () => onExportFeature(f.id) },
+            { label: 'Add document…', icon: <DocIcon />, onSelect: () => onAddDocument(f.id) },
+            { label: 'Archive', icon: <ArchiveIcon />, onSelect: () => onArchiveFeature(f.id) }
+          ]} />
+        )
+      })()}
 
       <div
         role="separator" aria-label="Resize sidebar"

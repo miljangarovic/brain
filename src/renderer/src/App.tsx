@@ -2,15 +2,20 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import { removedIds, pruneRecord } from './ptyReaper'
-import { shouldSpawn } from './spawnGate'
+import { shouldSpawn, restoredSpawnIds } from './spawnGate'
 import { isLayoutRepaint } from './repaintGuard'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview,
+  addImportedGroup, addImportedFeature,
+  archiveFeature, restoreFeature, deleteArchivedFeature, addDocument, renameDocument, removeDocument
 } from './store'
+import { collectCwdCandidates, buildImport } from './importRemap'
+import { ExportToast } from './components/ExportToast'
+import type { ExportProgress, ExportRunResult } from '@shared/exportTypes'
 import { useAttention } from './attention/useAttention'
 import { migrateWorkspace } from './migrate'
 import { createId } from '@shared/id'
@@ -25,10 +30,15 @@ import { TerminalPane } from './components/TerminalPane'
 import { NewGroupDialog, NewGroupInput } from './components/NewGroupDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
+import { ArchiveDialog } from './components/ArchiveDialog'
 
 export default function App() {
   const { state, setState, apply } = useStore()
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
+  const [archiveGroupId, setArchiveGroupId] = useState<string | null>(null)
+  const archiveGroup = archiveGroupId
+    ? state.workspace.groups.find((g) => g.id === archiveGroupId) ?? null
+    : null
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [confirm, setConfirm] = useState<{ message: string; action: () => void } | null>(null)
@@ -40,6 +50,36 @@ export default function App() {
     apply((s) => addTerminal(s, featureId, { name: 'shell', id }))
     setRenameTerminalId(id)
   }
+
+  // Restore = the app-restart rules for this feature's terminals: cold until
+  // opened, agents resume. Refs are mutated BEFORE apply() so the remount sees
+  // them; a pre-archive "started" flag must not auto-launch anything either.
+  const restoreArchivedFeature = (featureId: string) => {
+    const f = archiveGroup?.archivedFeatures?.find((x) => x.id === featureId)
+    if (!f) return
+    const { bootIds, resumeIds } = restoredSpawnIds(f)
+    for (const id of bootIds) bootIdsRef.current.add(id)
+    for (const id of resumeIds) resumeIdsRef.current.add(id)
+    setStartedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of bootIds) next.delete(id)
+      return next
+    })
+    apply((s) => restoreFeature(s, featureId))
+  }
+
+  // Id of a just-added document whose rename input the sidebar should auto-open.
+  const [renameDocId, setRenameDocId] = useState<string | null>(null)
+  const addDocumentTo = async (featureId: string) => {
+    const group = state.workspace.groups.find((g) => g.features.some((f) => f.id === featureId))
+    const feature = group?.features.find((f) => f.id === featureId)
+    const path = await window.brain.pickFile(group?.cwd ? { defaultPath: group.cwd } : undefined)
+    if (!path) return
+    if (feature?.documents?.some((d) => d.path === path)) return // already referenced: no-op
+    const id = createId()
+    apply((s) => addDocument(s, featureId, { id, name: path.split('/').pop() || path, path }))
+    setRenameDocId(id)
+  }
   // Drag-and-drop reorder of terminals inside the open grid. The pane header is the
   // drag handle; dropping a pane onto another moves it into that pane's slot. The
   // dragged id lives in a ref so dragover/drop read it synchronously (a stale
@@ -49,6 +89,16 @@ export default function App() {
   const [gridDragId, setGridDragId] = useState<string | null>(null)
   const [gridDropId, setGridDropId] = useState<string | null>(null)
   const clearGridDrag = () => { gridDragRef.current = null; setGridDragId(null); setGridDropId(null) }
+
+  // Export/import feedback: live progress while the main process summarizes
+  // sessions, then a dismissible result notice (shared with import results).
+  // `transferRef` guards against double-triggering an export/import AND drops
+  // any progress event that straggles in after the invoke already resolved —
+  // without it a late event would re-show the spinner forever.
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null)
+  const [exportNotice, setExportNotice] = useState<{ text: string; path?: string } | null>(null)
+  const transferRef = useRef(false)
+  useEffect(() => window.brain.onExportProgress((p) => { if (transferRef.current) setExportProgress(p) }), [])
 
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
@@ -155,6 +205,28 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.workspace])
 
+  // Which referenced document files still exist — drives the broken-doc rows.
+  const [docExists, setDocExists] = useState<Record<string, boolean>>({})
+  const docPathsKey = state.workspace.groups
+    .flatMap((g) => g.features).flatMap((f) => f.documents ?? []).map((d) => d.path)
+    .sort().join('\n')
+  useEffect(() => {
+    const paths = docPathsKey ? Array.from(new Set(docPathsKey.split('\n'))) : []
+    let stale = false
+    const check = () => {
+      if (paths.length === 0) { setDocExists({}); return }
+      void window.brain.pathsExist(paths).then((flags) => {
+        if (stale) return
+        const next: Record<string, boolean> = {}
+        paths.forEach((p, i) => { next[p] = flags[i] })
+        setDocExists(next)
+      })
+    }
+    check()
+    window.addEventListener('focus', check)
+    return () => { stale = true; window.removeEventListener('focus', check) }
+  }, [docPathsKey])
+
   const activeGroup = getActiveGroup(state)
   const activeFeature = getActiveFeature(state)
 
@@ -219,6 +291,86 @@ export default function App() {
       void window.brain.captureAgentSession({ kind, cwd, exclude }).then((sid) => {
         if (sid) apply((s) => setTerminalSessionId(s, id, sid))
       })
+    }
+  }
+  const finishExport = (res: ExportRunResult) => {
+    transferRef.current = false
+    setExportProgress(null)
+    if (res.canceled) return
+    if (res.ok) {
+      const path = res.path ?? ''
+      setExportNotice({
+        text: `Exported to ${path}${res.warnings.length ? ` — ${res.warnings.length} session(s) without summary: ${res.warnings.join('; ')}` : ''}`,
+        ...(path ? { path } : {})
+      })
+      // Summarization can take minutes — announce the finish even when the
+      // window is in the background. Click focuses the app (existing behavior).
+      window.brain.showNotification({
+        key: `export:${path}`,
+        title: 'Export finished',
+        body: path.split(/[\\/]/).pop() || path
+      })
+    } else {
+      setExportNotice({ text: `Export failed: ${res.warnings.join('; ') || 'unknown error'}` })
+    }
+  }
+  const exportGroup = (groupId: string) => {
+    if (transferRef.current) return
+    const g = state.workspace.groups.find((x) => x.id === groupId)
+    if (!g) return
+    transferRef.current = true
+    void window.brain.exportArchive({ scope: 'group', group: g }).then(finishExport)
+  }
+  const exportFeature = (featureId: string) => {
+    if (transferRef.current) return
+    const g = state.workspace.groups.find((x) => x.features.some((f) => f.id === featureId))
+    const f = g?.features.find((x) => x.id === featureId)
+    if (!g || !f) return
+    transferRef.current = true
+    void window.brain.exportArchive({ scope: 'feature', group: { name: g.name, cwd: g.cwd }, feature: f }).then(finishExport)
+  }
+  const importArchive = async () => {
+    if (transferRef.current) return
+    transferRef.current = true
+    try {
+      const res = await window.brain.importArchive()
+      if (res.canceled) return
+      if (res.error || !res.manifest || !res.dir) {
+        setExportNotice({ text: `Import failed: ${res.error ?? 'unknown error'}` })
+        return
+      }
+      // Old root missing on this machine → let the user point at the new one.
+      // Canceling the picker just means every dead cwd falls back to home.
+      const newRoot = res.cwdExists ? null : await window.brain.pickDirectory()
+      const candidates = collectCwdCandidates(res.manifest, newRoot)
+      const found = await window.brain.pathsExist(candidates)
+      const existing = new Set(candidates.filter((_, i) => found[i]))
+      const built = buildImport({
+        manifest: res.manifest, dir: res.dir, newRoot,
+        exists: (p) => existing.has(p), createId
+      })
+      // Imported terminals must stay cold until explicitly opened — without this,
+      // adding them mid-session would auto-spawn every agent at once (spawnGate
+      // treats non-boot ids as user-created). Must happen BEFORE the state update.
+      for (const id of built.terminalIds) bootIdsRef.current.add(id)
+      // Tell the user when the original project folder wasn't found and wasn't
+      // remapped — their terminals will open in the home directory.
+      const cwdNote = !res.cwdExists && !newRoot ? ' (original folder not found — terminals open in home)' : ''
+      if (built.scope === 'group' && built.group) {
+        const g = built.group
+        apply((s) => addImportedGroup(s, g))
+        setExportNotice({ text: `Imported project "${g.name}" — open a terminal to continue its session${cwdNote}` })
+      } else if (built.feature) {
+        const f = built.feature
+        apply((s) => addImportedFeature(s, f, built.fallbackGroup))
+        setExportNotice({ text: `Imported feature "${f.name}" — open a terminal to continue its session${cwdNote}` })
+      }
+    } catch (err) {
+      // Foreign/hand-crafted archives can pass validation yet still surprise the
+      // remap — surface it as a notice instead of an unhandled rejection.
+      setExportNotice({ text: `Import failed: ${String(err)}` })
+    } finally {
+      transferRef.current = false
     }
   }
   const createGroup = (input: NewGroupInput) => {
@@ -286,6 +438,18 @@ export default function App() {
           const g = state.workspace.groups.find((x) => x.id === gid)
           window.brain.openPath(g?.cwd ?? '')
         }}
+        onExportGroup={exportGroup}
+        onExportFeature={exportFeature}
+        onImport={() => void importArchive()}
+        onArchiveFeature={(fid) => apply((s) => archiveFeature(s, fid))}
+        onOpenArchive={(gid) => setArchiveGroupId(gid)}
+        onAddDocument={(fid) => void addDocumentTo(fid)}
+        onOpenDocument={(p) => window.brain.openPath(p)}
+        onRenameDocument={(fid, did, name) => apply((s) => renameDocument(s, fid, did, name))}
+        onRemoveDocument={(fid, did) => apply((s) => removeDocument(s, fid, did))}
+        docExists={docExists}
+        pendingRenameDocId={renameDocId}
+        onPendingRenameDocConsumed={() => setRenameDocId(null)}
         reviewStatus={reviewStatus}
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
         pendingRenameTerminalId={renameTerminalId}
@@ -398,6 +562,19 @@ export default function App() {
       </div>
 
       {groupDialogOpen && <NewGroupDialog onCreate={createGroup} onCancel={() => setGroupDialogOpen(false)} />}
+      {archiveGroup && (
+        <ArchiveDialog
+          group={archiveGroup}
+          onArchive={(fid) => apply((s) => archiveFeature(s, fid))}
+          onRestore={restoreArchivedFeature}
+          onDeleteArchived={(fid) => {
+            const f = archiveGroup.archivedFeatures?.find((x) => x.id === fid)
+            askDelete(`Permanently delete archived feature "${f?.name ?? ''}"? Its documents list goes with it.`, () =>
+              apply((s) => deleteArchivedFeature(s, fid)))
+          }}
+          onClose={() => setArchiveGroupId(null)}
+        />
+      )}
       {confirm && (
         <ConfirmDialog
           message={confirm.message}
@@ -421,6 +598,7 @@ export default function App() {
           />
         )
       })()}
+      <ExportToast progress={exportProgress} notice={exportNotice} onDismiss={() => setExportNotice(null)} />
     </div>
   )
 }

@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
-  shellSingleQuote, buildReviewerCommand,
+  buildReviewerCommand,
   reviewerStartupPrompt, reviewerInjectPrompt, relayToOriginPrompt
 } from './prompt'
+import { shellSingleQuote } from '../shellQuote'
 
 describe('shellSingleQuote', () => {
   it('wraps in single quotes', () => expect(shellSingleQuote('abc')).toBe(`'abc'`))

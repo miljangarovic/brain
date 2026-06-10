@@ -25,12 +25,24 @@ function suppressed(ctx: DecideCtx): boolean {
   return !ctx.isAgent || ctx.underReview || ctx.activeAndFocused
 }
 
+// How long the agent actually produced output: busy=false is emitted only after
+// `idleMs` of silence, so the trailing quiet window must be subtracted — without
+// this every sub-second redraw blip "lasts" at least idleMs and defeats the
+// MIN_WORK_MS gate (the source of fake "je gotov" notifications).
+export function outputSpanMs(busyStartedAt: number | undefined, idleEmittedAt: number, idleMs: number): number {
+  if (busyStartedAt === undefined) return 0
+  return Math.max(0, idleEmittedAt - busyStartedAt - idleMs)
+}
+
 // busy→idle: the classified state to set, or null to do nothing. Idle-derived
-// signals additionally require (a) the terminal to be armed — the user typed in
-// it since the last alert, so there is a turn of theirs to finish — and (b) a
-// busy span long enough to be actual work rather than a repaint.
+// signals require the terminal to be armed — the user engaged it since the last
+// alert, so there is a turn of theirs to finish. 'done' additionally needs a
+// busy span long enough to be actual work rather than a repaint; a permission
+// prompt ('waiting-input') alerts regardless of span — claude often asks before
+// doing any work at all, and the agent is blocked either way.
 export function decideOnIdle(state: 'waiting-input' | 'done', ctx: IdleCtx): AttentionState | null {
-  if (suppressed(ctx) || !ctx.armed || ctx.workSpanMs < MIN_WORK_MS) return null
+  if (suppressed(ctx) || !ctx.armed) return null
+  if (state === 'done' && ctx.workSpanMs < MIN_WORK_MS) return null
   return state
 }
 

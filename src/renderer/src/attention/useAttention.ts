@@ -6,7 +6,8 @@ import { readTail } from './tailRegistry'
 import { isTouched, clearTouched } from './touched'
 import { markExited, consumeExited, clearExited } from './exited'
 import { classifyIdle, type AttentionState } from './detect'
-import { decideOnIdle, decideOnExit } from './decide'
+import { decideOnIdle, decideOnExit, outputSpanMs } from './decide'
+import { AGENT_IDLE_MS } from '@shared/pty'
 import { upsertItem, removeItem, lastLineOf, type AttentionItem } from './queue'
 import { notifTitle } from './notify'
 import { beep, isMuted, setMuted } from './sound'
@@ -91,10 +92,13 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
     const tail = readTail(id)
     const st = decideOnIdle(classifyIdle(tail), {
       ...ctx,
-      // Armed = the user typed in this terminal since the last alert; a busy:false
-      // with no busy:true seen by this hook gets span 0 (settle on app open, etc.).
+      // Armed = the user engaged this terminal (key/click) since the last alert;
+      // a busy:false with no busy:true seen by this hook gets span 0.
       armed: isTouched(id),
-      workSpanMs: started === undefined ? 0 : Date.now() - started,
+      // Honest output span: busy=false arrives AGENT_IDLE_MS after the LAST
+      // chunk, so the quiet tail is subtracted — else every sub-second redraw
+      // blip "lasts" 1.5s+ and sails past the MIN_WORK_MS gate.
+      workSpanMs: outputSpanMs(started, Date.now(), AGENT_IDLE_MS),
     })
     if (st) {
       fire(id, st, lastLineOf(tail))
@@ -115,7 +119,9 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
 
   const handleNotificationClick = useCallback((key: string) => {
     // showTerminal both un-hides (no-op when visible) and activates the terminal,
-    // so a click on the alert always reveals it.
+    // so a click on the alert always reveals it. Non-terminal keys (e.g. the
+    // export-finished notification's 'export:<path>') are harmless no-ops here —
+    // the window focus they want is handled in the main process before this runs.
     apply((s) => showTerminal(s, key))
     clearInternal(key)
   }, [apply, clearInternal])

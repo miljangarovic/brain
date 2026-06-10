@@ -1,11 +1,24 @@
 // src/renderer/src/components/termKeys.test.ts
 import { describe, it, expect } from 'vitest'
-import { classifyKeyEvent, type TermKeyEvent } from './termKeys'
+import { classifyKeyEvent, isModifierKey, type TermKeyEvent } from './termKeys'
 
 const ev = (over: Partial<TermKeyEvent> = {}): TermKeyEvent => ({
   type: 'keydown', code: 'Enter',
   shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
   ...over,
+})
+
+describe('isModifierKey', () => {
+  it('recognizes pure modifier keydowns (they must not arm attention)', () => {
+    for (const code of ['ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight', 'CapsLock']) {
+      expect(isModifierKey(code)).toBe(true)
+    }
+  })
+  it('treats real input keys as non-modifiers', () => {
+    for (const code of ['KeyA', 'Digit1', 'Enter', 'Space', 'Backspace', 'ArrowDown']) {
+      expect(isModifierKey(code)).toBe(false)
+    }
+  })
 })
 
 describe('classifyKeyEvent', () => {
