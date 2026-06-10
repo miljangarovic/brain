@@ -5,8 +5,10 @@ import {
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
-  patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById
+  patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById,
+  addImportedGroup, addImportedFeature
 } from './store'
+import type { Group, Feature } from '@shared/types'
 import { migrateWorkspace } from './migrate'
 
 const firstGroup = (s: ReturnType<typeof addGroup>) => s.workspace.groups[0]
@@ -526,5 +528,44 @@ describe('attention store helpers', () => {
   })
   it('terminalPath is empty for an unknown id', () => {
     expect(terminalPath(createInitialState(), 'nope')).toBe('')
+  })
+})
+
+describe('addImportedGroup / addImportedFeature', () => {
+  const importedGroup: Group = {
+    id: 'ig', name: 'imported', cwd: '/p', collapsed: false, features: [
+      { id: 'if', name: 'auth', collapsed: false, terminals: [{ id: 'it', name: 'claude', cwd: '/p', kind: 'claude' }] }
+    ]
+  }
+  const importedFeature: Feature = {
+    id: 'xf', name: 'payments', collapsed: false, terminals: [{ id: 'xt', name: 'codex', cwd: '/p', kind: 'codex' }]
+  }
+
+  it('addImportedGroup appends the group and activates its first feature/terminal', () => {
+    const s0 = createInitialState()
+    const s1 = addImportedGroup(s0, importedGroup)
+    expect(s1.workspace.groups.map((g) => g.id)).toContain('ig')
+    expect(s1.activeGroupId).toBe('ig')
+    expect(s1.activeFeatureId).toBe('if')
+    expect(s1.activeTerminalId).toBe('it')
+  })
+
+  it('addImportedFeature inserts into the active group and activates it', () => {
+    let s = createInitialState()
+    s = addGroup(s, 'host', '/host')
+    const s1 = addImportedFeature(s, importedFeature, { name: 'fallback', cwd: '/fb' })
+    const host = s1.workspace.groups.find((g) => g.name === 'host')!
+    expect(host.features.map((f) => f.id)).toContain('xf')
+    expect(host.collapsed).toBe(false)
+    expect(s1.activeFeatureId).toBe('xf')
+    expect(s1.activeTerminalId).toBe('xt')
+  })
+
+  it('addImportedFeature creates a group from the fallback when the workspace is empty', () => {
+    const s1 = addImportedFeature(createInitialState(), importedFeature, { name: 'fallback', cwd: '/fb' })
+    expect(s1.workspace.groups).toHaveLength(1)
+    expect(s1.workspace.groups[0]).toMatchObject({ name: 'fallback', cwd: '/fb' })
+    expect(s1.workspace.groups[0].features.map((f) => f.id)).toEqual(['xf'])
+    expect(s1.activeFeatureId).toBe('xf')
   })
 })

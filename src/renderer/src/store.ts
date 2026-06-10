@@ -89,6 +89,37 @@ export function moveGroup(state: AppState, groupId: string, toIndex: number): Ap
   return { ...state, workspace: { groups: [...rest.slice(0, dest), moved, ...rest.slice(dest)] } }
 }
 
+// ---- import ----------------------------------------------------------------
+// Insert an imported group (already carrying fresh ids) and activate it.
+export function addImportedGroup(state: AppState, group: Group): AppState {
+  const sel = selectFeature(group, state.hidden)
+  return {
+    ...state,
+    workspace: { groups: [...state.workspace.groups, group] },
+    activeGroupId: group.id,
+    activeFeatureId: sel.featureId,
+    activeTerminalId: sel.terminalId
+  }
+}
+
+// Insert an imported feature into the active group (fallback: first group; an
+// empty workspace gets a group built from the export's own name/cwd).
+export function addImportedFeature(state: AppState, feature: Feature, fallback: { name: string; cwd: string }): AppState {
+  const target = getActiveGroup(state) ?? state.workspace.groups[0] ?? null
+  const first = feature.terminals[0]?.id ?? null
+  if (!target) {
+    const group: Group = { id: createId(), name: fallback.name, cwd: fallback.cwd, collapsed: false, features: [feature] }
+    return { ...state, workspace: { groups: [group] }, activeGroupId: group.id, activeFeatureId: feature.id, activeTerminalId: first }
+  }
+  return {
+    ...state,
+    workspace: mapGroup(state.workspace, target.id, (g) => ({ ...g, collapsed: false, features: [...g.features, feature] })),
+    activeGroupId: target.id,
+    activeFeatureId: feature.id,
+    activeTerminalId: first
+  }
+}
+
 // ---- features ------------------------------------------------------------
 export function addFeature(state: AppState, groupId: string, name: string): AppState {
   const feature: Feature = { id: createId(), name, collapsed: false, terminals: [] }
