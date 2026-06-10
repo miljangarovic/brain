@@ -504,9 +504,11 @@ export function Sidebar(props: {
         return (
           <ContextMenu x={featMenu.x} y={featMenu.y} onClose={() => setFeatMenu(null)} items={[
             { label: 'Rename', onSelect: () => startRename('feature', f.id, f.name) },
-            { label: 'New Claude', icon: <ClaudeIcon />, onSelect: () => onLaunchAgent(f.id, 'claude') },
-            { label: 'New Codex', icon: <CodexIcon />, onSelect: () => onLaunchAgent(f.id, 'codex') },
-            { label: 'New Terminal', icon: <ShellIcon className="text-fg-muted" />, onSelect: () => onAddTerminal(f.id) },
+            { label: 'New', children: [
+              { label: 'Claude', icon: <ClaudeIcon />, onSelect: () => onLaunchAgent(f.id, 'claude') },
+              { label: 'Codex', icon: <CodexIcon />, onSelect: () => onLaunchAgent(f.id, 'codex') },
+              { label: 'Terminal', icon: <ShellIcon className="text-fg-muted" />, onSelect: () => onAddTerminal(f.id) }
+            ] },
             { label: 'Export feature…', onSelect: () => onExportFeature(f.id) },
             { label: 'Add document…', icon: <DocIcon />, onSelect: () => onAddDocument(f.id) },
             { label: 'Archive', icon: <ArchiveIcon />, onSelect: () => onArchiveFeature(f.id) }

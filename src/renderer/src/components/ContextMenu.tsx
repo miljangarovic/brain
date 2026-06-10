@@ -2,13 +2,16 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 
 export interface MenuItem {
   label: string
-  onSelect: () => void
+  onSelect?: () => void
   icon?: ReactNode
+  children?: MenuItem[]
 }
 
 export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; items: MenuItem[]; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ x, y })
+  const [subFor, setSubFor] = useState<string | null>(null)
+  const [subFlip, setSubFlip] = useState(false)
 
   // Keep the menu fully inside the window: measure after layout and shift it
   // left/up if it would overflow the right/bottom edge (e.g. a "+" near the edge).
@@ -63,17 +66,49 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
       role="menu"
       style={{ left: pos.x, top: pos.y }}
       className="fixed z-50 min-w-40 rounded-md border border-line bg-elevated py-1 shadow-xl shadow-black/50"
+      onMouseLeave={() => setSubFor(null)}
     >
       {items.map((it) => (
-        <button
+        <div
           key={it.label}
-          role="menuitem"
-          onClick={() => { it.onSelect(); onClose() }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-fg hover:bg-hover"
+          className="relative"
+          onMouseEnter={(e) => {
+            if (!it.children) { setSubFor(null); return }
+            const r = e.currentTarget.getBoundingClientRect()
+            setSubFlip(r.right + 160 > window.innerWidth)
+            setSubFor(it.label)
+          }}
         >
-          {it.icon && <span className="shrink-0 text-base leading-none">{it.icon}</span>}
-          {it.label}
-        </button>
+          <button
+            role="menuitem"
+            aria-haspopup={it.children ? 'menu' : undefined}
+            aria-expanded={it.children ? subFor === it.label : undefined}
+            onClick={() => { if (!it.children) { it.onSelect?.(); onClose() } }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-fg hover:bg-hover"
+          >
+            {it.icon && <span className="shrink-0 text-base leading-none">{it.icon}</span>}
+            <span className="flex-1">{it.label}</span>
+            {it.children && <span aria-hidden className="text-[9px] leading-none text-fg-muted">▶</span>}
+          </button>
+          {it.children && subFor === it.label && (
+            <div
+              role="menu"
+              className={`absolute top-0 min-w-40 rounded-md border border-line bg-elevated py-1 shadow-xl shadow-black/50 ${subFlip ? 'right-full' : 'left-full'}`}
+            >
+              {it.children.map((c) => (
+                <button
+                  key={c.label}
+                  role="menuitem"
+                  onClick={() => { c.onSelect?.(); onClose() }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-fg hover:bg-hover"
+                >
+                  {c.icon && <span className="shrink-0 text-base leading-none">{c.icon}</span>}
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       ))}
     </div>
   )

@@ -63,3 +63,80 @@ describe('ContextMenu', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 })
+
+describe('submenu', () => {
+  function makeItems() {
+    return [
+      { label: 'Plain', onSelect: vi.fn() },
+      { label: 'New', children: [
+        { label: 'Claude', onSelect: vi.fn() },
+        { label: 'Terminal', onSelect: vi.fn() }
+      ] }
+    ]
+  }
+
+  it('an item with children shows the arrow and opens its submenu on hover', () => {
+    const onClose = vi.fn()
+    const items = makeItems()
+    render(<ContextMenu x={10} y={20} onClose={onClose} items={items} />)
+
+    // submenu not visible yet
+    expect(screen.queryByRole('menuitem', { name: 'Claude' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Terminal' })).not.toBeInTheDocument()
+
+    // the parent item should have the arrow indicator and aria attributes
+    const newItem = screen.getByRole('menuitem', { name: /New/ })
+    expect(newItem).toHaveAttribute('aria-haspopup', 'menu')
+    expect(newItem).toHaveAttribute('aria-expanded', 'false')
+
+    // hover the container wrapping the 'New' button
+    fireEvent.mouseEnter(newItem.closest('.relative')!)
+
+    // submenu children are now visible
+    expect(screen.getByRole('menuitem', { name: 'Claude' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Terminal' })).toBeInTheDocument()
+
+    // aria-expanded flips to true
+    expect(newItem).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('clicking a submenu entry selects it and closes the whole menu', () => {
+    const onClose = vi.fn()
+    const items = makeItems()
+    render(<ContextMenu x={10} y={20} onClose={onClose} items={items} />)
+
+    // open the submenu
+    const newItem = screen.getByRole('menuitem', { name: /New/ })
+    fireEvent.mouseEnter(newItem.closest('.relative')!)
+
+    // click the child
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
+    expect(items[1].children![0].onSelect).toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('clicking the parent item itself does nothing', () => {
+    const onClose = vi.fn()
+    const items = makeItems()
+    render(<ContextMenu x={10} y={20} onClose={onClose} items={items} />)
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /New/ }))
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('hovering another item closes the submenu', () => {
+    const onClose = vi.fn()
+    const items = makeItems()
+    render(<ContextMenu x={10} y={20} onClose={onClose} items={items} />)
+
+    // open submenu
+    const newItem = screen.getByRole('menuitem', { name: /New/ })
+    fireEvent.mouseEnter(newItem.closest('.relative')!)
+    expect(screen.getByRole('menuitem', { name: 'Claude' })).toBeInTheDocument()
+
+    // hover Plain (no children) → submenu should close
+    const plainItem = screen.getByRole('menuitem', { name: 'Plain' })
+    fireEvent.mouseEnter(plainItem.closest('.relative')!)
+    expect(screen.queryByRole('menuitem', { name: 'Claude' })).not.toBeInTheDocument()
+  })
+})
