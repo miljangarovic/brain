@@ -380,6 +380,31 @@ describe('store reducers', () => {
     expect(isHidden(s, bId)).toBe(false)
   })
 
+  it('entering grid view un-hides every terminal of the feature (X-ed panes return)', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'a' })
+    s = addTerminal(s, fid, { name: 'b' })
+    const bId = firstFeature(s).terminals[1].id
+    s = hideTerminal(s, bId)
+    s = toggleFeatureViewMode(s, fid)        // tabs -> grid
+    expect(firstFeature(s).viewMode).toBe('grid')
+    expect(isHidden(s, bId)).toBe(false)
+  })
+
+  it('entering grid view leaves other features\' hidden terminals alone', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const gid = firstGroup(s).id
+    const f1 = firstFeature(s).id
+    s = addFeature(s, gid, 'other')
+    const f2 = firstGroup(s).features[1].id
+    s = addTerminal(s, f2, { name: 'x' })
+    const xId = firstGroup(s).features[1].terminals[0].id
+    s = hideTerminal(s, xId)
+    s = toggleFeatureViewMode(s, f1)         // grid on the FIRST feature
+    expect(isHidden(s, xId)).toBe(true)      // f2's hidden terminal untouched
+  })
+
   it('setActiveFeature skips hidden terminals when picking the active one', () => {
     let s = addGroup(createInitialState(), 'a', '')
     const fid = firstFeature(s).id

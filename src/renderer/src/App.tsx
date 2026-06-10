@@ -16,7 +16,7 @@ import { createId } from '@shared/id'
 import { AGENTS, detectAgent, agentLaunchCommand, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
-import { styledGridLayout, paneTerminals } from './layout'
+import { styledGridLayout } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { FeatureHeader } from './components/FeatureHeader'
@@ -217,17 +217,17 @@ export default function App() {
   const attentionItems = useMemo(() => attention.queue.map((q) => ({
     terminalId: q.terminalId, state: q.state, lastLine: q.lastLine, path: terminalPath(state, q.terminalId),
   })), [attention.queue, state.workspace]) // eslint-disable-line react-hooks/exhaustive-deps -- terminalPath reads only state.workspace
+  // Both the tab bar and the grid show the visible (non-hidden) set: X-ing a
+  // tab prunes its pane from the open grid too, and ENTERING grid mode clears
+  // the feature's hidden set (store.toggleFeatureViewMode), so every terminal
+  // returns on the next grid open.
   const featureVisible = (activeFeature?.terminals ?? []).filter((t) => !state.hidden.includes(t.id))
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
-  // The main area's pane set: the grid surveys the WHOLE feature (tab-hidden
-  // terminals included), tabs mode shows only the visible set (= featureVisible,
-  // which also stays the tab bar's list).
-  const paneSet = paneTerminals(activeFeature?.terminals ?? [], state.hidden, gridMode)
-  const featureTerminalIds = new Set(paneSet.map((t) => t.id))
-  const { cols, rows, lastSpan, spanFirst, flow: gridFlow } = styledGridLayout(paneSet.length, activeFeature?.gridStyle ?? 'auto')
+  const featureTerminalIds = new Set(featureVisible.map((t) => t.id))
+  const { cols, rows, lastSpan, spanFirst, flow: gridFlow } = styledGridLayout(featureVisible.length, activeFeature?.gridStyle ?? 'auto')
   // Auto-fill leaves any gap in one column (column flow) or one row (row flow);
   // the spanning pane stretches over it — first or last pane, per gridStyle.
-  const spanTerminalId = spanFirst ? paneSet[0]?.id : paneSet[paneSet.length - 1]?.id
+  const spanTerminalId = spanFirst ? featureVisible[0]?.id : featureVisible[featureVisible.length - 1]?.id
 
   return (
     <div className="flex h-screen text-fg bg-panel">
@@ -316,7 +316,7 @@ export default function App() {
           className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-2 p-2 bg-panel' : ''}`}
           style={gridMode ? { gridAutoFlow: gridFlow, gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
         >
-          {paneSet.length === 0 && (
+          {featureVisible.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
               <span className="text-2xl font-semibold tracking-tight text-fg">Brain</span>
               <span className="text-sm">

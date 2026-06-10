@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gridColumns, gridDimensions, gridLayout, styledGridLayout, paneMode, paneTerminals } from './layout'
+import { gridColumns, gridDimensions, gridLayout, styledGridLayout, paneMode } from './layout'
 
 describe('styledGridLayout', () => {
   it('auto keeps the balanced grid with the spanning pane last (big pane right)', () => {
@@ -34,21 +34,6 @@ describe('styledGridLayout', () => {
   it('never returns zero rows or columns', () => {
     expect(styledGridLayout(0, 'rows')).toEqual({ cols: 1, rows: 1, lastSpan: 1, spanFirst: false, flow: 'column' })
     expect(styledGridLayout(0, 'auto-top')).toEqual({ cols: 1, rows: 1, lastSpan: 1, spanFirst: false, flow: 'row' })
-  })
-})
-
-describe('paneTerminals', () => {
-  const terms = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
-
-  it('grid mode surveys the whole feature — tab-hidden terminals included', () => {
-    expect(paneTerminals(terms, ['b'], true)).toEqual(terms)
-  })
-  it('tabs mode shows only the visible (non-hidden) terminals', () => {
-    expect(paneTerminals(terms, ['b'], false)).toEqual([{ id: 'a' }, { id: 'c' }])
-  })
-  it('is the identity when nothing is hidden', () => {
-    expect(paneTerminals(terms, [], false)).toEqual(terms)
-    expect(paneTerminals(terms, [], true)).toEqual(terms)
   })
 })
 

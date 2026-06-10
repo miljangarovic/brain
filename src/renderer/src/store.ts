@@ -131,7 +131,11 @@ export function toggleFeatureViewMode(state: AppState, featureId: string): AppSt
       activeTerminalId: first?.id ?? state.activeTerminalId
     }
   }
-  return { ...state, workspace }
+  // Entering the grid is a fresh survey of the feature: every X-ed (hidden)
+  // terminal returns to the board (and to the tab bar). X-ing a pane while the
+  // grid is open still prunes it — until the next grid open.
+  const ids = new Set((feature?.terminals ?? []).map((t) => t.id))
+  return { ...state, workspace, hidden: state.hidden.filter((id) => !ids.has(id)) }
 }
 
 export function deleteFeature(state: AppState, featureId: string): AppState {
