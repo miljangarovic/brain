@@ -15,7 +15,9 @@ export function remapCwd(cwd: string, oldRoot: string, newRoot: string | null): 
 // which exist (fs lives in the main process) and feeds the answer to buildImport.
 export function collectCwdCandidates(manifest: ExportManifest, newRoot: string | null): string[] {
   const oldRoot = manifest.group.cwd
-  const features = manifest.scope === 'group' ? manifest.group.features : [manifest.feature]
+  const features = manifest.scope === 'group'
+    ? [...manifest.group.features, ...(manifest.group.archivedFeatures ?? [])]
+    : [manifest.feature]
   const set = new Set<string>()
   const root = remapCwd(oldRoot, oldRoot, newRoot)
   if (root) set.add(root)
@@ -32,7 +34,8 @@ export interface BuiltImport {
   group?: Group       // scope 'group'
   feature?: Feature   // scope 'feature'
   fallbackGroup: { name: string; cwd: string }  // creates a group when the workspace has none
-  terminalIds: string[]                          // all fresh ids — the caller spawn-gates them
+  terminalIds: string[]   // fresh ids of ACTIVE features' terminals — the caller spawn-gates
+                          // them; archived terminals are excluded (restore re-seeds them)
 }
 
 // The pure import transformation: fresh ids everywhere, cwds remapped (dead ones
@@ -56,9 +59,9 @@ export function buildImport(opts: {
     return c === '' || exists(c) ? c : ''
   }
 
-  const importTerminal = (t: Terminal): Terminal => {
+  const importTerminal = (t: Terminal, track: boolean): Terminal => {
     const id = createId()
-    terminalIds.push(id)
+    if (track) terminalIds.push(id)
     const base: Terminal = { id, name: t.name, cwd: fixCwd(t.cwd) }
     if (t.shell) base.shell = t.shell
     if (t.kind && t.kind !== 'shell') base.kind = t.kind
@@ -78,13 +81,15 @@ export function buildImport(opts: {
     return base
   }
 
-  const importFeature = (f: Feature): Feature => ({
+  const importFeature = (f: Feature, track = true): Feature => ({
     id: createId(),
     name: f.name,
     collapsed: f.collapsed,
     ...(f.viewMode ? { viewMode: f.viewMode } : {}),
     ...(f.gridStyle ? { gridStyle: f.gridStyle } : {}),
-    terminals: f.terminals.map(importTerminal)
+    // Document paths stay VERBATIM: dead ones just render as broken rows.
+    ...(f.documents?.length ? { documents: f.documents.map((d) => ({ id: createId(), name: d.name, path: d.path })) } : {}),
+    terminals: f.terminals.map((t) => importTerminal(t, track))
   })
 
   const fallbackGroup = { name: manifest.group.name, cwd: fixCwd(oldRoot) }
@@ -92,7 +97,16 @@ export function buildImport(opts: {
     return { scope: 'feature', feature: importFeature(manifest.feature), fallbackGroup, terminalIds }
   return {
     scope: 'group',
-    group: { id: createId(), name: manifest.group.name, cwd: fixCwd(oldRoot), collapsed: false, features: manifest.group.features.map(importFeature) },
+    group: {
+      id: createId(),
+      name: manifest.group.name,
+      cwd: fixCwd(oldRoot),
+      collapsed: false,
+      features: manifest.group.features.map((f) => importFeature(f)),
+      ...(manifest.group.archivedFeatures?.length
+        ? { archivedFeatures: manifest.group.archivedFeatures.map((f) => importFeature(f, false)) }
+        : {})
+    },
     fallbackGroup,
     terminalIds
   }
