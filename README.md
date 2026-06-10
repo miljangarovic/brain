@@ -1,4 +1,4 @@
-# OrchestriX
+# Brain
 
 A desktop wrapper around the terminal for Linux: named terminals with full PTY,
 organized into projects (sidebar tree + tabs) — for orchestrating and monitoring
@@ -26,9 +26,9 @@ npm run dist:dir  # unpacked build only (no installer), for a quick check
 Install the built `.deb` (Linux):
 
 ```bash
-sudo apt install ./release/0.1.0/orchestrix_0.1.0_amd64.deb   # resolves deps automatically
-# then launch from your app menu, or run: /opt/OrchestriX/orchestrix
-# uninstall: sudo apt remove orchestrix
+sudo apt install ./release/0.1.0/brain_0.1.0_amd64.deb   # resolves deps automatically
+# then launch from your app menu, or run: /opt/Brain/brain
+# uninstall: sudo apt remove brain
 ```
 
 ## Shortcuts
@@ -62,4 +62,4 @@ and grid view apply to the active feature.
 ## Persistence
 
 The structure (projects + terminals + cwd + startup command) is saved to
-`~/.config/OrchestriX/workspace.json` and restored on launch with fresh shells.
+`~/.config/brain/workspace.json` and restored on launch with fresh shells.
