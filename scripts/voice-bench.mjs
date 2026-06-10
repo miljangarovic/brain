@@ -40,7 +40,7 @@ const wordAcc = (got, want) => {
 }
 
 const segText = (r) => (typeof r === 'string' ? r
-  : (Array.isArray(r) ? r : r?.transcription ?? []).map((s) => s?.[2] ?? '').join('')).replace(/\s+/g, ' ').trim()
+  : (Array.isArray(r) ? r : r?.transcription ?? []).map((s) => Array.isArray(s) ? (typeof s[2] === 'string' ? s[2] : '') : typeof s === 'string' ? s : '').join('')).replace(/\s+/g, ' ').trim()
 
 const wavs = readdirSync(fixturesDir).filter((f) => f.endsWith('.wav')).sort()
 
