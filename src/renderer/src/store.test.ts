@@ -366,6 +366,15 @@ describe('store reducers', () => {
     expect(s.activeTerminalId).toBe(tid)
   })
 
+  it('showTerminal with an unknown id leaves the state untouched', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'x' })
+    // e.g. an OS-notification key that is not a terminal ('export:<path>')
+    const s1 = showTerminal(s, 'export:/tmp/x.zip')
+    expect(s1).toBe(s)
+  })
+
   it('removeTerminal prunes the hidden set and skips hidden siblings when re-selecting', () => {
     let s = addGroup(createInitialState(), 'a', '')
     const fid = firstFeature(s).id

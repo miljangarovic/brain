@@ -312,13 +312,17 @@ export function hideTerminal(state: AppState, terminalId: string): AppState {
 }
 
 // Un-hide a terminal (it reappears as a tab with its preserved shell) and activate it.
+// Unknown ids are a strict no-op — callers route arbitrary keys here (e.g. OS
+// notification keys like 'export:<path>'), and activating a nonexistent id
+// would blank the tab pane.
 export function showTerminal(state: AppState, terminalId: string): AppState {
   const loc = featureOfTerminal(state.workspace, terminalId)
+  if (!loc) return state
   return {
     ...state,
     hidden: state.hidden.filter((x) => x !== terminalId),
-    activeGroupId: loc?.group.id ?? state.activeGroupId,
-    activeFeatureId: loc?.feature.id ?? state.activeFeatureId,
+    activeGroupId: loc.group.id,
+    activeFeatureId: loc.feature.id,
     activeTerminalId: terminalId
   }
 }
