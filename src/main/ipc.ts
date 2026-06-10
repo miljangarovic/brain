@@ -187,10 +187,16 @@ export function registerIpc(opts: {
     const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters: [{ name: 'Zip', extensions: ['zip'] }] }
     const res = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     if (res.canceled || res.filePaths.length === 0) return { canceled: true }
-    const out = await extractImportArchive(res.filePaths[0], join(userDataDir, 'imports', randomUUID()))
-    if ('error' in out) return { error: out.error }
-    const root = out.manifest.group.cwd
-    return { manifest: out.manifest, dir: out.dir, cwdExists: root === '' ? true : await pathExists(root) }
+    try {
+      const out = await extractImportArchive(res.filePaths[0], join(userDataDir, 'imports', randomUUID()))
+      if ('error' in out) return { error: out.error }
+      const root = out.manifest.group.cwd
+      return { manifest: out.manifest, dir: out.dir, cwdExists: root === '' ? true : await pathExists(root) }
+    } catch (err) {
+      // fs failures during extraction (EACCES, ENOSPC, ...) must surface as a
+      // result, not a rejected invoke — the renderer only handles { error }.
+      return { error: String(err) }
+    }
   })
 
   ipcMain.handle(IPC.fsExists, (_e, p: { paths: string[] }) => Promise.all((p?.paths ?? []).map(pathExists)))
