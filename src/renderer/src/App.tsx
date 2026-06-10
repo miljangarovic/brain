@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import { removedIds, pruneRecord } from './ptyReaper'
 import { shouldSpawn } from './spawnGate'
+import { isLayoutRepaint } from './repaintGuard'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
@@ -58,16 +59,30 @@ export default function App() {
 
   const [reviewStatus, setReviewStatus] = useState<Record<string, ReviewStatus | undefined>>({})
 
+  // Grid toggles / style switches resize every pane and make the TUIs repaint;
+  // busy=true transitions inside the short window after such an action are
+  // repaint noise, not work — drop them before any busy consumer sees them.
+  const layoutChangeAt = useRef(0)
+  const markLayoutChange = useCallback(() => { layoutChangeAt.current = Date.now() }, [])
+  const guardBusy = useCallback(
+    (handler: (id: string, busy: boolean) => void) =>
+      (id: string, b: boolean) => {
+        if (isLayoutRepaint(b, Date.now(), layoutChangeAt.current)) return
+        handler(id, b)
+      },
+    []
+  )
+
   // Live "is producing output" flag per terminal — drives the busy spinner in the
   // tab bar and sidebar. Main emits only on idle↔busy transitions. A terminal going
   // busy also clears its green 'approved' review dot — its next request has started.
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   useEffect(() => {
-    return window.brain.onPtyBusy((id, b) => {
+    return window.brain.onPtyBusy(guardBusy((id, b) => {
       setBusy((m) => ({ ...m, [id]: b }))
       if (b) setReviewStatus((m) => (m[id] === 'approved' ? { ...m, [id]: undefined } : m))
-    })
-  }, [])
+    }))
+  }, [guardBusy])
 
   const [reviewReq, setReviewReq] = useState<{ id: string; reviewer?: AgentKind } | null>(null)
   const setStatus = useCallback(
@@ -76,10 +91,10 @@ export default function App() {
   )
   const review = useReview(state, apply, setStatus, reviewStatus)
   useEffect(() => window.brain.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
-  useEffect(() => window.brain.onPtyBusy(review.handleBusy), [review.handleBusy])
+  useEffect(() => window.brain.onPtyBusy(guardBusy(review.handleBusy)), [review.handleBusy, guardBusy])
 
   const attention = useAttention(state, apply)
-  useEffect(() => window.brain.onPtyBusy(attention.handleBusy), [attention.handleBusy])
+  useEffect(() => window.brain.onPtyBusy(guardBusy(attention.handleBusy)), [attention.handleBusy, guardBusy])
   useEffect(() => window.brain.onPtyExit(attention.handleExit), [attention.handleExit])
   useEffect(() => window.brain.onNotificationClick(attention.handleNotificationClick), [attention.handleNotificationClick])
 
@@ -168,7 +183,7 @@ export default function App() {
         if (state.activeTerminalId) apply((s) => hideTerminal(s, state.activeTerminalId!))
       } else if (e.ctrlKey && e.shiftKey && e.code === 'KeyG') {
         e.preventDefault()
-        if (state.activeFeatureId) apply((s) => toggleFeatureViewMode(s, state.activeFeatureId!))
+        if (state.activeFeatureId) { markLayoutChange(); apply((s) => toggleFeatureViewMode(s, state.activeFeatureId!)) }
       } else if (e.ctrlKey && e.code === 'PageDown') {
         e.preventDefault(); cycleTab(1)
       } else if (e.ctrlKey && e.code === 'PageUp') {
@@ -245,7 +260,7 @@ export default function App() {
         onAddFeature={(gid, name) => apply((s) => addFeature(s, gid, name))}
         onAddTerminal={(fid) => addShellTerminal(fid)}
         onLaunchAgent={launchAgent}
-        onToggleFeatureView={(fid) => apply((s) => toggleFeatureViewMode(setActiveFeature(s, fid), fid))}
+        onToggleFeatureView={(fid) => { markLayoutChange(); apply((s) => toggleFeatureViewMode(setActiveFeature(s, fid), fid)) }}
         onMoveGroup={(groupId, toIndex) => apply((s) => moveGroup(s, groupId, toIndex))}
         onMoveFeature={(featureId, toIndex) => apply((s) => moveFeature(s, featureId, toIndex))}
         onMoveTerminal={(terminalId, toIndex) => apply((s) => moveTerminal(s, terminalId, toIndex))}
@@ -289,7 +304,7 @@ export default function App() {
           <FeatureHeader
             featureName={activeFeature.name}
             viewMode={activeFeature.viewMode ?? 'tabs'}
-            onToggleView={() => apply((s) => toggleFeatureViewMode(s, activeFeature.id))}
+            onToggleView={() => { markLayoutChange(); apply((s) => toggleFeatureViewMode(s, activeFeature.id)) }}
             onAdd={(kind) => (kind === 'shell'
               ? addShellTerminal(activeFeature.id)
               : launchAgent(activeFeature.id, kind))}
@@ -298,7 +313,7 @@ export default function App() {
             onAcceptPhase={(rid) => review.acceptPhase(rid)}
             onStopLoop={(rid) => review.stopLoop(rid)}
             gridStyle={activeFeature.gridStyle ?? 'auto'}
-            onSetGridStyle={(gs) => apply((s) => setFeatureGridStyle(s, activeFeature.id, gs))}
+            onSetGridStyle={(gs) => { markLayoutChange(); apply((s) => setFeatureGridStyle(s, activeFeature.id, gs)) }}
           />
         )}
         <TabBar
