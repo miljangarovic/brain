@@ -26,15 +26,20 @@ const featureOfTerminal = (ws: Workspace, terminalId: string): { group: Group; f
   return undefined
 }
 
-const selectFeature = (g: Group | null): { featureId: string | null; terminalId: string | null } => {
+// First terminal of `f` that isn't hidden from the tab bar — activating a hidden
+// terminal would select something with no visible tab or pane.
+const firstVisibleTerminal = (f: Feature | null, hidden: string[]): Terminal | null =>
+  f?.terminals.find((t) => !hidden.includes(t.id)) ?? null
+
+const selectFeature = (g: Group | null, hidden: string[]): { featureId: string | null; terminalId: string | null } => {
   const f = g?.features[0] ?? null
-  return { featureId: f?.id ?? null, terminalId: f?.terminals[0]?.id ?? null }
+  return { featureId: f?.id ?? null, terminalId: firstVisibleTerminal(f, hidden)?.id ?? null }
 }
 
 // ---- init ----------------------------------------------------------------
 export function createInitialState(ws: Workspace = createWorkspace()): AppState {
   const g = ws.groups[0] ?? null
-  const sel = selectFeature(g)
+  const sel = selectFeature(g, [])
   return { workspace: ws, activeGroupId: g?.id ?? null, activeFeatureId: sel.featureId, activeTerminalId: sel.terminalId, hidden: [] }
 }
 
@@ -64,7 +69,7 @@ export function deleteGroup(state: AppState, groupId: string): AppState {
   let { activeGroupId, activeFeatureId, activeTerminalId } = state
   if (activeGroupId === groupId) {
     const ng = groups[0] ?? null
-    const sel = selectFeature(ng)
+    const sel = selectFeature(ng, state.hidden)
     activeGroupId = ng?.id ?? null
     activeFeatureId = sel.featureId
     activeTerminalId = sel.terminalId
@@ -133,7 +138,7 @@ export function deleteFeature(state: AppState, featureId: string): AppState {
   let { activeFeatureId, activeTerminalId } = state
   if (activeFeatureId === featureId) {
     const g2 = ws.groups.find((g) => g.id === group?.id) ?? null
-    const sel = selectFeature(g2)
+    const sel = selectFeature(g2, state.hidden)
     activeFeatureId = sel.featureId
     activeTerminalId = sel.terminalId
   }
@@ -282,7 +287,7 @@ export const isHidden = (s: AppState, terminalId: string): boolean => s.hidden.i
 // ---- active selection ----------------------------------------------------
 export function setActiveGroup(state: AppState, groupId: string): AppState {
   const g = state.workspace.groups.find((x) => x.id === groupId) ?? null
-  const sel = selectFeature(g)
+  const sel = selectFeature(g, state.hidden)
   return { ...state, activeGroupId: groupId, activeFeatureId: sel.featureId, activeTerminalId: sel.terminalId }
 }
 
@@ -293,7 +298,7 @@ export function setActiveFeature(state: AppState, featureId: string): AppState {
     ...state,
     activeGroupId: group?.id ?? state.activeGroupId,
     activeFeatureId: featureId,
-    activeTerminalId: feature?.terminals[0]?.id ?? null
+    activeTerminalId: firstVisibleTerminal(feature, state.hidden)?.id ?? null
   }
 }
 

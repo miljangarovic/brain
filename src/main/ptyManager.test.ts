@@ -92,6 +92,34 @@ describe('PtyManager', () => {
     }).not.toThrow()
   })
 
+  it('surfaces a spawner throw as data + exit instead of crashing', () => {
+    const spawner: PtySpawner = () => { throw new Error('forkpty(3) failed.') }
+    const m = new PtyManager(spawner)
+    const onData = vi.fn()
+    const onExit = vi.fn()
+    m.onData(onData)
+    m.onExit(onExit)
+    expect(() => m.create({ id: 't1', cwd: '', shell: '', cols: 80, rows: 24 })).not.toThrow()
+    expect(onData).toHaveBeenCalledWith('t1', expect.stringContaining('forkpty(3) failed.'))
+    expect(onExit).toHaveBeenCalledWith('t1', expect.any(Number))
+    expect(m.has('t1')).toBe(false)
+  })
+
+  it('a failed create can be retried with the same id', () => {
+    let fail = true
+    const { spawner, created } = makeFake()
+    const flaky: PtySpawner = (opts) => {
+      if (fail) { fail = false; throw new Error('Cannot create process') }
+      return spawner(opts)
+    }
+    const m = new PtyManager(flaky)
+    m.create({ id: 't1', cwd: '', shell: '', cols: 80, rows: 24 })
+    expect(m.has('t1')).toBe(false)
+    m.create({ id: 't1', cwd: '', shell: '', cols: 80, rows: 24 })
+    expect(m.has('t1')).toBe(true)
+    expect(created).toHaveLength(1)
+  })
+
   it('snapshotProcesses lists the foreground process per live terminal', () => {
     const { spawner } = makeFake()
     const m = new PtyManager(spawner)

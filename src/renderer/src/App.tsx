@@ -1,7 +1,7 @@
 // src/renderer/src/App.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
-import { removedIds } from './ptyReaper'
+import { removedIds, pruneRecord } from './ptyReaper'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
@@ -116,7 +116,15 @@ export default function App() {
   useEffect(() => {
     const ids = new Set(allTerminals(state).map((t) => t.id))
     if (prevTermIds.current) {
-      for (const id of removedIds(prevTermIds.current, ids)) window.orchestrix.killPty(id)
+      const removed = removedIds(prevTermIds.current, ids)
+      for (const id of removed) window.orchestrix.killPty(id)
+      if (removed.length > 0) {
+        // Drop the dead terminals' per-id UI state so these Records don't grow
+        // for the whole session (and a future id reuse can't inherit stale state).
+        setLiveAgents((m) => pruneRecord(m, removed))
+        setBusy((m) => pruneRecord(m, removed))
+        setReviewStatus((m) => pruneRecord(m, removed))
+      }
     }
     prevTermIds.current = ids
     // eslint-disable-next-line react-hooks/exhaustive-deps

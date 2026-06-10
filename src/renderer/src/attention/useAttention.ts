@@ -4,6 +4,7 @@ import type { AppState } from '../store'
 import { getTerminalById, allTerminals, isUnderReview, showTerminal } from '../store'
 import { readTail } from './tailRegistry'
 import { isTouched, clearTouched } from './touched'
+import { markExited, consumeExited, clearExited } from './exited'
 import { classifyIdle, type AttentionState } from './detect'
 import { decideOnIdle, decideOnExit } from './decide'
 import { upsertItem, removeItem, lastLineOf, type AttentionItem } from './queue'
@@ -74,12 +75,16 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
 
   const handleBusy = useCallback((id: string, busy: boolean) => {
     if (busy) {
+      clearExited(id) // a fresh busy cycle belongs to a live (re)spawned process
       busySince.current.set(id, Date.now())
       clearInternal(id) // resumed → previous attention is stale
       return
     }
     const started = busySince.current.get(id)
     busySince.current.delete(id)
+    // The busy tracker's trailing busy:false right after pty:exit must not
+    // reclassify the dead terminal's tail as 'done' over the exit's 'error'.
+    if (consumeExited(id)) return
     if (Date.now() - startedAt.current < STARTUP_GRACE_MS) return
     const { term, ctx } = ctxFor(id)
     if (!term) return
@@ -100,6 +105,7 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
   }, [clearInternal, fire])
 
   const handleExit = useCallback((id: string, code: number) => {
+    markExited(id) // latch before the busy tracker's trailing idle arrives
     if (Date.now() - startedAt.current < STARTUP_GRACE_MS) return
     const { term, ctx } = ctxFor(id)
     if (!term) return

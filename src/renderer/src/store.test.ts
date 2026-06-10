@@ -369,6 +369,39 @@ describe('store reducers', () => {
     s = removeTerminal(s, bId)      // deleting b prunes it from hidden
     expect(isHidden(s, bId)).toBe(false)
   })
+
+  it('setActiveFeature skips hidden terminals when picking the active one', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'a' })
+    s = addTerminal(s, fid, { name: 'b' })
+    const [aId, bId] = firstFeature(s).terminals.map((t) => t.id)
+    s = hideTerminal(s, aId)
+    s = setActiveFeature(s, fid)
+    expect(s.activeTerminalId).toBe(bId)
+  })
+
+  it('setActiveFeature selects no terminal when every one is hidden', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'a' })
+    const tid = firstFeature(s).terminals[0].id
+    s = hideTerminal(s, tid)
+    s = setActiveFeature(s, fid)
+    expect(s.activeTerminalId).toBeNull()
+  })
+
+  it('setActiveGroup skips hidden terminals when picking the active one', () => {
+    let s = addGroup(createInitialState(), 'one', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'a' })
+    s = addTerminal(s, fid, { name: 'b' })
+    const [aId, bId] = firstFeature(s).terminals.map((t) => t.id)
+    s = addGroup(s, 'two', '')
+    s = hideTerminal(s, aId)
+    s = setActiveGroup(s, s.workspace.groups[0].id)
+    expect(s.activeTerminalId).toBe(bId)
+  })
 })
 
 describe('review store', () => {
