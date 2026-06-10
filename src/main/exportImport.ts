@@ -95,11 +95,15 @@ export function validateManifest(raw: unknown): ExportManifest | null {
   if (!m || m['format'] !== EXPORT_FORMAT || m['version'] !== EXPORT_VERSION) return null
   const group = m['group'] as Record<string, unknown> | undefined
   if (!group || typeof m['sessions'] !== 'object' || m['sessions'] === null || Array.isArray(m['sessions'])) return null
+  // Every feature must carry a terminals array — the import walks them blindly.
+  const featureOk = (f: unknown): boolean =>
+    !!f && Array.isArray((f as Record<string, unknown>)['terminals'])
   if (m['scope'] === 'group')
-    return Array.isArray(group['features']) ? (m as unknown as ExportManifest) : null
+    return Array.isArray(group['features']) && (group['features'] as unknown[]).every(featureOk)
+      ? (m as unknown as ExportManifest)
+      : null
   if (m['scope'] === 'feature') {
-    const feature = m['feature'] as Record<string, unknown> | undefined
-    return feature && Array.isArray(feature['terminals']) && typeof group['name'] === 'string' && typeof group['cwd'] === 'string'
+    return featureOk(m['feature']) && typeof group['name'] === 'string' && typeof group['cwd'] === 'string'
       ? (m as unknown as ExportManifest)
       : null
   }

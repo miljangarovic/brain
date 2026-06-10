@@ -88,6 +88,7 @@ describe('validateManifest', () => {
     expect(validateManifest({ ...base, scope: 'group', group: {} })).toBeNull()
     expect(validateManifest({ ...base, scope: 'feature', group: { name: 'p' }, feature: { terminals: [] } })).toBeNull()
     expect(validateManifest({ ...base, sessions: [], scope: 'group', group: { features: [] } })).toBeNull()
+    expect(validateManifest({ ...base, scope: 'group', group: { features: [{ name: 'no-terminals' }] } })).toBeNull()
   })
 })
 

@@ -294,6 +294,10 @@ export default function App() {
         apply((s) => addImportedFeature(s, f, built.fallbackGroup))
         setExportNotice(`Imported feature "${f.name}" — open a terminal to continue its session${cwdNote}`)
       }
+    } catch (err) {
+      // Foreign/hand-crafted archives can pass validation yet still surprise the
+      // remap — surface it as a notice instead of an unhandled rejection.
+      setExportNotice(`Import failed: ${String(err)}`)
     } finally {
       transferRef.current = false
     }
