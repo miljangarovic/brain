@@ -26,48 +26,58 @@ export async function startRecording(opts: { onAutoStop: () => void }): Promise<
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
   })
   const ctx = new AudioContext()
-  const workletUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'application/javascript' }))
   try {
-    await ctx.audioWorklet.addModule(workletUrl)
-  } finally {
-    URL.revokeObjectURL(workletUrl)
-  }
-
-  const chunks: Float32Array[] = []
-  const tracker = new SilenceTracker({ sampleRate: ctx.sampleRate })
-  let done = false
-  let autoStopFired = false
-
-  const source = ctx.createMediaStreamSource(stream)
-  const node = new AudioWorkletNode(ctx, 'voice-capture')
-  node.port.onmessage = (e: MessageEvent<Float32Array>) => {
-    if (done) return
-    chunks.push(e.data)
-    if (!autoStopFired && tracker.push(e.data) === 'stop') {
-      autoStopFired = true
-      opts.onAutoStop()
+    const workletUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'application/javascript' }))
+    try {
+      await ctx.audioWorklet.addModule(workletUrl)
+    } finally {
+      URL.revokeObjectURL(workletUrl)
     }
-  }
-  source.connect(node)
-  // No connection to ctx.destination — capture only, no monitoring loopback.
 
-  const teardown = () => {
-    done = true
-    node.port.onmessage = null
-    source.disconnect()
-    node.disconnect()
+    const chunks: Float32Array[] = []
+    const tracker = new SilenceTracker({ sampleRate: ctx.sampleRate })
+    let done = false
+    let autoStopFired = false
+
+    const source = ctx.createMediaStreamSource(stream)
+    const node = new AudioWorkletNode(ctx, 'voice-capture')
+    node.port.onmessage = (e: MessageEvent<Float32Array>) => {
+      if (done) return
+      chunks.push(e.data)
+      if (!autoStopFired && tracker.push(e.data) === 'stop') {
+        autoStopFired = true
+        opts.onAutoStop()
+      }
+    }
+    source.connect(node)
+    // No connection to ctx.destination — capture only, no monitoring loopback.
+
+    const teardown = () => {
+      if (done) return
+      done = true
+      node.port.onmessage = null
+      source.disconnect()
+      node.disconnect()
+      stream.getTracks().forEach((t) => t.stop())
+      void ctx.close().catch(() => {})
+    }
+
+    return {
+      stop: async () => {
+        const sampleRate = ctx.sampleRate
+        teardown()
+        const pcm = downsample(concatFloat32(chunks), sampleRate, 16000)
+        // Under ~0.4s is a misfire (key bounce, instant second press) — drop it.
+        return pcm.length < 16000 * 0.4 ? null : pcm
+      },
+      cancel: () => {
+        chunks.length = 0
+        teardown()
+      }
+    }
+  } catch (err) {
     stream.getTracks().forEach((t) => t.stop())
-    void ctx.close()
-  }
-
-  return {
-    stop: async () => {
-      const sampleRate = ctx.sampleRate
-      teardown()
-      const pcm = downsample(concatFloat32(chunks), sampleRate, 16000)
-      // Under ~0.4s is a misfire (key bounce, instant second press) — drop it.
-      return pcm.length < 16000 * 0.4 ? null : pcm
-    },
-    cancel: teardown
+    void ctx.close().catch(() => {})
+    throw err
   }
 }
