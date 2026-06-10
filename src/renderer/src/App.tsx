@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
 import { removedIds, pruneRecord } from './ptyReaper'
-import { shouldSpawn } from './spawnGate'
+import { shouldSpawn, restoredSpawnIds } from './spawnGate'
 import { isLayoutRepaint } from './repaintGuard'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
@@ -10,7 +10,8 @@ import {
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
   getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview,
-  addImportedGroup, addImportedFeature
+  addImportedGroup, addImportedFeature,
+  archiveFeature, restoreFeature, deleteArchivedFeature, addDocument, renameDocument, removeDocument
 } from './store'
 import { collectCwdCandidates, buildImport } from './importRemap'
 import { ExportToast } from './components/ExportToast'
@@ -29,10 +30,15 @@ import { TerminalPane } from './components/TerminalPane'
 import { NewGroupDialog, NewGroupInput } from './components/NewGroupDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
+import { ArchiveDialog } from './components/ArchiveDialog'
 
 export default function App() {
   const { state, setState, apply } = useStore()
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
+  const [archiveGroupId, setArchiveGroupId] = useState<string | null>(null)
+  const archiveGroup = archiveGroupId
+    ? state.workspace.groups.find((g) => g.id === archiveGroupId) ?? null
+    : null
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [confirm, setConfirm] = useState<{ message: string; action: () => void } | null>(null)
@@ -43,6 +49,36 @@ export default function App() {
     const id = createId()
     apply((s) => addTerminal(s, featureId, { name: 'shell', id }))
     setRenameTerminalId(id)
+  }
+
+  // Restore = the app-restart rules for this feature's terminals: cold until
+  // opened, agents resume. Refs are mutated BEFORE apply() so the remount sees
+  // them; a pre-archive "started" flag must not auto-launch anything either.
+  const restoreArchivedFeature = (featureId: string) => {
+    const f = archiveGroup?.archivedFeatures?.find((x) => x.id === featureId)
+    if (!f) return
+    const { bootIds, resumeIds } = restoredSpawnIds(f)
+    for (const id of bootIds) bootIdsRef.current.add(id)
+    for (const id of resumeIds) resumeIdsRef.current.add(id)
+    setStartedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of bootIds) next.delete(id)
+      return next
+    })
+    apply((s) => restoreFeature(s, featureId))
+  }
+
+  // Id of a just-added document whose rename input the sidebar should auto-open.
+  const [renameDocId, setRenameDocId] = useState<string | null>(null)
+  const addDocumentTo = async (featureId: string) => {
+    const group = state.workspace.groups.find((g) => g.features.some((f) => f.id === featureId))
+    const feature = group?.features.find((f) => f.id === featureId)
+    const path = await window.brain.pickFile(group?.cwd ? { defaultPath: group.cwd } : undefined)
+    if (!path) return
+    if (feature?.documents?.some((d) => d.path === path)) return // already referenced: no-op
+    const id = createId()
+    apply((s) => addDocument(s, featureId, { id, name: path.split('/').pop() || path, path }))
+    setRenameDocId(id)
   }
   // Drag-and-drop reorder of terminals inside the open grid. The pane header is the
   // drag handle; dropping a pane onto another moves it into that pane's slot. The
@@ -168,6 +204,28 @@ export default function App() {
     prevTermIds.current = ids
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.workspace])
+
+  // Which referenced document files still exist — drives the broken-doc rows.
+  const [docExists, setDocExists] = useState<Record<string, boolean>>({})
+  const docPathsKey = state.workspace.groups
+    .flatMap((g) => g.features).flatMap((f) => f.documents ?? []).map((d) => d.path)
+    .sort().join('\n')
+  useEffect(() => {
+    const paths = docPathsKey ? Array.from(new Set(docPathsKey.split('\n'))) : []
+    let stale = false
+    const check = () => {
+      if (paths.length === 0) { setDocExists({}); return }
+      void window.brain.pathsExist(paths).then((flags) => {
+        if (stale) return
+        const next: Record<string, boolean> = {}
+        paths.forEach((p, i) => { next[p] = flags[i] })
+        setDocExists(next)
+      })
+    }
+    check()
+    window.addEventListener('focus', check)
+    return () => { stale = true; window.removeEventListener('focus', check) }
+  }, [docPathsKey])
 
   const activeGroup = getActiveGroup(state)
   const activeFeature = getActiveFeature(state)
@@ -370,6 +428,15 @@ export default function App() {
         onExportGroup={exportGroup}
         onExportFeature={exportFeature}
         onImport={() => void importArchive()}
+        onArchiveFeature={(fid) => apply((s) => archiveFeature(s, fid))}
+        onOpenArchive={(gid) => setArchiveGroupId(gid)}
+        onAddDocument={(fid) => void addDocumentTo(fid)}
+        onOpenDocument={(p) => window.brain.openPath(p)}
+        onRenameDocument={(fid, did, name) => apply((s) => renameDocument(s, fid, did, name))}
+        onRemoveDocument={(fid, did) => apply((s) => removeDocument(s, fid, did))}
+        docExists={docExists}
+        pendingRenameDocId={renameDocId}
+        onPendingRenameDocConsumed={() => setRenameDocId(null)}
         reviewStatus={reviewStatus}
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
         pendingRenameTerminalId={renameTerminalId}
@@ -482,6 +549,19 @@ export default function App() {
       </div>
 
       {groupDialogOpen && <NewGroupDialog onCreate={createGroup} onCancel={() => setGroupDialogOpen(false)} />}
+      {archiveGroup && (
+        <ArchiveDialog
+          group={archiveGroup}
+          onArchive={(fid) => apply((s) => archiveFeature(s, fid))}
+          onRestore={restoreArchivedFeature}
+          onDeleteArchived={(fid) => {
+            const f = archiveGroup.archivedFeatures?.find((x) => x.id === fid)
+            askDelete(`Permanently delete archived feature "${f?.name ?? ''}"? Its documents list goes with it.`, () =>
+              apply((s) => deleteArchivedFeature(s, fid)))
+          }}
+          onClose={() => setArchiveGroupId(null)}
+        />
+      )}
       {confirm && (
         <ConfirmDialog
           message={confirm.message}
