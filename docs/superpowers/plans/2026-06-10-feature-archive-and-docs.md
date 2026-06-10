@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-10-feature-archive-and-docs-design.md`
 
-**Branch:** create `feature/archive-and-docs` off `feature/export-import` — Task 11 modifies `src/main/exportImport.ts`, which only exists on that branch. (If export-import has merged to master by then, branch off master instead.)
+**Branch:** create `feature/archive-and-docs` off `feature/export-import` — Tasks 12 and 13 modify `src/renderer/src/importRemap.ts` and `src/main/exportImport.ts`, which only exist on that branch, and Task 4 refactors IPC wiring that landed there. (If export-import has merged to master by then, branch off master instead.)
 
 ```bash
 git checkout feature/export-import && git checkout -b feature/archive-and-docs
@@ -26,8 +26,8 @@ git checkout feature/export-import && git checkout -b feature/archive-and-docs
 | `src/renderer/src/migrate.ts` | modify | sanitize both new fields on load/import |
 | `src/renderer/src/store.ts` | modify | archive/restore/delete-archived + document ops |
 | `src/main/pathsExist.ts` | create | pure existence check (testable, like `pathLinks.ts`) |
-| `src/main/ipc.ts` | modify | register `IPC.fsExists` handler |
-| `src/shared/api.ts` + `src/preload/index.ts` | modify | `BrainApi.pathsExist` |
+| `src/main/ipc.ts` | modify | refactor the EXISTING `IPC.fsExists` handler onto the new module (`BrainApi.pathsExist` + preload already landed on the base branch in `1defa47`) |
+| `src/renderer/src/importRemap.ts` | modify | carry `archivedFeatures` + `documents` through import |
 | `src/renderer/src/components/icons.tsx` | modify | `DocIcon`, `ArchiveIcon` |
 | `src/renderer/src/components/Sidebar.tsx` | modify | feature context menu, docs section, archive row |
 | `src/renderer/src/components/ArchiveDialog.tsx` | create | per-group archive modal |
@@ -298,8 +298,21 @@ describe('feature archive', () => {
     expect(restoreFeature(s, 'nope')).toBe(s)
     expect(deleteArchivedFeature(s, 'nope')).toBe(s)
   })
+
+  // launchAgent's captureAgentSession callback can resolve ~15s after launch; if
+  // the feature was archived meanwhile, the sessionId must still land — otherwise
+  // restore falls back to `codex resume --last` and may grab the wrong session.
+  it('setTerminalSessionId reaches archived terminals (codex capture racing an archive)', () => {
+    let { s, fid } = setup()
+    const tid = s.workspace.groups[0].features[1].terminals[0].id
+    s = archiveFeature(s, fid)
+    const out = setTerminalSessionId(s, tid, 'sid-late')
+    expect(out.workspace.groups[0].archivedFeatures![0].terminals[0].sessionId).toBe('sid-late')
+  })
 })
 ```
+
+(This test also needs `setTerminalSessionId` added to the `./store` import.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -370,6 +383,25 @@ export function deleteArchivedFeature(state: AppState, featureId: string): AppSt
     workspace: mapGroup(state.workspace, group.id, (g) => ({
       ...g,
       archivedFeatures: (g.archivedFeatures ?? []).filter((f) => f.id !== featureId)
+    }))
+  }
+}
+```
+
+Also REPLACE the existing `setTerminalSessionId` so the late codex session capture
+reaches archived terminals too (its doc comment stays):
+
+```ts
+export function setTerminalSessionId(state: AppState, terminalId: string, sessionId: string): AppState {
+  const patch = (f: Feature): Feature => ({
+    ...f, terminals: f.terminals.map((t) => (t.id === terminalId ? { ...t, sessionId } : t))
+  })
+  return {
+    ...state,
+    workspace: mapGroups(state.workspace, (g) => ({
+      ...g,
+      features: g.features.map(patch),
+      ...(g.archivedFeatures ? { archivedFeatures: g.archivedFeatures.map(patch) } : {})
     }))
   }
 }
@@ -507,12 +539,19 @@ git commit -m "feat(store): feature document references (add/rename/remove)"
 
 ---
 
-### Task 4: `pathsExist` — main helper, IPC, preload
+### Task 4: `pathsExist` — extract the existing handler into a tested module
 
 **Files:**
 - Create: `src/main/pathsExist.ts`
 - Test: `src/main/pathsExist.test.ts`
-- Modify: `src/main/ipc.ts`, `src/shared/api.ts`, `src/preload/index.ts`
+- Modify: `src/main/ipc.ts`
+
+> The IPC surface ALREADY EXISTS on the base branch (commit `1defa47`): the
+> `IPC.fsExists` handler at `src/main/ipc.ts:202` (with a local `pathExists`
+> helper at line 157), `BrainApi.pathsExist` at `src/shared/api.ts:42`, and the
+> preload wiring at `src/preload/index.ts:72`. Do NOT add any of those again —
+> a second `ipcMain.handle('fs:exists', …)` throws at startup. This task only
+> extracts the helper into a testable module and points the handler at it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -563,31 +602,35 @@ export function pathsExist(paths: string[]): Promise<boolean[]> {
 Run: `npx vitest run src/main/pathsExist.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Wire IPC, API, preload**
+- [ ] **Step 5: Point the existing handler at the module**
 
-In `src/main/ipc.ts`, add the import and register the handler right after the `IPC.fsRead` handler:
+In `src/main/ipc.ts`:
+
+1. Add the import:
 
 ```ts
 import { pathsExist } from './pathsExist'
 ```
 
+2. DELETE the local helper at line 157:
+
 ```ts
-  // Document rows in the sidebar: which referenced files still exist on disk.
+  const pathExists = (p: string): Promise<boolean> => fsp.access(p).then(() => true, () => false)
+```
+
+3. Replace its use at line 194 (`cwdExists: root === '' ? true : await pathExists(root)`) with:
+
+```ts
+      return { manifest: out.manifest, dir: out.dir, cwdExists: root === '' ? true : (await pathsExist([root]))[0] }
+```
+
+4. Replace the handler at line 202 with:
+
+```ts
   ipcMain.handle(IPC.fsExists, (_e, p: { paths: string[] }) => pathsExist(p?.paths ?? []))
 ```
 
-In `src/shared/api.ts`, add to `BrainApi` (after `resolvePathLinks`):
-
-```ts
-  // Index-aligned: true where the path exists on disk (feature document rows).
-  pathsExist(paths: string[]): Promise<boolean[]>
-```
-
-In `src/preload/index.ts`, add to the `api` object:
-
-```ts
-  pathsExist: (paths) => ipcRenderer.invoke(IPC.fsExists, { paths }) as Promise<boolean[]>,
-```
+`src/shared/api.ts` and `src/preload/index.ts` need NO changes — both already done on the base branch.
 
 - [ ] **Step 6: Typecheck and run the suite**
 
@@ -597,8 +640,8 @@ Expected: clean typecheck, all tests pass.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/main/pathsExist.ts src/main/pathsExist.test.ts src/main/ipc.ts src/shared/api.ts src/preload/index.ts
-git commit -m "feat(ipc): fs:exists — batch path existence for document rows"
+git add src/main/pathsExist.ts src/main/pathsExist.test.ts src/main/ipc.ts
+git commit -m "refactor(ipc): extract fs:exists logic into a tested pathsExist module"
 ```
 
 ---
@@ -802,7 +845,7 @@ git commit -m "feat(sidebar): feature context menu — rename, new terminal/agen
 - Modify: `src/renderer/src/components/Sidebar.tsx`
 - Test: `src/renderer/src/components/Sidebar.test.tsx`
 
-New props: `onOpenDocument(path)`, `onRenameDocument(featureId, docId, name)`, `onRemoveDocument(featureId, docId)`, `docExists: Record<string, boolean | undefined>`, `pendingRenameDocId?`, `onPendingRenameDocConsumed?`. Existence is computed in App (Task 10) and passed down — the Sidebar stays prop-driven; a path missing from `docExists` is treated as existing (check still in flight).
+New props: `onOpenDocument(path)`, `onRenameDocument(featureId, docId, name)`, `onRemoveDocument(featureId, docId)`, `docExists: Record<string, boolean | undefined>`, `pendingRenameDocId?`, `onPendingRenameDocConsumed?`. Existence is computed in App (Task 11) and passed down — the Sidebar stays prop-driven; a path missing from `docExists` is treated as existing (check still in flight).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -828,6 +871,12 @@ Add to the `renderSidebar` props factory:
 
 Append tests:
 
+Opening goes through the SAME single/double-click timer the group/feature names use
+(`onNameClick`/`onNameDblClick`, `NAME_CLICK_DELAY_MS`) — without it, the two clicks of
+a rename double-click would each fire `onOpenDocument` and launch the file twice. The
+click tests therefore wait out the timer (extend the `@testing-library/react` import
+with `waitFor`).
+
 ```tsx
 describe('feature documents section', () => {
   it('renders document rows after the terminals; click opens the file', async () => {
@@ -839,7 +888,7 @@ describe('feature documents section', () => {
     const term = screen.getByText('claude').closest('[data-term-id]') as HTMLElement
     expect(term.compareDocumentPosition(spec) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     await userEvent.click(screen.getByText('spec'))
-    expect(onOpenDocument).toHaveBeenCalledWith('/docs/spec.md')
+    await waitFor(() => expect(onOpenDocument).toHaveBeenCalledWith('/docs/spec.md'))
   })
 
   it('a missing file renders broken and does not open', async () => {
@@ -848,7 +897,17 @@ describe('feature documents section', () => {
     const row = screen.getByText('spec').closest('[data-doc-id]') as HTMLElement
     expect(row.className).toContain('line-through')
     await userEvent.click(screen.getByText('spec'))
+    await new Promise((r) => setTimeout(r, 150)) // outlast NAME_CLICK_DELAY_MS
     expect(onOpenDocument).not.toHaveBeenCalled()
+  })
+
+  it('a rename double-click never opens the file', async () => {
+    const onOpenDocument = vi.fn()
+    renderSidebar({ onOpenDocument })
+    await userEvent.dblClick(screen.getByText('spec'))
+    await new Promise((r) => setTimeout(r, 150))
+    expect(onOpenDocument).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Rename document spec')).toBeInTheDocument()
   })
 
   it('double-click renames; Enter commits via onRenameDocument', async () => {
@@ -947,7 +1006,9 @@ type RenameKind = 'group' | 'feature' | 'terminal' | 'doc'
                               const broken = docExists[d.path] === false
                               return (
                                 <div key={d.id} data-doc-id={d.id}
-                                  onClick={() => { if (!broken) onOpenDocument(d.path) }}
+                                  // The single/double-click timer (shared with group/feature names)
+                                  // keeps a rename double-click from ALSO launching the file twice.
+                                  onClick={() => { if (!broken) onNameClick(() => onOpenDocument(d.path)) }}
                                   title={broken ? `${d.path} (missing)` : d.path}
                                   className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors hover:bg-hover ${broken ? 'text-fg-muted line-through' : 'text-fg hover:text-fg-bright'}`}>
                                   <DocIcon className="shrink-0 text-fg-muted" />
@@ -955,7 +1016,7 @@ type RenameKind = 'group' | 'feature' | 'terminal' | 'doc'
                                     ? renameInput(`Rename document ${d.name}`)
                                     : (
                                       <span className="flex-1 truncate"
-                                        onDoubleClick={(e) => { e.stopPropagation(); startRename('doc', d.id, d.name) }}>
+                                        onDoubleClick={(e) => { e.stopPropagation(); onNameDblClick(() => startRename('doc', d.id, d.name)) }}>
                                         {d.name}
                                       </span>
                                     )}
@@ -1225,6 +1286,12 @@ git commit -m "feat(archive): per-project archive dialog — archive, restore, d
 
 The spec calls for an App-level test that restored agents resume. There is no App.tsx test harness in this repo (App mounts xterm/PTYs), so the testable logic — WHICH ids join the boot/resume sets — lives in `spawnGate.ts` as a pure helper with unit tests, and App's wiring (Task 11) reduces to applying it. This is the same pattern `shouldSpawn` already uses.
 
+**Deliberate deviation from the spec's parenthetical:** the spec's restore section says
+resume ids are agents "with a `sessionId`", but its own governing rule is "exactly like
+terminals present at first load" — and the first-load rule (`App.tsx:118-120`) is
+kind-only (a missing sessionId falls back to `--continue` / `resume --last` at spawn).
+The helper follows the first-load rule. Do not "fix" it toward the parenthetical.
+
 - [ ] **Step 1: Write the failing test**
 
 Append to `src/renderer/src/spawnGate.test.ts` (extend the `./spawnGate` import with `restoredSpawnIds`):
@@ -1293,7 +1360,7 @@ git commit -m "feat(spawn): restoredSpawnIds — restore re-applies the first-lo
 **Files:**
 - Modify: `src/renderer/src/App.tsx`
 
-App glue around already-tested pieces (store ops, IPC, Sidebar, ArchiveDialog, `restoredSpawnIds`); no new unit tests of its own — verification is typecheck + suite (this task turns typecheck green again) + the manual smoke test in Task 13.
+App glue around already-tested pieces (store ops, IPC, Sidebar, ArchiveDialog, `restoredSpawnIds`); no new unit tests of its own — verification is typecheck + suite (this task turns typecheck green again) + the manual smoke test in Task 14.
 
 - [ ] **Step 1: Wire the archive into App**
 
@@ -1434,7 +1501,170 @@ git commit -m "feat(app): wire archive dialog, restart-equivalent restore, and f
 
 ---
 
-### Task 12: Export includes archived features' sessions
+### Task 12: Import carries the archive and the documents
+
+**Files:**
+- Modify: `src/renderer/src/importRemap.ts`
+- Test: `src/renderer/src/importRemap.test.ts`
+
+The import path is NOT `migrateWorkspace` — it is `buildImport` in
+`src/renderer/src/importRemap.ts` (landed on the base branch in `1f4308f`), which
+reconstructs groups/features as literal objects and would silently DROP both
+`archivedFeatures` and `documents`. Decisions, stated here so nobody re-litigates them:
+
+- **Document paths are carried VERBATIM** (no remap, no existence fallback): per the
+  spec, "no special import handling" — the broken-file indicator covers paths that do
+  not exist on this machine. Documents do get fresh ids like everything else.
+- **Archived terminals' fresh ids stay OUT of `BuiltImport.terminalIds`**: that list
+  exists so the caller can spawn-gate imported terminals, but archived terminals are
+  not in the workspace tree (nothing mounts them), and `restoreArchivedFeature`
+  re-seeds the boot/resume sets when they come back. Including them would be
+  harmless-but-pointless; excluding is cleaner.
+- **Archived agent terminals DO get continue-from-summary startup commands** — that is
+  what makes Task 13's export change meaningful end-to-end.
+- **`collectCwdCandidates` must walk the archive too**: `buildImport`'s `fixCwd`
+  consults `exists()` for archived terminals' cwds, and the caller builds that lookup
+  from the candidates list — a cwd missing from it would wrongly degrade to `''`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `src/renderer/src/importRemap.test.ts`:
+
+```ts
+describe('buildImport — archive and documents', () => {
+  const withExtras: ExportManifest = {
+    ...manifest,
+    group: {
+      ...group,
+      features: [{ ...group.features[0], documents: [{ id: 'd1', name: 'spec', path: '/old/proj/docs/spec.md' }] }],
+      archivedFeatures: [
+        { id: 'fa', name: 'old-flow', collapsed: false, terminals: [
+          { id: 't-arch', name: 'claude', cwd: '/old/proj', kind: 'claude', sessionId: 'dead-9' }
+        ] }
+      ]
+    },
+    sessions: { ...manifest.sessions, 't-arch': { kind: 'claude', file: 'sessions/old-flow-claude-cccc.md' } }
+  }
+  const build = (exists: (p: string) => boolean = () => true, newRoot: string | null = null) =>
+    buildImport({ manifest: withExtras, dir: '/data/imports/abc', newRoot, exists, createId: counterId() })
+
+  it('documents carry through with fresh ids and verbatim paths', () => {
+    const docs = build().group!.features[0].documents!
+    expect(docs).toHaveLength(1)
+    expect(docs[0].id).toMatch(/^new-/)
+    expect(docs[0]).toMatchObject({ name: 'spec', path: '/old/proj/docs/spec.md' })
+  })
+
+  it('archived features import with fresh ids and continue-from-summary commands', () => {
+    const g = build().group!
+    expect(g.archivedFeatures).toHaveLength(1)
+    const t = g.archivedFeatures![0].terminals[0]
+    expect(t.id).toMatch(/^new-/)
+    expect(t.sessionId).toBeDefined()
+    expect(t.sessionId).not.toBe('dead-9')
+    expect(t.startupCommand).toContain('/data/imports/abc/sessions/old-flow-claude-cccc.md')
+  })
+
+  it('archived terminal ids stay out of terminalIds (nothing spawn-gates them)', () => {
+    const out = build()
+    const archivedIds = out.group!.archivedFeatures!.flatMap((f) => f.terminals.map((t) => t.id))
+    expect(out.terminalIds).toHaveLength(5) // the five ACTIVE terminals only
+    for (const id of archivedIds) expect(out.terminalIds).not.toContain(id)
+  })
+
+  it('collectCwdCandidates walks archived features too', () => {
+    expect(collectCwdCandidates(withExtras, '/new/proj')).toContain('/new/proj')
+    const archOnly: ExportManifest = { ...withExtras, group: { ...withExtras.group, archivedFeatures: [
+      { id: 'fa', name: 'x', collapsed: false, terminals: [{ id: 'ta', name: 's', cwd: '/old/proj/arch-only' }] }
+    ] } }
+    expect(collectCwdCandidates(archOnly, '/new/proj')).toContain('/new/proj/arch-only')
+  })
+})
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `npx vitest run src/renderer/src/importRemap.test.ts`
+Expected: all four new tests FAIL (both fields dropped; archive cwds not collected).
+
+- [ ] **Step 3: Implement**
+
+In `src/renderer/src/importRemap.ts`:
+
+1. In `collectCwdCandidates`, replace the `features` line:
+
+```ts
+  const features = manifest.scope === 'group'
+    ? [...manifest.group.features, ...(manifest.group.archivedFeatures ?? [])]
+    : [manifest.feature]
+```
+
+2. Give `importTerminal` a `track` flag (archived terminals are never spawn-gated):
+
+```ts
+  const importTerminal = (t: Terminal, track: boolean): Terminal => {
+    const id = createId()
+    if (track) terminalIds.push(id)
+```
+
+(rest of the function unchanged.)
+
+3. Replace `importFeature` — documents carried with fresh ids, paths verbatim:
+
+```ts
+  const importFeature = (f: Feature, track = true): Feature => ({
+    id: createId(),
+    name: f.name,
+    collapsed: f.collapsed,
+    ...(f.viewMode ? { viewMode: f.viewMode } : {}),
+    ...(f.gridStyle ? { gridStyle: f.gridStyle } : {}),
+    // Document paths stay VERBATIM: dead ones just render as broken rows.
+    ...(f.documents?.length ? { documents: f.documents.map((d) => ({ id: createId(), name: d.name, path: d.path })) } : {}),
+    terminals: f.terminals.map((t) => importTerminal(t, track))
+  })
+```
+
+4. In the group-scope return, map the archive too. CAREFUL: now that `importFeature`
+has a second parameter, `.map(importFeature)` would pass the array INDEX as `track`
+(index 0 → false) — always use an explicit lambda:
+
+```ts
+  return {
+    scope: 'group',
+    group: {
+      id: createId(), name: manifest.group.name, cwd: fixCwd(oldRoot), collapsed: false,
+      features: manifest.group.features.map((f) => importFeature(f)),
+      ...(manifest.group.archivedFeatures?.length
+        ? { archivedFeatures: manifest.group.archivedFeatures.map((f) => importFeature(f, false)) }
+        : {})
+    },
+    fallbackGroup,
+    terminalIds
+  }
+```
+
+5. Update the `BuiltImport.terminalIds` comment:
+
+```ts
+  terminalIds: string[]   // fresh ids of ACTIVE features' terminals — the caller spawn-gates
+                          // them; archived terminals are excluded (restore re-seeds them)
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npx vitest run src/renderer/src/importRemap.test.ts`
+Expected: PASS — including all pre-existing buildImport tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/renderer/src/importRemap.ts src/renderer/src/importRemap.test.ts
+git commit -m "feat(import): carry archivedFeatures and documents through buildImport"
+```
+
+---
+
+### Task 13: Export includes archived features' sessions
 
 **Files:**
 - Modify: `src/main/exportImport.ts`
@@ -1460,7 +1690,7 @@ In `src/main/exportImport.test.ts`, append to the `describe('collectAgentSession
   })
 ```
 
-Also add a round-trip test (new `describe` at the bottom; extend the `fs` import line with `mkdtempSync` — add `import { mkdtempSync } from 'fs'` if the file has no fs import yet):
+Also add a round-trip test (new `describe` at the bottom). The file already imports `{ promises as fsp }` from `'fs'` at line 4 — extend that line to `import { promises as fsp, mkdtempSync } from 'fs'` (do NOT add a second `'fs'` import):
 
 ```ts
 describe('manifest round-trips archive + documents', () => {
@@ -1517,7 +1747,7 @@ git commit -m "fix(export): collect agent sessions from archived features too"
 
 ---
 
-### Task 13: Final verification
+### Task 14: Final verification
 
 - [ ] **Step 1: Full suite + typecheck**
 
@@ -1535,6 +1765,10 @@ Run: `npm run dev`, then:
 5. Add document… → picker opens at the project cwd; picking a file adds a row named after the file with the rename input open; click opens it in the default app.
 6. Delete the file on disk, refocus the window → the row dims with line-through; click does nothing.
 7. Restart the app → archive, documents, and broken state survive.
+8. If the import UI is already wired on the branch: export a project that has an
+   archived feature and a document, import the zip → the archive row counts it, its
+   agent terminal has a continue-from-summary startup command, and the document row
+   is present (broken if the path doesn't exist here).
 
 - [ ] **Step 3: Wrap up the branch**
 

@@ -63,7 +63,9 @@ This does NOT come for free: `App.tsx` seeds `resumeIdsRef` (agent terminals tha
 and `bootIdsRef` (terminals that stay cold) **once, at initial load** — a feature restored
 mid-session would otherwise auto-spawn all its terminals with their plain startup commands.
 Restore therefore also appends the restored ids to both refs: agent terminal ids
-(claude/codex with a `sessionId`) to `resumeIdsRef`, all restored ids to `bootIdsRef`.
+(claude/codex — kind only, matching the first-load rule; a missing `sessionId` falls
+back to `--continue` / `resume --last` at spawn) to `resumeIdsRef`, all restored ids
+to `bootIdsRef`.
 
 `migrateWorkspace` sanitizes both new fields: `archivedFeatures` entries go through the
 same `sanitizeFeature` as active ones; `documents` entries missing an id/name/path are
