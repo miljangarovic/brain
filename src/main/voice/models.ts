@@ -50,22 +50,24 @@ async function download(
 
   await fsp.mkdir(dirname(path), { recursive: true })
   const part = path + '.part'
+  let ws: ReturnType<typeof createWriteStream> | undefined
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
   try {
     const res = await fetchImpl(url)
     if (!res.ok || !res.body) throw new Error(`model download failed: HTTP ${res.status}`)
     const len = res.headers.get('content-length')
-    const total = len ? Number(len) : null
-    const ws = createWriteStream(part)
-    const reader = res.body.getReader()
+    const total = len !== null && Number.isFinite(Number(len)) ? Number(len) : null
+    ws = createWriteStream(part)
+    reader = res.body.getReader()
     let received = 0
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
       received += value.byteLength
-      await new Promise<void>((resolve, reject) => ws.write(value, (e) => (e ? reject(e) : resolve())))
+      await new Promise<void>((resolve, reject) => ws!.write(value, (e) => (e ? reject(e) : resolve())))
       onProgress(received, total)
     }
-    await new Promise<void>((resolve, reject) => ws.end((e?: Error | null) => (e ? reject(e) : resolve())))
+    await new Promise<void>((resolve, reject) => ws!.end((e?: Error | null) => (e ? reject(e) : resolve())))
     // Cheap integrity check standing in for the spec's checksum: a body that
     // does not match its advertised size must never be renamed into place.
     if (total !== null && received !== total) {
@@ -74,6 +76,8 @@ async function download(
     await fsp.rename(part, path)
     return path
   } catch (err) {
+    ws?.destroy()
+    void reader?.cancel().catch(() => { /* connection already dead */ })
     await fsp.rm(part, { force: true })
     throw err
   }

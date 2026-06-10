@@ -68,4 +68,22 @@ describe('ensureModel', () => {
     const files = await fsp.readdir(dir).catch(() => [])
     expect(files).toEqual([])
   })
+  it('a mid-stream error cleans up and a retry can succeed', async () => {
+    const failing = {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: new ReadableStream<Uint8Array>({
+        start(c) { c.enqueue(new Uint8Array([1])); c.error(new Error('connection reset')) }
+      })
+    } as unknown as Response
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(failing)
+      .mockResolvedValueOnce(okResponse(new Uint8Array([7, 8]), 2))
+    await expect(ensureModel('sagicc-small-sr-q5_0', dir, fetchImpl, () => {})).rejects.toThrow(/connection reset/)
+    expect((await fsp.readdir(dir).catch(() => []) as string[]).filter((f) => f.endsWith('.part'))).toEqual([])
+    const path = await ensureModel('sagicc-small-sr-q5_0', dir, fetchImpl, () => {})
+    expect(Array.from(await fsp.readFile(path))).toEqual([7, 8])
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
 })
