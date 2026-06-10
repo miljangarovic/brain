@@ -128,4 +128,28 @@ describe('archive + documents migration', () => {
     ] }] })
     expect(ws.groups[0].features[0].documents).toBeUndefined()
   })
+
+  it('sanitizes feature files: fills ids/names, drops entries without a path, keeps valid mdView', () => {
+    const ws = migrateWorkspace({ groups: [{ id: 'g', name: 'p', cwd: '', features: [
+      { id: 'f', name: 'auth', collapsed: false, terminals: [], files: [
+        { name: 'spec', path: '/docs/spec.md', mdView: 'raw' },
+        { path: '/docs/plan.md', mdView: 'sideways' },
+        { name: 'no-path' },
+        'garbage'
+      ] }
+    ] }] })
+    const files = ws.groups[0].features[0].files!
+    expect(files).toHaveLength(2)
+    expect(files[0]).toMatchObject({ name: 'spec', path: '/docs/spec.md', mdView: 'raw' })
+    expect(files[0].id).toBeTruthy()
+    expect(files[1].name).toBe('plan.md')      // basename fallback
+    expect(files[1].mdView).toBeUndefined()    // invalid mdView dropped
+  })
+
+  it('omits files when the sanitized list is empty', () => {
+    const ws = migrateWorkspace({ groups: [{ id: 'g', name: 'p', cwd: '', features: [
+      { id: 'f', name: 'auth', collapsed: false, terminals: [], files: ['junk'] }
+    ] }] })
+    expect(ws.groups[0].features[0].files).toBeUndefined()
+  })
 })
