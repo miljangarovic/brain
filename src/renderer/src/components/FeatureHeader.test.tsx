@@ -23,6 +23,13 @@ describe('FeatureHeader', () => {
     expect(onToggleView).toHaveBeenCalled()
   })
 
+  it('keeps the grid toggle as the FIRST control, whatever else is shown', () => {
+    // Busiest case: review decision buttons + grid-style picker all visible.
+    render(<FeatureHeader {...base} viewMode="grid" review={{ reviewerId: 'b', needsDecision: true, active: false }} />)
+    const buttons = screen.getAllByRole('button')
+    expect(buttons[0]).toHaveAccessibleName('Tabs view')
+  })
+
   it('shows the grid layout picker only in grid mode', () => {
     const { rerender } = render(<FeatureHeader {...base} review={noReview} />)
     expect(screen.queryByRole('button', { name: 'Stack vertically' })).not.toBeInTheDocument()

@@ -46,19 +46,20 @@ export function FeatureHeader({
     <div className="flex items-center gap-2.5 h-9 px-3 bg-panel border-b border-line">
       <span className="shrink-0 truncate max-w-[16rem] text-sm font-medium text-fg-bright">{featureName}</span>
       <div className="flex items-center gap-1.5 leading-none">
-        {rid && review.needsDecision && (
-          <>
-            <button onClick={() => onMoreRounds(rid)} title="Run more review rounds" className={goBtn}>Nastavi</button>
-            <button onClick={() => onAcceptPhase(rid)} title="Accept as approved (reviewer closes)" className={ghostBtn}>Prihvati</button>
-            <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
-          </>
-        )}
-        {rid && review.active && !review.needsDecision && (
-          <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
-        )}
-        {showControls && <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />}
+        {/* The grid toggle leads the cluster so it never shifts when the style
+            picker or the review controls appear. */}
+        <button
+          aria-label={viewMode === 'grid' ? 'Tabs view' : 'Grid view'}
+          aria-pressed={viewMode === 'grid'}
+          title={viewMode === 'grid' ? 'Switch to tabs' : 'Switch to grid'}
+          onClick={onToggleView}
+          className={iconBtn(viewMode === 'grid')}
+        >
+          <GridIcon />
+        </button>
         {viewMode === 'grid' && (
           <>
+            <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />
             {GRID_STYLES.map(({ style, label, Icon }) => (
               <button
                 key={style}
@@ -71,18 +72,19 @@ export function FeatureHeader({
                 <Icon />
               </button>
             ))}
-            <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />
           </>
         )}
-        <button
-          aria-label={viewMode === 'grid' ? 'Tabs view' : 'Grid view'}
-          aria-pressed={viewMode === 'grid'}
-          title={viewMode === 'grid' ? 'Switch to tabs' : 'Switch to grid'}
-          onClick={onToggleView}
-          className={iconBtn(viewMode === 'grid')}
-        >
-          <GridIcon />
-        </button>
+        {showControls && <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />}
+        {rid && review.needsDecision && (
+          <>
+            <button onClick={() => onMoreRounds(rid)} title="Run more review rounds" className={goBtn}>Nastavi</button>
+            <button onClick={() => onAcceptPhase(rid)} title="Accept as approved (reviewer closes)" className={ghostBtn}>Prihvati</button>
+            <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
+          </>
+        )}
+        {rid && review.active && !review.needsDecision && (
+          <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Zaustavi petlju</button>
+        )}
         <AddMenuButton onAdd={onAdd} className="px-1.5 py-1 rounded-md text-sm text-fg-muted hover:text-accent hover:bg-hover transition-colors" />
       </div>
     </div>
