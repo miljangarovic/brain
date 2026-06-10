@@ -7,7 +7,8 @@ import {
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
   patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById,
   addImportedGroup, addImportedFeature, archiveFeature, restoreFeature, deleteArchivedFeature, setTerminalSessionId,
-  addDocument, renameDocument, removeDocument
+  addDocument, renameDocument, removeDocument,
+  openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane
 } from './store'
 import type { Group, Feature } from '@shared/types'
 import { migrateWorkspace } from './migrate'
@@ -728,5 +729,89 @@ describe('feature documents', () => {
     expect(removeDocument(s, fid, 'd1').workspace).toEqual(s.workspace)
     // the archived feature still carries its documents
     expect(s.workspace.groups[0].archivedFeatures![0].documents).toHaveLength(1)
+  })
+})
+
+describe('file panes', () => {
+  const setup = () => {
+    let s = addGroup(createInitialState(), 'proj', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 'term' })
+    return { s, fid, tid: s.workspace.groups[0].features[0].terminals[0].id }
+  }
+  const filesOf = (s: ReturnType<typeof addGroup>) => s.workspace.groups[0].features[0].files
+
+  it('openFile appends a pane (name defaults to basename) and activates it', () => {
+    const { s, fid } = setup()
+    const out = openFile(s, fid, { id: 'p1', path: '/p/readme.md' })
+    expect(filesOf(out)).toEqual([{ id: 'p1', path: '/p/readme.md', name: 'readme.md' }])
+    expect(out.activeTerminalId).toBe('p1')
+    expect(out.activeFeatureId).toBe(fid)
+  })
+
+  it('openFile with an already-open path just activates the existing pane', () => {
+    let { s, fid, tid } = setup()
+    s = openFile(s, fid, { id: 'p1', path: '/p/readme.md' })
+    s = setActiveTerminal(s, tid)
+    const out = openFile(s, fid, { path: '/p/readme.md' })
+    expect(filesOf(out)).toHaveLength(1)
+    expect(out.activeTerminalId).toBe('p1')
+  })
+
+  it('setActiveTerminal accepts a file pane id and selects its feature', () => {
+    let { s, fid, tid } = setup()
+    s = openFile(s, fid, { id: 'p1', path: '/p/readme.md' })
+    s = setActiveTerminal(s, tid)
+    const out = setActiveTerminal(s, 'p1')
+    expect(out.activeTerminalId).toBe('p1')
+    expect(out.activeFeatureId).toBe(fid)
+  })
+
+  it('closeFile removes the pane; selection falls to the first visible terminal', () => {
+    let { s, fid, tid } = setup()
+    s = openFile(s, fid, { id: 'p1', path: '/p/readme.md' })
+    const out = closeFile(s, 'p1')
+    expect(filesOf(out)).toHaveLength(0)
+    expect(out.activeTerminalId).toBe(tid)
+  })
+
+  it('closeFile falls back to another file pane when no terminal is visible', () => {
+    let s = addGroup(createInitialState(), 'proj', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = openFile(s, fid, { id: 'p1', path: '/p/a.md' })
+    s = openFile(s, fid, { id: 'p2', path: '/p/b.md' })
+    const out = closeFile(s, 'p2')
+    expect(out.activeTerminalId).toBe('p1')
+    expect(closeFile(out, 'p1').activeTerminalId).toBeNull()
+  })
+
+  it('closeFile of a non-active pane leaves selection untouched; unknown id is a no-op', () => {
+    let { s, fid, tid } = setup()
+    s = openFile(s, fid, { id: 'p1', path: '/p/readme.md' })
+    s = setActiveTerminal(s, tid)
+    expect(closeFile(s, 'p1').activeTerminalId).toBe(tid)
+    expect(closeFile(s, 'nope')).toBe(s)
+  })
+
+  it('moveFile reorders within the feature; renameFilePane and setFilePaneMdView patch the pane', () => {
+    let { s, fid } = setup()
+    s = openFile(s, fid, { id: 'p1', path: '/p/a.md' })
+    s = openFile(s, fid, { id: 'p2', path: '/p/b.md' })
+    s = moveFile(s, 'p2', 0)
+    expect(filesOf(s)!.map((p) => p.id)).toEqual(['p2', 'p1'])
+    s = renameFilePane(s, 'p1', 'Notes')
+    s = setFilePaneMdView(s, 'p1', 'raw')
+    const p1 = filesOf(s)!.find((p) => p.id === 'p1')!
+    expect(p1.name).toBe('Notes')
+    expect(p1.mdView).toBe('raw')
+  })
+
+  it('findFilePane locates a pane and its feature; archived features carry files along', () => {
+    let { s, fid } = setup()
+    s = openFile(s, fid, { id: 'p1', path: '/p/a.md' })
+    expect(findFilePane(s, 'p1')?.feature.id).toBe(fid)
+    const archived = archiveFeature(s, fid)
+    expect(findFilePane(archived, 'p1')).toBeNull() // active features only
+    expect(archived.workspace.groups[0].archivedFeatures![0].files).toHaveLength(1)
   })
 })
