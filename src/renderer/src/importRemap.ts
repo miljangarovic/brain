@@ -64,6 +64,8 @@ export function buildImport(opts: {
     if (t.kind && t.kind !== 'shell') base.kind = t.kind
     if (t.kind === 'claude' || t.kind === 'codex') {
       const session = manifest.sessions[t.id]
+      // session.file is always POSIX-style ('sessions/x.md'); a '/' join works
+      // on every platform Node/the agent CLIs support, even with a Windows dir.
       const summaryPath = session?.file ? `${dir}/${session.file}` : null
       const sessionId = t.kind === 'claude' ? createId() : undefined
       if (sessionId) base.sessionId = sessionId

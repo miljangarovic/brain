@@ -98,6 +98,22 @@ describe('buildImport — group scope', () => {
     expect(f.terminals[0].cwd).toBe('/new/proj')
     expect(f.terminals[1].cwd).toBe('')   // /new/proj/sub does not exist
   })
+
+  it('a terminal exported with cwd "" stays "" and never hits the exists check', () => {
+    const m: ExportManifest = {
+      ...manifest,
+      group: { ...group, features: [{ id: 'f1', name: 'auth', collapsed: false, terminals: [
+        { id: 't-home', name: 'shell', cwd: '' }
+      ] }] }
+    }
+    const probed: string[] = []
+    const out = buildImport({
+      manifest: m, dir: '/d', newRoot: '/new/proj',
+      exists: (p) => { probed.push(p); return true }, createId: counterId()
+    })
+    expect(out.group!.features[0].terminals[0].cwd).toBe('')
+    expect(probed).not.toContain('')
+  })
 })
 
 describe('buildImport — feature scope', () => {
