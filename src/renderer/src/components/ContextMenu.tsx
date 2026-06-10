@@ -27,22 +27,33 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
   useEffect(() => {
     // Close only when the interaction is OUTSIDE the menu (a native target check —
     // React's synthetic stopPropagation can't stop events reaching window).
+    // CAPTURE phase everywhere: xterm cancels (stopPropagation) mousedown when the
+    // running TUI has mouse-tracking on, and cancels keydown it handles (Escape),
+    // so bubble-phase window listeners never fire when the click/key lands in a
+    // terminal — which is most of the screen. Capture runs before xterm can eat it.
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      // Consume it: Escape is for the menu, it must not also reach the focused
+      // terminal app (sending ESC to claude/codex can cancel their input).
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
     // Defer registration by one frame so the very event that opened the menu
     // (the contextmenu/mousedown that set the menu state) can't immediately close it.
     const raf = requestAnimationFrame(() => {
-      window.addEventListener('mousedown', onDown)
-      window.addEventListener('contextmenu', onDown)
+      window.addEventListener('mousedown', onDown, true)
+      window.addEventListener('contextmenu', onDown, true)
     })
-    window.addEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener('mousedown', onDown)
-      window.removeEventListener('contextmenu', onDown)
-      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mousedown', onDown, true)
+      window.removeEventListener('contextmenu', onDown, true)
+      window.removeEventListener('keydown', onKey, true)
     }
   }, [onClose])
 
