@@ -28,4 +28,13 @@ describe('validateVoiceCommand', () => {
   it('keeps a valid gridStyle', () => {
     expect(validateVoiceCommand({ action: 'set_grid_style', gridStyle: 'cols', confidence: 'high' }).gridStyle).toBe('cols')
   })
+  it('strips empty and whitespace-only strings, trims padded ones', () => {
+    const cmd = validateVoiceCommand({ action: 'rename_feature', featureId: '', name: '  novo ime  ', confidence: 'high' })
+    expect(cmd.featureId).toBeUndefined()
+    expect(cmd.name).toBe('novo ime')
+  })
+  it('an explicit unknown action is never high-confidence', () => {
+    expect(validateVoiceCommand({ action: 'unknown', confidence: 'high' }))
+      .toEqual({ action: 'unknown', confidence: 'low' })
+  })
 })

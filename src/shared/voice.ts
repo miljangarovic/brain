@@ -42,7 +42,11 @@ export type VoiceStateEvent =
 
 export interface VoiceResult { transcript: string; command: VoiceCommand }
 
-const str = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined)
+const str = (v: unknown): string | undefined => {
+  if (typeof v !== 'string') return undefined
+  const t = v.trim()
+  return t.length > 0 ? t : undefined
+}
 
 export function validateVoiceCommand(raw: unknown): VoiceCommand {
   if (typeof raw !== 'object' || raw === null) return { action: 'unknown', confidence: 'low' }
