@@ -554,7 +554,7 @@ export function Sidebar(props: {
 
       {termMenu && (
         <ContextMenu x={termMenu.x} y={termMenu.y} onClose={() => setTermMenu(null)} items={[
-          { label: 'Review', onSelect: () => onReviewTerminal(termMenu.terminalId, 'codex') },
+          { label: 'Review', onSelect: () => onReviewTerminal(termMenu.terminalId) },
           { label: 'Delete', onSelect: () => onDeleteTerminal(termMenu.terminalId) }
         ]} />
       )}

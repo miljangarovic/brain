@@ -239,12 +239,12 @@ describe('Sidebar (3-level)', () => {
     expect(onDeleteTerminal).toHaveBeenCalledWith('t1')
   })
 
-  it('right-click on a terminal opens the review modal with Codex preselected', async () => {
+  it('right-click Review opens the modal without preselecting a reviewer (App defaults to Claude)', async () => {
     const onReviewTerminal = vi.fn()
     renderSidebar({ onReviewTerminal })
     fireEvent.contextMenu(screen.getByText('claude'))
     await userEvent.click(screen.getByText('Review'))
-    expect(onReviewTerminal).toHaveBeenCalledWith('t1', 'codex')
+    expect(onReviewTerminal).toHaveBeenCalledWith('t1')
   })
 
   it('right-click on a terminal offers Delete', async () => {

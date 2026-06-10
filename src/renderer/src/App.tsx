@@ -628,8 +628,7 @@ export default function App() {
       {reviewReq && (() => {
         const origin = getTerminalById(state, reviewReq.id)
         if (!origin) return null
-        const currentKind = liveAgents[origin.id] ?? origin.kind
-        const defaultReviewer: AgentKind = reviewReq.reviewer ?? (currentKind === 'claude' ? 'codex' : 'claude')
+        const defaultReviewer: AgentKind = reviewReq.reviewer ?? 'claude'
         const group = state.workspace.groups.find((g) => g.features.some((f) => f.terminals.some((t) => t.id === origin.id)))
         return (
           <ReviewDialog
