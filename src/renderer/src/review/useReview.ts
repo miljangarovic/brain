@@ -1,9 +1,9 @@
 import { useEffect, useRef, useCallback } from 'react'
 import type { AppState } from '../store'
-import { addTerminal, removeTerminal, patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById, allTerminals } from '../store'
+import { addTerminal, removeTerminal, patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById, allTerminals, setTerminalSessionId } from '../store'
 import type { ReviewPhase, ReviewStatus, ReviewLink } from '@shared/types'
 import { createId } from '@shared/id'
-import { AGENTS, type AgentKind } from '../agents'
+import { agentLaunchCommand, type AgentKind } from '../agents'
 import { readTail } from '../attention/tailRegistry'
 import { classifyIdle } from '../attention/detect'
 import { buildReviewerCommand, reviewerStartupPrompt, reviewerInjectPrompt, relayToOriginPrompt } from './prompt'
@@ -89,10 +89,23 @@ export function useReview(
       transcriptPath: link.transcriptPath, intentPath: link.intentPath, specPath: link.specPath, intent: a.intent
     })
     const reviewerId = createId()
+    // Pin the reviewer's own conversation id, exactly like launchAgent does for
+    // ordinary agent terminals — a restored reviewer must resume ITS session,
+    // not fall back to "most recent in cwd" (which is usually the origin's).
+    const reviewerSessionId = a.reviewer === 'claude' ? createId() : undefined
     apply((s) => addTerminal(s, featureId, {
       id: reviewerId, name: `review: ${a.reviewer}`, kind: a.reviewer,
-      startupCommand: buildReviewerCommand(AGENTS[a.reviewer].command, startup), review: link
+      startupCommand: buildReviewerCommand(agentLaunchCommand(a.reviewer, reviewerSessionId), startup),
+      review: link, sessionId: reviewerSessionId
     }))
+    if (a.reviewer === 'codex') {
+      // codex can't pin an id at launch — detect it from the rollout it writes,
+      // excluding ids already owned by other terminals (same as launchAgent).
+      const exclude = allTerminals(state).map((t) => t.sessionId).filter((s): s is string => !!s)
+      void window.brain.captureAgentSession({ kind: 'codex', cwd: origin?.cwd ?? '', exclude }).then((sid) => {
+        if (sid) apply((s) => setTerminalSessionId(s, reviewerId, sid))
+      })
+    }
     setStatus(reviewerId, 'reviewing')
     setStatus(a.originTerminalId, 'under-review')
     armReviewWatch(reviewerId, paths.reviewFile, a.phase, round)

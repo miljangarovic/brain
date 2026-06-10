@@ -4,7 +4,7 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { Terminal as TerminalModel } from '@shared/types'
-import { agentStartupCommand } from '../agents'
+import { agentResumeCommand } from '../agents'
 import { getXtermTheme, MONO_FONT } from '../theme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { registerTail, unregisterTail, readXtermTail } from '../attention/tailRegistry'
@@ -15,7 +15,9 @@ import { classifyKeyEvent } from './termKeys'
 // PTY spawns resuming the terminal's own prior conversation (by session id when
 // known — claude --resume / codex resume <id> — else the cwd's most recent) so it
 // continues instead of starting fresh. No effect for plain shells or freshly
-// created terminals. The exact command is resolved by agentStartupCommand.
+// created terminals — a fresh mount always uses the terminal's saved
+// startupCommand verbatim (it embeds any --session-id pin, and for reviewers
+// the whole review prompt).
 export function TerminalView({ terminal, active, resume }: { terminal: TerminalModel; active: boolean; resume?: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
@@ -73,7 +75,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
       shell: terminal.shell ?? '',
       cols: term.cols || 80,
       rows: term.rows || 24,
-      startupCommand: agentStartupCommand({ kind: terminal.kind, sessionId: terminal.sessionId, resume }) ?? terminal.startupCommand
+      startupCommand: (resume ? agentResumeCommand({ kind: terminal.kind, sessionId: terminal.sessionId }) : undefined) ?? terminal.startupCommand
     })
 
     const offData = window.brain.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })

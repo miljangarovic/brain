@@ -15,7 +15,8 @@ const api = {
     intentPath: '/rd/intent.md',
     specPath: '/rd/spec.md'
   })),
-  resolveTranscript: vi.fn(async () => null)
+  resolveTranscript: vi.fn(async () => null),
+  captureAgentSession: vi.fn(async (): Promise<string | null> => null)
 }
 
 beforeEach(() => {
@@ -112,6 +113,32 @@ describe('useReview verdict gating', () => {
     await act(() => result.current.handleFsChanged(WATCH_ID))
     expect(api.unwatchFile).toHaveBeenCalledWith(WATCH_ID)
     expect(api.writePty).toHaveBeenCalled() // critique relayed into the origin
+  })
+})
+
+describe('useReview reviewer session pinning', () => {
+  it('pins a claude reviewer session id at spawn (no --continue fallback on restore)', async () => {
+    const { result, apply } = setup({ state: mkState(false) })
+    await act(async () => {})
+    await act(() => result.current.startReview({ originTerminalId: 'origin', reviewer: 'claude', phase: 'impl', maxRounds: 3 }))
+    const updater = apply.mock.calls.at(-1)![0]
+    const next = updater(mkState(false))
+    const reviewer = next.workspace.groups[0].features[0].terminals.find((t: { review?: unknown }) => t.review)
+    expect(reviewer?.sessionId).toBeTruthy()
+    expect(reviewer?.startupCommand).toContain(`claude --session-id ${reviewer?.sessionId} '`)
+  })
+
+  it('detects and stores a codex reviewer session id after launch', async () => {
+    api.captureAgentSession.mockResolvedValueOnce('sid-123')
+    const { result, apply } = setup({ state: mkState(false) })
+    await act(async () => {})
+    await act(() => result.current.startReview({ originTerminalId: 'origin', reviewer: 'codex', phase: 'impl', maxRounds: 3 }))
+    await act(async () => {}) // let the capture promise settle
+    expect(api.captureAgentSession).toHaveBeenCalledWith(expect.objectContaining({ kind: 'codex', cwd: '/p' }))
+    const afterAdd = apply.mock.calls[0][0](mkState(false))
+    const afterSid = apply.mock.calls.at(-1)![0](afterAdd)
+    const reviewer = afterSid.workspace.groups[0].features[0].terminals.find((t: { review?: unknown }) => t.review)
+    expect(reviewer?.sessionId).toBe('sid-123')
   })
 })
 

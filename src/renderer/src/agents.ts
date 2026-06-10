@@ -19,29 +19,31 @@ export const AGENTS: Record<AgentKind, AgentDef> = {
   codex: { label: 'Codex', command: 'codex', resumeCommand: 'codex resume --last', defaultName: 'codex' }
 }
 
-// The actual command to spawn an agent terminal, resolving session continuity:
-//  - fresh claude pins its id so it can be resumed later (claude --session-id X);
-//    a restored claude reopens exactly that conversation (claude --resume X).
-//  - codex can't pin an id at launch, so a fresh codex starts plain (its id is
-//    detected afterwards) and a restored codex resumes by the detected id.
-//  - without a known id (legacy terminals) we fall back to "most recent in cwd".
-// Returns undefined for non-agents (plain shells) — the caller then uses the
-// terminal's saved startupCommand.
-export function agentStartupCommand(opts: {
+// How to relaunch a RESTORED agent terminal so it continues its own previous
+// conversation: by pinned/detected id when one is known (claude --resume X /
+// codex resume X), else the cwd's most recent session (legacy terminals
+// persisted before ids were pinned). Returns undefined for plain shells — the
+// caller falls back to the terminal's saved startupCommand. Fresh launches
+// never go through here: their exact command (including any --session-id pin)
+// is persisted as the terminal's startupCommand at creation time, so custom
+// commands like a reviewer's prompt are never overridden.
+export function agentResumeCommand(opts: {
   kind: TerminalKind | undefined
   sessionId?: string
-  resume?: boolean
 }): string | undefined {
-  const { kind, sessionId, resume } = opts
-  if (kind === 'claude') {
-    if (sessionId) return resume ? `claude --resume ${sessionId}` : `claude --session-id ${sessionId}`
-    return resume ? AGENTS.claude.resumeCommand : AGENTS.claude.command
-  }
-  if (kind === 'codex') {
-    if (resume) return sessionId ? `codex resume ${sessionId}` : AGENTS.codex.resumeCommand
-    return AGENTS.codex.command
-  }
+  const { kind, sessionId } = opts
+  if (kind === 'claude') return sessionId ? `claude --resume ${sessionId}` : AGENTS.claude.resumeCommand
+  if (kind === 'codex') return sessionId ? `codex resume ${sessionId}` : AGENTS.codex.resumeCommand
   return undefined
+}
+
+// The fresh-launch command for an agent, pinning the conversation id when the
+// agent supports it (claude --session-id X; codex can't — its id is detected
+// from the rollout file after launch). This is what gets persisted as the
+// terminal's startupCommand.
+export function agentLaunchCommand(kind: AgentKind, sessionId?: string): string {
+  if (kind === 'claude' && sessionId) return `claude --session-id ${sessionId}`
+  return AGENTS[kind].command
 }
 
 export function detectAgent(processName: string | null | undefined): AgentKind | null {

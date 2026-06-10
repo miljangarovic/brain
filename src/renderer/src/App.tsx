@@ -13,7 +13,7 @@ import {
 import { useAttention } from './attention/useAttention'
 import { migrateWorkspace } from './migrate'
 import { createId } from '@shared/id'
-import { AGENTS, detectAgent, type AgentKind } from './agents'
+import { AGENTS, detectAgent, agentLaunchCommand, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
 import { gridLayout } from './layout'
@@ -195,7 +195,7 @@ export default function App() {
     // resumes THIS terminal's session, not the cwd's most-recent one. codex can't,
     // so it launches plain and we detect its session id from the rollout it writes.
     const sessionId = kind === 'claude' ? createId() : undefined
-    apply((s) => addTerminal(s, featureId, { id, name: a.defaultName, startupCommand: a.command, kind, sessionId }))
+    apply((s) => addTerminal(s, featureId, { id, name: a.defaultName, startupCommand: agentLaunchCommand(kind, sessionId), kind, sessionId }))
     if (kind === 'codex') {
       const cwd = state.workspace.groups.find((g) => g.features.some((f) => f.id === featureId))?.cwd ?? ''
       // Exclude ids already on other terminals so a fresh codex never re-grabs a

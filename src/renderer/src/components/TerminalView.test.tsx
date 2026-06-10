@@ -83,10 +83,17 @@ describe('TerminalView PTY lifecycle', () => {
     expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't3', startupCommand: 'npm run dev' }))
   })
 
-  it('pins a fresh claude session id so it can be resumed later', () => {
-    const claude: TerminalModel = { id: 't4', name: 'claude', cwd: '/x', startupCommand: 'claude', kind: 'claude', sessionId: 'sess-4' }
-    render(<TerminalView terminal={claude} active />)
-    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't4', startupCommand: 'claude --session-id sess-4' }))
+  it('a fresh agent terminal keeps its saved startup command verbatim (reviewer prompt must survive)', () => {
+    // Reviewer terminals persist `claude --session-id X '<review prompt>'` —
+    // the fresh mount must not replace it with a bare agent command.
+    const reviewer: TerminalModel = {
+      id: 't4', name: 'review: claude', cwd: '/x', kind: 'claude', sessionId: 'sess-4',
+      startupCommand: "claude --session-id sess-4 'Review the diff and write a verdict'"
+    }
+    render(<TerminalView terminal={reviewer} active />)
+    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({
+      id: 't4', startupCommand: "claude --session-id sess-4 'Review the diff and write a verdict'"
+    }))
   })
 
   it('resumes a restored claude terminal by its exact session id', () => {
