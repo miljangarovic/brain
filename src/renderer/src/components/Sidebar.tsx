@@ -40,6 +40,24 @@ export function reorderToIndex(insertion: number, fromIndex: number): number {
   return insertion > fromIndex ? insertion - 1 : insertion
 }
 
+// File-row drops are measured among the VISIBLE file rows only — a pane whose
+// path is also one of the feature's documents renders as the document row, not
+// as a separate file row. Translate the visible post-removal insertion index
+// into the destination moveFile expects (an index within the full files array
+// minus the dragged pane), anchoring on the visible pane the drop lands before;
+// past the last visible row appends to the very end.
+export function fileDropToFullIndex(
+  all: { id: string; path: string }[],
+  docPaths: Set<string>,
+  draggedId: string,
+  insertion: number
+): number {
+  const rest = all.filter((p) => p.id !== draggedId)
+  const visibleRest = rest.filter((p) => !docPaths.has(p.path))
+  const anchor = visibleRest[insertion]
+  return anchor ? rest.findIndex((p) => p.id === anchor.id) : rest.length
+}
+
 // Vertical midpoints of the rows matching `selector` inside a drop container.
 function rowMidpoints(container: Element, selector: string): number[] {
   return Array.from(container.querySelectorAll(selector)).map((el) => {
@@ -284,9 +302,15 @@ export function Sidebar(props: {
           const to = reorderToIndex(at.index, from)
           if (from !== -1 && to !== from) onMoveTerminal(d.id, to)
         } else if (at?.kind === 'file' && d.kind === 'file') {
-          const from = groups.flatMap((x) => x.features).find((x) => x.id === d.featureId)?.files?.findIndex((x) => x.id === d.id) ?? -1
+          // Indices are measured among the visible rows (document-backed panes
+          // render as their document row) — translate before calling moveFile.
+          const feature = groups.flatMap((x) => x.features).find((x) => x.id === d.featureId)
+          const all = feature?.files ?? []
+          const docPaths = new Set((feature?.documents ?? []).map((x) => x.path))
+          const visible = all.filter((p) => !docPaths.has(p.path))
+          const from = visible.findIndex((p) => p.id === d.id)
           const to = reorderToIndex(at.index, from)
-          if (from !== -1 && to !== from) onMoveFile(d.id, to)
+          if (from !== -1 && to !== from) onMoveFile(d.id, fileDropToFullIndex(all, docPaths, d.id, to))
         }
         clearDrag()
       }}
@@ -342,6 +366,11 @@ export function Sidebar(props: {
               >
                 {g.features.map((f, i) => {
                   const featureActive = f.id === activeFeatureId
+                  // A pane opened FROM a document would duplicate its row here —
+                  // the document row below stands in for it (and carries the
+                  // active accent while that pane is selected).
+                  const docPaths = new Set((f.documents ?? []).map((d) => d.path))
+                  const sidebarFiles = (f.files ?? []).filter((p) => !docPaths.has(p.path))
                   return (
                   <div key={f.id}>
                     <div
@@ -432,9 +461,9 @@ export function Sidebar(props: {
                             )
                           })}
                         </div>
-                        {(f.files ?? []).length > 0 && (
+                        {sidebarFiles.length > 0 && (
                           <div className="ml-[18px] border-l border-divider pl-0.5" data-feature-files={f.id}>
-                            {(f.files ?? []).map((p, pi) => {
+                            {sidebarFiles.map((p, pi) => {
                               const fActive = p.id === activeTerminalId
                               return (
                                 <div key={p.id} data-file-id={p.id}
@@ -449,7 +478,7 @@ export function Sidebar(props: {
                                   {dropAt?.kind === 'file' && dropAt.featureId === f.id && dropAt.index === pi && (
                                     <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
                                   )}
-                                  {dropAt?.kind === 'file' && dropAt.featureId === f.id && dropAt.index === (f.files ?? []).length && pi === (f.files ?? []).length - 1 && (
+                                  {dropAt?.kind === 'file' && dropAt.featureId === f.id && dropAt.index === sidebarFiles.length && pi === sidebarFiles.length - 1 && (
                                     <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
                                   )}
                                   <FileCodeIcon className={`shrink-0 ${fActive ? 'text-accent' : 'text-fg-muted'}`} />
@@ -475,13 +504,18 @@ export function Sidebar(props: {
                           <div className="ml-[18px] border-l border-divider pl-0.5">
                             {(f.documents ?? []).map((d) => {
                               const broken = docExists[d.path] === false
+                              // The pane opened from this document (if any) has no
+                              // file row of its own — this row stands in for it.
+                              const pane = (f.files ?? []).find((p) => p.path === d.path)
+                              const docActive = !!pane && pane.id === activeTerminalId
                               return (
                                 <div key={d.id} data-doc-id={d.id}
                                   onClick={() => { if (!broken) onNameClick(() => onOpenDocument(f.id, d.path)) }}
                                   onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDocMenu({ x: e.clientX, y: e.clientY, featureId: f.id, docId: d.id, path: d.path }) }}
                                   title={broken ? `${d.path} (missing)` : d.path}
-                                  className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors hover:bg-hover ${broken ? 'text-fg-muted line-through' : 'text-fg hover:text-fg-bright'}`}>
-                                  <DocIcon className="shrink-0 text-fg-muted" />
+                                  className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors ${docActive ? 'bg-accent-sel text-fg-bright' : `hover:bg-hover ${broken ? 'text-fg-muted line-through' : 'text-fg hover:text-fg-bright'}`}`}>
+                                  {docActive && <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />}
+                                  <DocIcon className={`shrink-0 ${docActive ? 'text-accent' : 'text-fg-muted'}`} />
                                   {isEditing('doc', d.id)
                                     ? renameInput(`Rename document ${d.name}`)
                                     : (
