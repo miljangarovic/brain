@@ -233,3 +233,18 @@ export function ArchiveIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function FileCodeIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="1em" height="1em" className={className}
+      data-testid="icon-file-code" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4" />
+      <path d="M10.5 11.5 8.5 13.5l2 2" />
+      <path d="M13.5 11.5l2 2-2 2" />
+    </svg>
+  )
+}
