@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
-  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
+  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
@@ -43,6 +43,16 @@ describe('store reducers', () => {
     expect(auth.name).toBe('auth')
     expect(s.activeFeatureId).toBe(auth.id)
     expect(s.activeTerminalId).toBeNull()
+  })
+
+  it('setFeatureGridStyle sets the persisted grid style on the feature', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    expect(firstFeature(s).gridStyle).toBeUndefined()
+    s = setFeatureGridStyle(s, fid, 'rows')
+    expect(firstFeature(s).gridStyle).toBe('rows')
+    s = setFeatureGridStyle(s, fid, 'auto-left')
+    expect(firstFeature(s).gridStyle).toBe('auto-left')
   })
 
   it('renameFeature / toggleFeatureCollapsed / toggleFeatureViewMode', () => {
@@ -369,6 +379,64 @@ describe('store reducers', () => {
     s = removeTerminal(s, bId)      // deleting b prunes it from hidden
     expect(isHidden(s, bId)).toBe(false)
   })
+
+  it('entering grid view un-hides every terminal of the feature (X-ed panes return)', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'a' })
+    s = addTerminal(s, fid, { name: 'b' })
+    const bId = firstFeature(s).terminals[1].id
+    s = hideTerminal(s, bId)
+    s = toggleFeatureViewMode(s, fid)        // tabs -> grid
+    expect(firstFeature(s).viewMode).toBe('grid')
+    expect(isHidden(s, bId)).toBe(false)
+  })
+
+  it('entering grid view leaves other features\' hidden terminals alone', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const gid = firstGroup(s).id
+    const f1 = firstFeature(s).id
+    s = addFeature(s, gid, 'other')
+    const f2 = firstGroup(s).features[1].id
+    s = addTerminal(s, f2, { name: 'x' })
+    const xId = firstGroup(s).features[1].terminals[0].id
+    s = hideTerminal(s, xId)
+    s = toggleFeatureViewMode(s, f1)         // grid on the FIRST feature
+    expect(isHidden(s, xId)).toBe(true)      // f2's hidden terminal untouched
+  })
+
+  it('setActiveFeature skips hidden terminals when picking the active one', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'a' })
+    s = addTerminal(s, fid, { name: 'b' })
+    const [aId, bId] = firstFeature(s).terminals.map((t) => t.id)
+    s = hideTerminal(s, aId)
+    s = setActiveFeature(s, fid)
+    expect(s.activeTerminalId).toBe(bId)
+  })
+
+  it('setActiveFeature selects no terminal when every one is hidden', () => {
+    let s = addGroup(createInitialState(), 'a', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'a' })
+    const tid = firstFeature(s).terminals[0].id
+    s = hideTerminal(s, tid)
+    s = setActiveFeature(s, fid)
+    expect(s.activeTerminalId).toBeNull()
+  })
+
+  it('setActiveGroup skips hidden terminals when picking the active one', () => {
+    let s = addGroup(createInitialState(), 'one', '')
+    const fid = firstFeature(s).id
+    s = addTerminal(s, fid, { name: 'a' })
+    s = addTerminal(s, fid, { name: 'b' })
+    const [aId, bId] = firstFeature(s).terminals.map((t) => t.id)
+    s = addGroup(s, 'two', '')
+    s = hideTerminal(s, aId)
+    s = setActiveGroup(s, s.workspace.groups[0].id)
+    expect(s.activeTerminalId).toBe(bId)
+  })
 })
 
 describe('review store', () => {
@@ -424,5 +492,39 @@ describe('review store', () => {
     const fid = s.workspace.groups[0].features[0].id
     s = addTerminal(s, fid, { name: 'B', id: 'fixed-id' })
     expect(getTerminalById(s, 'fixed-id')?.name).toBe('B')
+  })
+})
+
+import { isUnderReview, terminalPath } from './store'
+
+describe('attention store helpers', () => {
+  // Build: project "p" › feature "general" › terminals origin + reviewer(origin).
+  function withReviewer() {
+    let s = addGroup(createInitialState(), 'p', '/tmp')
+    const fid = s.activeFeatureId!
+    s = addTerminal(s, fid, { id: 'origin', name: 'impl', kind: 'claude' })
+    s = addTerminal(s, fid, {
+      id: 'rev', name: 'review: codex', kind: 'codex',
+      review: { originTerminalId: 'origin', phase: 'impl', round: 1, maxRounds: 5, reviewDir: '/x' }
+    })
+    return s
+  }
+
+  it('isUnderReview is true for a reviewer and its origin', () => {
+    const s = withReviewer()
+    expect(isUnderReview(s, 'rev')).toBe(true)
+    expect(isUnderReview(s, 'origin')).toBe(true)
+  })
+  it('isUnderReview is false for an unrelated terminal', () => {
+    let s = withReviewer()
+    s = addTerminal(s, s.activeFeatureId!, { id: 'solo', name: 'solo', kind: 'claude' })
+    expect(isUnderReview(s, 'solo')).toBe(false)
+  })
+  it('terminalPath renders Project › Feature › Terminal', () => {
+    const s = withReviewer()
+    expect(terminalPath(s, 'origin')).toBe('p › general › impl')
+  })
+  it('terminalPath is empty for an unknown id', () => {
+    expect(terminalPath(createInitialState(), 'nope')).toBe('')
   })
 })

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
-import type { OrchestrixApi } from '../shared/api'
+import type { BrainApi } from '../shared/api'
 import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
 
@@ -18,7 +18,7 @@ ipcRenderer.on(IPC.ptyExit, (_e, p: { id: string; code: number }) => {
   for (const cb of ptyExitSubs) cb(p.id, p.code)
 })
 
-const api: OrchestrixApi = {
+const api: BrainApi = {
   loadWorkspace: () => ipcRenderer.invoke(IPC.workspaceLoad) as Promise<Workspace>,
   saveWorkspace: (ws: Workspace) => ipcRenderer.send(IPC.workspaceSave, ws),
   createPty: (opts: PtyCreateOptions) => ipcRenderer.send(IPC.ptyCreate, opts),
@@ -54,6 +54,13 @@ const api: OrchestrixApi = {
     return () => ipcRenderer.removeListener(IPC.fsChanged, listener)
   },
   captureAgentSession: (opts) => ipcRenderer.invoke(IPC.agentCaptureSession, opts) as Promise<string | null>,
+  showNotification: (opts) => ipcRenderer.send(IPC.notifyShow, opts),
+  onNotificationClick: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: { key: string }) => cb(p.key)
+    ipcRenderer.on(IPC.notificationClick, listener)
+    return () => ipcRenderer.removeListener(IPC.notificationClick, listener)
+  },
+  resolvePathLinks: (opts) => ipcRenderer.invoke(IPC.linksResolve, opts) as Promise<(string | null)[]>,
 }
 
-contextBridge.exposeInMainWorld('orchestrix', api)
+contextBridge.exposeInMainWorld('brain', api)

@@ -1,4 +1,5 @@
 // Pure layout helpers for the per-group grid view.
+import type { GridStyle } from '@shared/types'
 
 export function gridColumns(n: number): number {
   if (n <= 1) return 1
@@ -33,4 +34,28 @@ export type PaneMode = 'hidden' | 'stacked' | 'grid'
 export function paneMode(opts: { inActiveGroup: boolean; gridMode: boolean }): PaneMode {
   if (!opts.inActiveGroup) return 'hidden'
   return opts.gridMode ? 'grid' : 'stacked'
+}
+
+// gridLayout shaped by the feature's GridStyle. `flow` is the CSS
+// grid-auto-flow: 'column' styles span ROWS (the big pane is a full column,
+// left or right), 'row' styles transpose the geometry and span COLUMNS (the
+// big pane is a full-width row, top or bottom). `spanFirst` says which pane
+// gets the `lastSpan` gap-filler: the FIRST ('auto-left'/'auto-top') or the
+// LAST ('auto'/'auto-bottom'). 'rows'/'cols' are plain strips, no spanning.
+export function styledGridLayout(
+  n: number,
+  style: GridStyle
+): { cols: number; rows: number; lastSpan: number; spanFirst: boolean; flow: 'column' | 'row' } {
+  const count = Math.max(1, n)
+  if (style === 'rows') return { cols: 1, rows: count, lastSpan: 1, spanFirst: false, flow: 'column' }
+  if (style === 'cols') return { cols: count, rows: 1, lastSpan: 1, spanFirst: false, flow: 'column' }
+  const base = gridLayout(count)
+  if (style === 'auto-top' || style === 'auto-bottom') {
+    return {
+      cols: base.rows, rows: base.cols, lastSpan: base.lastSpan,
+      spanFirst: style === 'auto-top' && base.lastSpan > 1,
+      flow: 'row'
+    }
+  }
+  return { ...base, spanFirst: style === 'auto-left' && base.lastSpan > 1, flow: 'column' }
 }

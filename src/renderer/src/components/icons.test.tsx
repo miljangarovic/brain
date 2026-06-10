@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { TerminalKindIcon, GridIcon, TrashIcon } from './icons'
+import { TerminalKindIcon, GridIcon, TrashIcon, BellIcon, SpeakerIcon, SpeakerMutedIcon } from './icons'
 
 describe('TerminalKindIcon', () => {
   it('renders the matching icon per kind', () => {
@@ -24,5 +24,20 @@ describe('TrashIcon', () => {
   it('renders a trash glyph', () => {
     render(<TrashIcon />)
     expect(screen.getByTestId('icon-trash')).toBeInTheDocument()
+  })
+})
+
+describe('attention icons', () => {
+  it('renders the bell icon', () => {
+    render(<BellIcon />)
+    expect(screen.getByTestId('icon-bell')).toBeInTheDocument()
+  })
+  it('renders the speaker icon', () => {
+    render(<SpeakerIcon />)
+    expect(screen.getByTestId('icon-speaker')).toBeInTheDocument()
+  })
+  it('renders the muted speaker icon', () => {
+    render(<SpeakerMutedIcon />)
+    expect(screen.getByTestId('icon-speaker-muted')).toBeInTheDocument()
   })
 })

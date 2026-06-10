@@ -2,7 +2,7 @@ import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
 import type { ReviewPhase } from './types'
 
-export interface OrchestrixApi {
+export interface BrainApi {
   loadWorkspace(): Promise<Workspace>
   saveWorkspace(ws: Workspace): void
   createPty(opts: PtyCreateOptions): void
@@ -27,4 +27,9 @@ export interface OrchestrixApi {
   // it created (currently codex only — claude pins its id up front). Returns null
   // if none is found within the capture window.
   captureAgentSession(opts: { kind: string; cwd: string; exclude?: string[] }): Promise<string | null>
+  showNotification(opts: { key: string; title: string; body: string }): void
+  onNotificationClick(cb: (key: string) => void): () => void
+  // Resolve printed path candidates against a terminal's cwd; index-aligned
+  // result, null where no such file exists (no link is offered).
+  resolvePathLinks(opts: { cwd: string; candidates: string[] }): Promise<(string | null)[]>
 }

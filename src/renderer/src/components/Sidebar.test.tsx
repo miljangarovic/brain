@@ -44,6 +44,13 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     busy: {},
     reviewStatus: {},
     onReviewTerminal: noop,
+    attention: {},
+    attentionItems: [],
+    attentionMuted: false,
+    onAttentionSelect: noop,
+    onAttentionClear: noop,
+    onAttentionClearAll: noop,
+    onToggleAttentionMute: noop,
     ...overrides
   }
   return render(<Sidebar {...props} />)
@@ -359,6 +366,74 @@ describe('Sidebar (3-level)', () => {
       fireEvent.dragOver(termZone(container, 'f2'))
       fireEvent.drop(termZone(container, 'f2'))
       expect(onMoveTerminal).not.toHaveBeenCalled()
+    })
+  })
+
+  // Dropping outside the dragged kind's own container must still reorder, clamped
+  // to the nearest end — aiming the exact half-row at the container's edge was a
+  // needle-threading exercise (most of the sidebar was a dead zone for the drop).
+  describe('forgiving drop zones (clamp to nearest position)', () => {
+    const groupsZone = (c: HTMLElement) => c.querySelector('[data-groups]') as HTMLElement
+    const termRow = (c: HTMLElement, id: string) => c.querySelector(`[data-term-id="${id}"]`) as HTMLElement
+    const featRow = (c: HTMLElement, id: string) => c.querySelector(`[data-feature-id="${id}"]`) as HTMLElement
+
+    it('terminal dropped anywhere below its feature lands at the end', () => {
+      const fixture: Group[] = [
+        { id: 'g1', name: 'proj', cwd: '', collapsed: false, features: [
+          { id: 'f1', name: 'auth', collapsed: false, terminals: [
+            { id: 't1', name: 'a', cwd: '' }, { id: 't2', name: 'b', cwd: '' }
+          ] }
+        ] }
+      ]
+      const onMoveTerminal = vi.fn()
+      const { container } = renderSidebar({ groups: fixture, onMoveTerminal })
+      fireEvent.dragStart(termRow(container, 't1'))
+      // jsdom rects are all 0 → clientY 50 is "below every row midpoint"
+      fireEvent.dragOver(groupsZone(container), { clientY: 50 })
+      fireEvent.drop(groupsZone(container), { clientY: 50 })
+      expect(onMoveTerminal).toHaveBeenCalledWith('t1', 1)
+    })
+
+    it('project dropped above the tree (over the attention header) lands first', () => {
+      const fixture: Group[] = [
+        { id: 'gA', name: 'A', cwd: '', collapsed: true, features: [] },
+        { id: 'gB', name: 'B', cwd: '', collapsed: true, features: [] }
+      ]
+      const onMoveGroup = vi.fn()
+      const { container } = renderSidebar({ groups: fixture, onMoveGroup })
+      container.querySelectorAll('[data-group-id]').forEach((el, i) => {
+        ;(el as HTMLElement).getBoundingClientRect = () =>
+          ({ top: 100 + i * 20, height: 20, bottom: 120 + i * 20, left: 0, right: 0, width: 200, x: 0, y: 100 + i * 20, toJSON: () => ({}) }) as DOMRect
+      })
+      fireEvent.dragStart(container.querySelector('[data-group-id="gB"]') as HTMLElement)
+      // The bell host sits ABOVE the tree container — dropping there must still work.
+      const bell = screen.getByRole('button', { name: /attention/i })
+      bell.dispatchEvent(new MouseEvent('dragover', { bubbles: true, cancelable: true, clientY: 5 }))
+      bell.dispatchEvent(new MouseEvent('drop', { bubbles: true, cancelable: true, clientY: 5 }))
+      expect(onMoveGroup).toHaveBeenCalledWith('gB', 0)
+    })
+
+    it('feature dropped anywhere above its group lands first', () => {
+      const fixture: Group[] = [
+        { id: 'gA', name: 'A', cwd: '', collapsed: false, features: [
+          { id: 'fa', name: 'aa', collapsed: true, terminals: [] },
+          { id: 'fb', name: 'bb', collapsed: true, terminals: [] }
+        ] }
+      ]
+      const onMoveFeature = vi.fn()
+      const { container } = renderSidebar({ groups: fixture, onMoveFeature })
+      // jsdom can't lay out — give the feature rows real vertical geometry so a
+      // cursor above the first row's midpoint is expressible with a positive Y.
+      container.querySelectorAll('[data-feature-id]').forEach((el, i) => {
+        ;(el as HTMLElement).getBoundingClientRect = () =>
+          ({ top: 100 + i * 20, height: 20, bottom: 120 + i * 20, left: 0, right: 0, width: 200, x: 0, y: 100 + i * 20, toJSON: () => ({}) }) as DOMRect
+      })
+      fireEvent.dragStart(featRow(container, 'fb'))
+      // fireEvent's drag events drop MouseEvent fields (clientY arrives undefined),
+      // so dispatch real MouseEvents: clientY 5 is above every midpoint (110, 130) → 0
+      groupsZone(container).dispatchEvent(new MouseEvent('dragover', { bubbles: true, cancelable: true, clientY: 5 }))
+      groupsZone(container).dispatchEvent(new MouseEvent('drop', { bubbles: true, cancelable: true, clientY: 5 }))
+      expect(onMoveFeature).toHaveBeenCalledWith('fb', 0)
     })
   })
 })

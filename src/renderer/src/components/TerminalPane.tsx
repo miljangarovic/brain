@@ -27,12 +27,13 @@ export interface PaneDnd {
 }
 
 export function TerminalPane({
-  terminal, active, gridded, gridRowSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume
+  terminal, active, gridded, gridRowSpan, gridColSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume, started, onStart
 }: {
   terminal: Terminal
   active: boolean
   gridded: boolean          // shown as a grid cell (grid mode + in the active feature)
-  gridRowSpan?: number      // rows this pane spans in column-major grid (>1 fills the odd-count gap)
+  gridRowSpan?: number      // rows this pane spans (column-flow styles: big pane left/right)
+  gridColSpan?: number      // columns this pane spans (row-flow styles: big pane top/bottom)
   visibleInTabs: boolean    // shown in tabs mode (active, in feature, not gridded)
   busy: boolean
   liveAgent: 'claude' | 'codex' | undefined
@@ -40,11 +41,14 @@ export function TerminalPane({
   onActivate: () => void
   dnd?: PaneDnd             // grid reorder handlers (present only for gridded panes)
   resume?: boolean          // restored agent terminal → spawn with its resume command
+  started: boolean          // false → boot-restored and never opened: render a cold placeholder, no PTY
+  onStart: () => void
 }) {
   const gridStyle = gridded
     ? {
         ...(active ? { boxShadow: ACTIVE_PANE_SHADOW } : {}),
-        ...(gridRowSpan && gridRowSpan > 1 ? { gridRow: `span ${gridRowSpan}` } : {})
+        ...(gridRowSpan && gridRowSpan > 1 ? { gridRow: `span ${gridRowSpan}` } : {}),
+        ...(gridColSpan && gridColSpan > 1 ? { gridColumn: `span ${gridColSpan}` } : {})
       }
     : { display: visibleInTabs ? 'block' : 'none' }
   return (
@@ -78,7 +82,24 @@ export function TerminalPane({
         </div>
       )}
       <div className={gridded ? 'relative flex-1 min-h-0' : 'absolute inset-0'}>
-        <TerminalView terminal={terminal} active={active} resume={resume} />
+        {started ? (
+          <TerminalView terminal={terminal} active={active} resume={resume} />
+        ) : (
+          // Cold pane: the shell/agent spawns only when the user opens it.
+          // Mounting TerminalView is what creates the PTY, so we render this
+          // stand-in instead until then.
+          <button
+            type="button"
+            onClick={onStart}
+            className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface text-fg-muted hover:text-fg transition-colors"
+          >
+            <TerminalKindIcon kind={liveAgent ?? terminal.kind ?? 'shell'} className="opacity-60" />
+            {!gridded && <span className="text-sm font-medium" style={{ fontFamily: MONO_FONT }}>{terminal.name}</span>}
+            <span className="text-xs">
+              Click to start{resume && (terminal.kind === 'claude' || terminal.kind === 'codex') ? ' — resumes its session' : ''}
+            </span>
+          </button>
+        )}
       </div>
       {gridded && dnd?.isDropTarget && (
         <div

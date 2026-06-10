@@ -5,6 +5,9 @@ import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
+import { AttentionDot } from './AttentionDot'
+import { AttentionBell, type AttentionBellItem } from './AttentionBell'
+import type { AttentionState } from '../attention/detect'
 
 type RenameKind = 'group' | 'feature' | 'terminal'
 
@@ -40,6 +43,22 @@ function rowMidpoints(container: Element, selector: string): number[] {
     const r = el.getBoundingClientRect()
     return r.top + r.height / 2
   })
+}
+
+// Insertion point for the dragged kind, measured against ITS OWN container's
+// rows but accepting the cursor anywhere in the tree: a cursor above/below that
+// container clamps to first/last. This makes the whole sidebar a valid drop
+// surface — without it, placing an item first/last required hovering the exact
+// half-row at the container's edge, and one pixel past it was a dead zone.
+function insertionFor(root: Element, d: Drag, y: number): DropAt | null {
+  if (d.kind === 'group')
+    return { kind: 'group', index: insertionFromMidpoints(rowMidpoints(root, '[data-group-id]'), y) }
+  if (d.kind === 'feature') {
+    const c = root.querySelector(`[data-group-features="${CSS.escape(d.groupId)}"]`)
+    return c ? { kind: 'feature', groupId: d.groupId, index: insertionFromMidpoints(rowMidpoints(c, '[data-feature-id]'), y) } : null
+  }
+  const c = root.querySelector(`[data-feature-terminals="${CSS.escape(d.featureId)}"]`)
+  return c ? { kind: 'terminal', featureId: d.featureId, index: insertionFromMidpoints(rowMidpoints(c, '[data-term-id]'), y) } : null
 }
 
 const SIDEBAR_MIN = 180
@@ -80,12 +99,20 @@ export function Sidebar(props: {
   onReviewTerminal: (terminalId: string, reviewer?: AgentKind) => void
   pendingRenameTerminalId?: string | null
   onPendingRenameConsumed?: () => void
+  attention: Record<string, AttentionState | undefined>
+  attentionItems: AttentionBellItem[]
+  attentionMuted: boolean
+  onAttentionSelect: (terminalId: string) => void
+  onAttentionClear: (terminalId: string) => void
+  onAttentionClearAll: () => void
+  onToggleAttentionMute: () => void
 }) {
   const {
     groups, activeTerminalId, activeFeatureId, activeGroupId, liveAgents, busy, onSelectTerminal, onToggleGroup, onToggleFeature, onAddGroup,
     onAddFeature, onAddTerminal, onLaunchAgent, onToggleFeatureView, onMoveGroup, onMoveFeature, onMoveTerminal,
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onOpenInFiles,
-    reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed
+    reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
+    attention, attentionItems, attentionMuted, onAttentionSelect, onAttentionClear, onAttentionClearAll, onToggleAttentionMute
   } = props
 
   const [menu, setMenu] = useState<{ x: number; y: number; groupId: string } | null>(null)
@@ -181,27 +208,51 @@ export function Sidebar(props: {
   const hoverBtn = 'opacity-0 group-hover:opacity-100 px-1 text-fg-muted transition'
 
   return (
-    <div style={{ width }} className="relative shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg">
-      <div
-        className="flex-1 overflow-y-auto py-1"
-        data-groups
-        onDragOver={(e) => {
-          const d = dragRef.current
-          if (!d || d.kind !== 'group') return
-          e.preventDefault()
-          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-          setDropAt({ kind: 'group', index: insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-group-id]'), e.clientY) })
-        }}
-        onDrop={(e) => {
-          const d = dragRef.current
-          if (!d || d.kind !== 'group') return
-          e.preventDefault()
+    <div
+      style={{ width }}
+      className="relative shrink-0 h-full flex flex-col bg-panel border-r border-line text-fg"
+      // Drag reorder is handled here, on the WHOLE sidebar: the bell header and
+      // footer sit outside the tree container, and dragging a row past the top/
+      // bottom edge of the tree must still drop (clamped to first/last position).
+      onDragOver={(e) => {
+        const d = dragRef.current
+        if (!d) return
+        e.preventDefault()
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+        setDropAt(insertionFor(e.currentTarget, d, e.clientY))
+      }}
+      onDrop={(e) => {
+        const d = dragRef.current
+        if (!d) return
+        e.preventDefault()
+        const at = insertionFor(e.currentTarget, d, e.clientY)
+        if (at?.kind === 'group' && d.kind === 'group') {
           const from = groups.findIndex((x) => x.id === d.id)
-          const to = reorderToIndex(insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-group-id]'), e.clientY), from)
+          const to = reorderToIndex(at.index, from)
           if (to !== from) onMoveGroup(d.id, to)
-          clearDrag()
-        }}
-      >
+        } else if (at?.kind === 'feature' && d.kind === 'feature') {
+          const from = groups.find((x) => x.id === d.groupId)?.features.findIndex((x) => x.id === d.id) ?? -1
+          const to = reorderToIndex(at.index, from)
+          if (from !== -1 && to !== from) onMoveFeature(d.id, to)
+        } else if (at?.kind === 'terminal' && d.kind === 'terminal') {
+          const from = groups.flatMap((x) => x.features).find((x) => x.id === d.featureId)?.terminals.findIndex((x) => x.id === d.id) ?? -1
+          const to = reorderToIndex(at.index, from)
+          if (from !== -1 && to !== from) onMoveTerminal(d.id, to)
+        }
+        clearDrag()
+      }}
+    >
+      <div className="p-2 border-b border-line">
+        <AttentionBell
+          items={attentionItems}
+          muted={attentionMuted}
+          onSelect={onAttentionSelect}
+          onClear={onAttentionClear}
+          onClearAll={onAttentionClearAll}
+          onToggleMute={onToggleAttentionMute}
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto py-1" data-groups>
         {groups.map((g, gi) => {
           const groupActive = g.id === activeGroupId
           return (
@@ -209,7 +260,7 @@ export function Sidebar(props: {
             <div
               data-group-id={g.id}
               aria-current={groupActive ? 'true' : undefined}
-              className={`relative group flex items-center gap-1 px-2 py-1 transition-colors ${groupActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'group' && drag.id === g.id ? 'opacity-40' : ''} ${!isEditing('group', g.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              className={`relative group mx-1 mt-1 mb-[2px] flex items-center gap-1 rounded-md px-1.5 py-[2px] transition-colors ${groupActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'group' && drag.id === g.id ? 'opacity-40' : ''} ${!isEditing('group', g.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
               draggable={!isEditing('group', g.id)}
               onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'group', id: g.id }; setDrag({ kind: 'group', id: g.id }) }}
               onDragEnd={clearDrag}
@@ -224,11 +275,11 @@ export function Sidebar(props: {
               {dropAt?.kind === 'group' && dropAt.index === groups.length && gi === groups.length - 1 && (
                 <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
               )}
-              <button aria-label={`Collapse/expand ${g.name}`} onClick={() => onToggleGroup(g.id)} className={`w-4 hover:text-fg ${groupActive ? 'text-accent' : 'text-fg-muted'}`}>
-                {g.collapsed ? '▸' : '▾'}
+              <button aria-label={`Collapse/expand ${g.name}`} onClick={() => onToggleGroup(g.id)} className={`flex h-4 w-4 shrink-0 items-center justify-center self-center hover:text-fg ${groupActive ? 'text-accent' : 'text-fg-muted'}`}>
+                <span className={`block text-[9px] leading-none transition-transform duration-150 ${g.collapsed ? '' : 'rotate-90'}`}>▶</span>
               </button>
               {isEditing('group', g.id) ? renameInput(`Rename project ${g.name}`) : (
-                <span className="flex-1 min-w-0 truncate text-sm font-semibold text-fg-bright cursor-pointer"
+                <span className={`flex-1 min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.12em] cursor-pointer transition-colors ${groupActive ? 'text-accent' : 'text-fg-muted group-hover:text-fg'}`}
                   onClick={() => onNameClick(() => onToggleGroup(g.id))}
                   onDoubleClick={() => onNameDblClick(() => startRename('group', g.id, g.name))}>{g.name}</span>
               )}
@@ -237,25 +288,8 @@ export function Sidebar(props: {
 
             {!g.collapsed && (
               <div
-                className="pl-3"
+                className="ml-3 border-l border-divider pl-0.5"
                 data-group-features={g.id}
-                onDragOver={(e) => {
-                  const d = dragRef.current
-                  if (!d || d.kind !== 'feature') return                // not a feature drag — let the matching zone own it
-                  if (d.groupId !== g.id) { setDropAt(null); return }    // hovering another project — clear stale line
-                  e.preventDefault()
-                  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-                  setDropAt({ kind: 'feature', groupId: g.id, index: insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-feature-id]'), e.clientY) })
-                }}
-                onDrop={(e) => {
-                  const d = dragRef.current
-                  if (!d || d.kind !== 'feature' || d.groupId !== g.id) return
-                  e.preventDefault()
-                  const from = g.features.findIndex((x) => x.id === d.id)
-                  const to = reorderToIndex(insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-feature-id]'), e.clientY), from)
-                  if (to !== from) onMoveFeature(d.id, to)
-                  clearDrag()
-                }}
               >
                 {g.features.map((f, i) => {
                   const featureActive = f.id === activeFeatureId
@@ -264,7 +298,7 @@ export function Sidebar(props: {
                     <div
                       data-feature-id={f.id}
                       aria-current={featureActive ? 'true' : undefined}
-                      className={`relative group flex items-center gap-1 px-2 py-1 transition-colors ${featureActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'feature' && drag.id === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      className={`relative group mx-1 my-[2px] flex items-center gap-1 rounded-md px-1.5 py-[2px] transition-colors ${featureActive ? 'bg-accent-soft' : 'hover:bg-hover'} ${drag?.kind === 'feature' && drag.id === f.id ? 'opacity-40' : ''} ${!isEditing('feature', f.id) ? 'cursor-grab active:cursor-grabbing' : ''}`}
                       draggable={!isEditing('feature', f.id)}
                       onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'feature', id: f.id, groupId: g.id }; setDrag({ kind: 'feature', id: f.id, groupId: g.id }) }}
                       onDragEnd={clearDrag}
@@ -278,13 +312,16 @@ export function Sidebar(props: {
                       {dropAt?.kind === 'feature' && dropAt.groupId === g.id && dropAt.index === g.features.length && i === g.features.length - 1 && (
                         <div className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded bg-accent" />
                       )}
-                      <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className={`w-4 hover:text-fg ${featureActive ? 'text-accent' : 'text-fg-muted'}`}>
-                        {f.collapsed ? '▸' : '▾'}
+                      <button aria-label={`Collapse/expand feature ${f.name}`} onClick={() => onToggleFeature(f.id)} className={`flex h-4 w-4 shrink-0 items-center justify-center self-center hover:text-fg ${featureActive ? 'text-accent' : 'text-fg-muted'}`}>
+                        <span className={`block text-[9px] leading-none transition-transform duration-150 ${f.collapsed ? '' : 'rotate-90'}`}>▶</span>
                       </button>
                       {isEditing('feature', f.id) ? renameInput(`Rename feature ${f.name}`) : (
-                        <span className={`flex-1 truncate text-sm font-medium cursor-pointer ${featureActive ? 'text-fg-bright' : 'text-fg'}`}
+                        <span className={`flex-1 truncate text-[13px] font-medium cursor-pointer ${featureActive ? 'text-fg-bright' : 'text-fg'}`}
                           onClick={() => onNameClick(() => onToggleFeature(f.id))}
                           onDoubleClick={() => onNameDblClick(() => startRename('feature', f.id, f.name))}>{f.name}</span>
+                      )}
+                      {f.collapsed && f.terminals.length > 0 && (
+                        <span className="shrink-0 rounded-full bg-sel px-1.5 text-[10px] leading-4 text-fg-muted">{f.terminals.length}</span>
                       )}
                       {f.terminals.some((t) => busy[t.id] && liveAgents[t.id]) && <SpinnerIcon className="shrink-0 text-accent" />}
                       <AddMenuButton
@@ -298,25 +335,8 @@ export function Sidebar(props: {
 
                     {!f.collapsed && (
                       <div
-                        className="pl-2"
+                        className="ml-[18px] border-l border-divider pl-0.5"
                         data-feature-terminals={f.id}
-                        onDragOver={(e) => {
-                          const d = dragRef.current
-                          if (!d || d.kind !== 'terminal') return       // not a terminal drag — let the matching zone own it
-                          if (d.featureId !== f.id) { setDropAt(null); return }   // a different feature — no cross-feature move
-                          e.preventDefault()
-                          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-                          setDropAt({ kind: 'terminal', featureId: f.id, index: insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-term-id]'), e.clientY) })
-                        }}
-                        onDrop={(e) => {
-                          const d = dragRef.current
-                          if (!d || d.kind !== 'terminal' || d.featureId !== f.id) return
-                          e.preventDefault()
-                          const from = f.terminals.findIndex((x) => x.id === d.id)
-                          const to = reorderToIndex(insertionFromMidpoints(rowMidpoints(e.currentTarget, '[data-term-id]'), e.clientY), from)
-                          if (to !== from) onMoveTerminal(d.id, to)
-                          clearDrag()
-                        }}
                       >
                         {f.terminals.map((t, ti) => {
                           const active = t.id === activeTerminalId
@@ -326,8 +346,11 @@ export function Sidebar(props: {
                               draggable={!isEditing('terminal', t.id)}
                               onDragStart={(e) => { e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'terminal', id: t.id, featureId: f.id }; setDrag({ kind: 'terminal', id: t.id, featureId: f.id }) }}
                               onDragEnd={clearDrag}
-                              className={`relative group flex items-center gap-2 pl-6 pr-2 py-1 text-sm cursor-pointer border-l-2 transition-colors ${drag?.kind === 'terminal' && drag.id === t.id ? 'opacity-40' : ''} ${
-                                active ? 'border-accent bg-accent-sel text-fg-bright' : 'border-transparent text-fg hover:bg-hover hover:text-fg-bright'}`}>
+                              className={`relative group mx-1 my-[2px] flex items-center gap-1.5 rounded-md pl-2 pr-1.5 py-[2px] text-[13px] cursor-pointer transition-colors ${drag?.kind === 'terminal' && drag.id === t.id ? 'opacity-40' : ''} ${
+                                active ? 'bg-accent-sel text-fg-bright' : 'text-fg hover:bg-hover hover:text-fg-bright'}`}>
+                              {active && (
+                                <div className="pointer-events-none absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent" />
+                              )}
                               {dropAt?.kind === 'terminal' && dropAt.featureId === f.id && dropAt.index === ti && (
                                 <div className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded bg-accent" />
                               )}
@@ -336,8 +359,9 @@ export function Sidebar(props: {
                               )}
                               {busy[t.id] && liveAgents[t.id]
                                 ? <SpinnerIcon className="shrink-0 text-accent" />
-                                : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
+                                : <TerminalKindIcon kind={liveAgents[t.id] ?? t.kind ?? 'shell'} className={`shrink-0 ${active ? 'text-accent' : 'text-fg-muted'}`} />}
                               <ReviewStatusDot status={reviewStatus[t.id]} />
+                              <AttentionDot state={attention[t.id]} />
                               {isEditing('terminal', t.id)
                                 ? renameInput(`Rename terminal ${t.name}`)
                                 : (
@@ -359,13 +383,13 @@ export function Sidebar(props: {
                   </div>
                   )
                 })}
-                <div className="px-2 pt-1 pb-0.5">
+                <div className="px-2 pt-1 pb-1">
                   <input
                     aria-label={`New feature in ${g.name}`} placeholder="+ Feature"
                     value={featureDraft[g.id] ?? ''}
                     onChange={(e) => setFeatureDraft((d) => ({ ...d, [g.id]: e.target.value }))}
                     onKeyDown={(e) => { if (e.key === 'Enter') submitFeature(g.id) }}
-                    className="w-full px-2 py-1.5 text-sm rounded-md bg-field text-fg placeholder-fg-muted outline-none focus:ring-1 focus:ring-accent transition"
+                    className="w-full rounded-md border border-dashed border-divider bg-transparent px-2 py-[3px] text-xs text-fg placeholder-fg-muted outline-none transition focus:border-solid focus:border-accent focus:bg-field"
                   />
                 </div>
               </div>
@@ -377,7 +401,7 @@ export function Sidebar(props: {
 
       <div className="p-2 border-t border-line">
         <button aria-label="New Project" onClick={onAddGroup}
-          className="w-full px-2 py-1.5 text-sm rounded-md bg-field text-fg-muted hover:text-accent outline-none transition">
+          className="w-full rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
           + New Project
         </button>
       </div>

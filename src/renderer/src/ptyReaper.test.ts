@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { removedIds } from './ptyReaper'
+import { removedIds, pruneRecord } from './ptyReaper'
+
+describe('pruneRecord', () => {
+  it('drops dead-terminal keys', () => {
+    expect(pruneRecord({ a: 1, b: 2, c: 3 }, ['b', 'c'])).toEqual({ a: 1 })
+  })
+  it('returns the same reference when no key matches (no pointless re-render)', () => {
+    const rec = { a: 1 }
+    expect(pruneRecord(rec, ['x', 'y'])).toBe(rec)
+  })
+  it('ignores dead ids that were never tracked', () => {
+    expect(pruneRecord({ a: 1, b: 2 }, ['b', 'ghost'])).toEqual({ a: 1 })
+  })
+})
 
 describe('removedIds', () => {
   it('returns ids present before but gone now (terminals removed from the workspace)', () => {

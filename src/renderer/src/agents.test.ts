@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AGENTS, agentStartupCommand } from './agents'
+import { AGENTS, agentResumeCommand, agentLaunchCommand } from './agents'
 
 describe('AGENTS', () => {
   it('defines claude and codex with label, command and default name', () => {
@@ -17,28 +17,34 @@ describe('AGENTS', () => {
   })
 })
 
-describe('agentStartupCommand', () => {
-  it('pins a fresh claude session and resumes that exact id later', () => {
-    expect(agentStartupCommand({ kind: 'claude', sessionId: 'abc' })).toBe('claude --session-id abc')
-    expect(agentStartupCommand({ kind: 'claude', sessionId: 'abc', resume: true })).toBe('claude --resume abc')
+describe('agentResumeCommand', () => {
+  it('resumes claude and codex by exact id when one is known', () => {
+    expect(agentResumeCommand({ kind: 'claude', sessionId: 'abc' })).toBe('claude --resume abc')
+    expect(agentResumeCommand({ kind: 'codex', sessionId: 'xyz' })).toBe('codex resume xyz')
   })
 
-  it('starts a fresh codex plainly and resumes by its detected id later', () => {
-    expect(agentStartupCommand({ kind: 'codex' })).toBe('codex')
-    expect(agentStartupCommand({ kind: 'codex', sessionId: 'xyz', resume: true })).toBe('codex resume xyz')
-  })
-
-  it('falls back to "most recent in cwd" when a restored agent has no known id (legacy)', () => {
-    expect(agentStartupCommand({ kind: 'claude', resume: true })).toBe('claude --continue')
-    expect(agentStartupCommand({ kind: 'codex', resume: true })).toBe('codex resume --last')
-  })
-
-  it('starts a fresh agent normally when no id was assigned', () => {
-    expect(agentStartupCommand({ kind: 'claude' })).toBe('claude')
+  it('falls back to "most recent in cwd" when no id is known (legacy terminals)', () => {
+    expect(agentResumeCommand({ kind: 'claude' })).toBe('claude --continue')
+    expect(agentResumeCommand({ kind: 'codex' })).toBe('codex resume --last')
   })
 
   it('returns undefined for plain shells (caller uses the saved startupCommand)', () => {
-    expect(agentStartupCommand({ kind: 'shell' })).toBeUndefined()
-    expect(agentStartupCommand({ kind: undefined })).toBeUndefined()
+    expect(agentResumeCommand({ kind: 'shell' })).toBeUndefined()
+    expect(agentResumeCommand({ kind: undefined })).toBeUndefined()
+  })
+})
+
+describe('agentLaunchCommand', () => {
+  it('pins a fresh claude session by id', () => {
+    expect(agentLaunchCommand('claude', 'abc')).toBe('claude --session-id abc')
+  })
+
+  it('starts claude plainly when no id is given', () => {
+    expect(agentLaunchCommand('claude')).toBe('claude')
+  })
+
+  it('always starts codex plainly — its id is detected after launch', () => {
+    expect(agentLaunchCommand('codex')).toBe('codex')
+    expect(agentLaunchCommand('codex', 'ignored')).toBe('codex')
   })
 })

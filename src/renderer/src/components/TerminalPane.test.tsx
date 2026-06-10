@@ -17,6 +17,8 @@ const base = {
   liveAgent: undefined as 'claude' | 'codex' | undefined,
   reviewStatus: undefined,
   onActivate: () => {},
+  started: true,
+  onStart: () => {},
 }
 
 beforeEach(() => vi.clearAllMocks())
@@ -76,5 +78,37 @@ describe('TerminalPane', () => {
   it('is not draggable when no dnd is provided', () => {
     const { container } = render(<TerminalPane {...base} gridded />)
     expect(container.querySelector('[draggable="true"]')).toBeNull()
+  })
+
+  it('shows a cold placeholder instead of the terminal until started', () => {
+    render(<TerminalPane {...base} visibleInTabs started={false} />)
+    expect(screen.queryByTestId('terminal-view')).not.toBeInTheDocument()
+    expect(screen.getByText(/click to start/i)).toBeInTheDocument()
+  })
+
+  it('clicking the placeholder starts the terminal', () => {
+    const onStart = vi.fn()
+    render(<TerminalPane {...base} visibleInTabs started={false} onStart={onStart} />)
+    fireEvent.click(screen.getByText(/click to start/i))
+    expect(onStart).toHaveBeenCalled()
+  })
+
+  it('keeps the pane header in grid mode while cold', () => {
+    render(<TerminalPane {...base} gridded started={false} />)
+    expect(screen.getByText('api')).toBeInTheDocument()           // header chrome stays
+    expect(screen.queryByTestId('terminal-view')).not.toBeInTheDocument()
+  })
+
+  it('mounts the live terminal once started', () => {
+    render(<TerminalPane {...base} visibleInTabs started />)
+    expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
+    expect(screen.queryByText(/click to start/i)).not.toBeInTheDocument()
+  })
+
+  it('spans rows or columns per the grid style', () => {
+    const { container, rerender } = render(<TerminalPane {...base} gridded gridRowSpan={2} />)
+    expect((container.firstChild as HTMLElement).style.gridRow).toBe('span 2')
+    rerender(<TerminalPane {...base} gridded gridColSpan={3} />)
+    expect((container.firstChild as HTMLElement).style.gridColumn).toBe('span 3')
   })
 })

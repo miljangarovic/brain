@@ -1,4 +1,4 @@
-import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, createWorkspace } from '@shared/types'
+import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, GridStyle, createWorkspace } from '@shared/types'
 import { createId } from '@shared/id'
 
 export interface AppState {
@@ -26,15 +26,20 @@ const featureOfTerminal = (ws: Workspace, terminalId: string): { group: Group; f
   return undefined
 }
 
-const selectFeature = (g: Group | null): { featureId: string | null; terminalId: string | null } => {
+// First terminal of `f` that isn't hidden from the tab bar — activating a hidden
+// terminal would select something with no visible tab or pane.
+const firstVisibleTerminal = (f: Feature | null, hidden: string[]): Terminal | null =>
+  f?.terminals.find((t) => !hidden.includes(t.id)) ?? null
+
+const selectFeature = (g: Group | null, hidden: string[]): { featureId: string | null; terminalId: string | null } => {
   const f = g?.features[0] ?? null
-  return { featureId: f?.id ?? null, terminalId: f?.terminals[0]?.id ?? null }
+  return { featureId: f?.id ?? null, terminalId: firstVisibleTerminal(f, hidden)?.id ?? null }
 }
 
 // ---- init ----------------------------------------------------------------
 export function createInitialState(ws: Workspace = createWorkspace()): AppState {
   const g = ws.groups[0] ?? null
-  const sel = selectFeature(g)
+  const sel = selectFeature(g, [])
   return { workspace: ws, activeGroupId: g?.id ?? null, activeFeatureId: sel.featureId, activeTerminalId: sel.terminalId, hidden: [] }
 }
 
@@ -64,7 +69,7 @@ export function deleteGroup(state: AppState, groupId: string): AppState {
   let { activeGroupId, activeFeatureId, activeTerminalId } = state
   if (activeGroupId === groupId) {
     const ng = groups[0] ?? null
-    const sel = selectFeature(ng)
+    const sel = selectFeature(ng, state.hidden)
     activeGroupId = ng?.id ?? null
     activeFeatureId = sel.featureId
     activeTerminalId = sel.terminalId
@@ -104,6 +109,10 @@ export function toggleFeatureCollapsed(state: AppState, featureId: string): AppS
   return { ...state, workspace: mapFeature(state.workspace, featureId, (f) => ({ ...f, collapsed: !f.collapsed })) }
 }
 
+export function setFeatureGridStyle(state: AppState, featureId: string, gridStyle: GridStyle): AppState {
+  return { ...state, workspace: mapFeature(state.workspace, featureId, (f) => ({ ...f, gridStyle })) }
+}
+
 export function toggleFeatureViewMode(state: AppState, featureId: string): AppState {
   const group = groupOfFeature(state.workspace, featureId)
   const feature = group?.features.find((f) => f.id === featureId) ?? null
@@ -122,7 +131,11 @@ export function toggleFeatureViewMode(state: AppState, featureId: string): AppSt
       activeTerminalId: first?.id ?? state.activeTerminalId
     }
   }
-  return { ...state, workspace }
+  // Entering the grid is a fresh survey of the feature: every X-ed (hidden)
+  // terminal returns to the board (and to the tab bar). X-ing a pane while the
+  // grid is open still prunes it — until the next grid open.
+  const ids = new Set((feature?.terminals ?? []).map((t) => t.id))
+  return { ...state, workspace, hidden: state.hidden.filter((id) => !ids.has(id)) }
 }
 
 export function deleteFeature(state: AppState, featureId: string): AppState {
@@ -133,7 +146,7 @@ export function deleteFeature(state: AppState, featureId: string): AppState {
   let { activeFeatureId, activeTerminalId } = state
   if (activeFeatureId === featureId) {
     const g2 = ws.groups.find((g) => g.id === group?.id) ?? null
-    const sel = selectFeature(g2)
+    const sel = selectFeature(g2, state.hidden)
     activeFeatureId = sel.featureId
     activeTerminalId = sel.terminalId
   }
@@ -282,7 +295,7 @@ export const isHidden = (s: AppState, terminalId: string): boolean => s.hidden.i
 // ---- active selection ----------------------------------------------------
 export function setActiveGroup(state: AppState, groupId: string): AppState {
   const g = state.workspace.groups.find((x) => x.id === groupId) ?? null
-  const sel = selectFeature(g)
+  const sel = selectFeature(g, state.hidden)
   return { ...state, activeGroupId: groupId, activeFeatureId: sel.featureId, activeTerminalId: sel.terminalId }
 }
 
@@ -293,7 +306,7 @@ export function setActiveFeature(state: AppState, featureId: string): AppState {
     ...state,
     activeGroupId: group?.id ?? state.activeGroupId,
     activeFeatureId: featureId,
-    activeTerminalId: feature?.terminals[0]?.id ?? null
+    activeTerminalId: firstVisibleTerminal(feature, state.hidden)?.id ?? null
   }
 }
 
@@ -333,4 +346,23 @@ export const findReviewerFor = (s: AppState, originId: string): Terminal | null 
 export const featureIdOfTerminal = (s: AppState, terminalId: string): string | null => {
   for (const g of s.workspace.groups) for (const f of g.features) if (f.terminals.some((t) => t.id === terminalId)) return f.id
   return null
+}
+
+// A terminal the review loop owns: a reviewer (has a review link) or an origin
+// some active reviewer points at. Attention routing skips these — review status
+// already signals them.
+export const isUnderReview = (s: AppState, id: string): boolean => {
+  const t = getTerminalById(s, id)
+  if (t?.review) return true
+  return allTerminals(s).some((x) => x.review?.originTerminalId === id)
+}
+
+// "Project › Feature › Terminal" label for a terminal id; '' if not found.
+export function terminalPath(s: AppState, id: string): string {
+  for (const g of s.workspace.groups)
+    for (const f of g.features) {
+      const t = f.terminals.find((t) => t.id === id)
+      if (t) return `${g.name} › ${f.name} › ${t.name}`
+    }
+  return ''
 }

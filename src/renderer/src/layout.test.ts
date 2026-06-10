@@ -1,5 +1,41 @@
 import { describe, it, expect } from 'vitest'
-import { gridColumns, gridDimensions, gridLayout, paneMode } from './layout'
+import { gridColumns, gridDimensions, gridLayout, styledGridLayout, paneMode } from './layout'
+
+describe('styledGridLayout', () => {
+  it('auto keeps the balanced grid with the spanning pane last (big pane right)', () => {
+    expect(styledGridLayout(3, 'auto')).toEqual({ cols: 2, rows: 2, lastSpan: 2, spanFirst: false, flow: 'column' })
+    expect(styledGridLayout(4, 'auto')).toEqual({ cols: 2, rows: 2, lastSpan: 1, spanFirst: false, flow: 'column' })
+  })
+  it('auto-left mirrors auto: same shape, the FIRST pane gets the span (big pane left)', () => {
+    expect(styledGridLayout(3, 'auto-left')).toEqual({ cols: 2, rows: 2, lastSpan: 2, spanFirst: true, flow: 'column' })
+    expect(styledGridLayout(5, 'auto-left')).toEqual({ cols: 3, rows: 2, lastSpan: 2, spanFirst: true, flow: 'column' })
+  })
+  it('auto-left has nothing to mirror on gap-free counts', () => {
+    expect(styledGridLayout(4, 'auto-left')).toEqual({ cols: 2, rows: 2, lastSpan: 1, spanFirst: false, flow: 'column' })
+  })
+  it('auto-top transposes the grid: the FIRST pane spans the full top row', () => {
+    expect(styledGridLayout(3, 'auto-top')).toEqual({ cols: 2, rows: 2, lastSpan: 2, spanFirst: true, flow: 'row' })
+    expect(styledGridLayout(5, 'auto-top')).toEqual({ cols: 2, rows: 3, lastSpan: 2, spanFirst: true, flow: 'row' })
+  })
+  it('auto-bottom puts the spanning pane across the full bottom row', () => {
+    expect(styledGridLayout(3, 'auto-bottom')).toEqual({ cols: 2, rows: 2, lastSpan: 2, spanFirst: false, flow: 'row' })
+    expect(styledGridLayout(7, 'auto-bottom')).toEqual({ cols: 3, rows: 3, lastSpan: 3, spanFirst: false, flow: 'row' })
+  })
+  it('top/bottom on gap-free counts is a plain transposed grid', () => {
+    expect(styledGridLayout(4, 'auto-top')).toEqual({ cols: 2, rows: 2, lastSpan: 1, spanFirst: false, flow: 'row' })
+    expect(styledGridLayout(6, 'auto-bottom')).toEqual({ cols: 2, rows: 3, lastSpan: 1, spanFirst: false, flow: 'row' })
+  })
+  it('rows stacks every terminal one below another', () => {
+    expect(styledGridLayout(3, 'rows')).toEqual({ cols: 1, rows: 3, lastSpan: 1, spanFirst: false, flow: 'column' })
+  })
+  it('cols puts every terminal side by side', () => {
+    expect(styledGridLayout(3, 'cols')).toEqual({ cols: 3, rows: 1, lastSpan: 1, spanFirst: false, flow: 'column' })
+  })
+  it('never returns zero rows or columns', () => {
+    expect(styledGridLayout(0, 'rows')).toEqual({ cols: 1, rows: 1, lastSpan: 1, spanFirst: false, flow: 'column' })
+    expect(styledGridLayout(0, 'auto-top')).toEqual({ cols: 1, rows: 1, lastSpan: 1, spanFirst: false, flow: 'row' })
+  })
+})
 
 describe('gridColumns', () => {
   it('uses ceil(sqrt(n)) with a floor of 1', () => {

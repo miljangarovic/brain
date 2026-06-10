@@ -1,8 +1,8 @@
 {
-  "name": "orchestrix",
+  "name": "brain",
   "version": "0.1.0",
   "description": "Orchestrate, monitor and run many AI-agent terminals at once",
-  "desktopName": "orchestrix.desktop",
+  "desktopName": "brain.desktop",
   "main": "./out/main/index.js",
   "author": "Miljan Garovic <markogarovic1998@gmail.com>",
   "license": "MIT",
@@ -44,8 +44,8 @@
     "vitest": "^2.1.0"
   },
   "build": {
-    "appId": "com.orchestrix.app",
-    "productName": "OrchestriX",
+    "appId": "com.brain.app",
+    "productName": "Brain",
     "directories": {
       "buildResources": "build",
       "output": "release/${version}"

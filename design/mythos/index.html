@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MYTHOS — OrchestriX theme explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Karla:ital,wght@0,300;0,400;0,500;1,400&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0c14; --panel: #12141f; --line: #232639;
+  --fg: #c6cbe0; --fg-hi: #f0f2fc; --fg-dim: #6a7194;
+  --gold: #d4af37; --phos: #7ee8df;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Karla', sans-serif; color: var(--fg); background: var(--bg);
+  min-height: 100vh; padding: 56px 32px 80px;
+  background-image:
+    radial-gradient(900px 500px at 80% -10%, rgba(212,175,55,.06), transparent 60%),
+    radial-gradient(700px 500px at 0% 110%, rgba(126,232,223,.05), transparent 55%);
+}
+header { max-width: 1060px; margin: 0 auto 44px; text-align: center; }
+header h1 {
+  font-family: 'Marcellus', serif; font-size: 38px; font-weight: 400;
+  letter-spacing: .5em; text-indent: .5em; color: var(--fg-hi);
+  animation: in .8s ease-out both;
+}
+header p {
+  margin-top: 10px; font-size: 14px; color: var(--fg-dim); letter-spacing: .06em;
+  animation: in .8s .1s ease-out both;
+}
+header .rule {
+  width: 120px; height: 1px; margin: 22px auto 0;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+.grid {
+  max-width: 1060px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 22px;
+}
+.card {
+  display: block; text-decoration: none; color: inherit;
+  background: var(--panel); border: 1px solid var(--line);
+  overflow: hidden; position: relative;
+  transition: transform .3s cubic-bezier(.22,1,.36,1), border-color .3s, box-shadow .3s;
+  animation: in .7s ease-out both;
+}
+.card:nth-child(2) { animation-delay: .08s }
+.card:nth-child(3) { animation-delay: .16s }
+.card:nth-child(4) { animation-delay: .24s }
+.card:hover { transform: translateY(-4px); border-color: var(--gold); box-shadow: 0 24px 50px -28px rgba(0,0,0,.9); }
+.thumb { height: 240px; border-bottom: 1px solid var(--line); position: relative; overflow: hidden; }
+.thumb iframe {
+  width: 200%; height: 200%; transform: scale(.5); transform-origin: 0 0;
+  border: 0; pointer-events: none;
+}
+.thumb::after { content: ''; position: absolute; inset: 0; } /* swallow clicks */
+.meta { padding: 16px 18px 18px; display: flex; align-items: center; gap: 14px; }
+.meta .num { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--fg-dim); }
+.meta h2 { font-family: 'Marcellus', serif; font-weight: 400; font-size: 19px; letter-spacing: .18em; color: var(--fg-hi); }
+.meta p { font-size: 12px; color: var(--fg-dim); margin-top: 2px; }
+.chips { margin-left: auto; display: flex; gap: 5px; }
+.chips i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,.18); }
+footer { max-width: 1060px; margin: 40px auto 0; text-align: center; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--fg-dim); }
+@keyframes in { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+</style>
+</head>
+<body>
+<header>
+  <h1>MYTHOS</h1>
+  <p>OrchestriX — istraživanje nove teme · četiri pravca, četiri mita</p>
+  <div class="rule"></div>
+</header>
+
+<div class="grid">
+  <a class="card" href="01-olympus.html">
+    <div class="thumb"><iframe src="01-olympus.html" loading="lazy" tabindex="-1"></iframe></div>
+    <div class="meta">
+      <span class="num">I</span>
+      <div><h2>OLYMPOS</h2><p>svijetli mermer · zlatni list · egejsko plava · meander</p></div>
+      <div class="chips"><i style="background:#f3efe6"></i><i style="background:#d4af37"></i><i style="background:#1f4e79"></i></div>
+    </div>
+  </a>
+
+  <a class="card" href="02-hades.html">
+    <div class="thumb"><iframe src="02-hades.html" loading="lazy" tabindex="-1"></iframe></div>
+    <div class="meta">
+      <span class="num">II</span>
+      <div><h2>HADES</h2><p>obsidijan · žar · nar · urezana slova · Stiks</p></div>
+      <div class="chips"><i style="background:#0b0908"></i><i style="background:#ff6d3a"></i><i style="background:#c03546"></i></div>
+    </div>
+  </a>
+
+  <a class="card" href="03-yggdrasil.html">
+    <div class="thumb"><iframe src="03-yggdrasil.html" loading="lazy" tabindex="-1"></iframe></div>
+    <div class="meta">
+      <span class="num">III</span>
+      <div><h2>YGGDRASIL</h2><p>željezo · mahovina · runsko zlato · aurora</p></div>
+      <div class="chips"><i style="background:#0d1310"></i><i style="background:#d9a441"></i><i style="background:#58c9a4"></i></div>
+    </div>
+  </a>
+
+  <a class="card" href="04-oracle.html">
+    <div class="thumb"><iframe src="04-oracle.html" loading="lazy" tabindex="-1"></iframe></div>
+    <div class="meta">
+      <span class="num">IV</span>
+      <div><h2>ORACLE</h2><p>zvjezdana karta · srebro · fosfor · sazviježđa</p></div>
+      <div class="chips"><i style="background:#0a0d1d"></i><i style="background:#c3cbe3"></i><i style="background:#7ee8df"></i></div>
+    </div>
+  </a>
+</div>
+
+<footer>design / mythos · mock-ovi attention-routing UI-ja · otvori varijantu za pun ekran</footer>
+</body>
+</html>

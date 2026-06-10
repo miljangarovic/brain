@@ -27,7 +27,7 @@ export function NewGroupDialog({
   }
 
   const browse = async () => {
-    const dir = await window.orchestrix.pickDirectory()
+    const dir = await window.brain.pickDirectory()
     if (dir) setCwd(dir)
   }
 

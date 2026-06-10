@@ -12,7 +12,18 @@ export class PtyManager {
 
   create(opts: PtyCreateOptions): void {
     if (this.handles.has(opts.id)) return
-    const handle = this.spawn({ shell: opts.shell, cwd: opts.cwd, cols: opts.cols, rows: opts.rows })
+    let handle: PtyHandle
+    try {
+      handle = this.spawn({ shell: opts.shell, cwd: opts.cwd, cols: opts.cols, rows: opts.rows })
+    } catch (err) {
+      // node-pty throws synchronously when the shell is missing or forkpty/conpty
+      // fails — uncaught in main that's a fatal error dialog (one per restored
+      // terminal on boot). Surface it in the pane as data + exit instead.
+      const msg = err instanceof Error ? err.message : String(err)
+      this.dataCb(opts.id, `\x1b[31m[failed to start terminal: ${msg}]\x1b[0m\r\n`)
+      this.exitCb(opts.id, 1)
+      return
+    }
     handle.onData((data) => this.dataCb(opts.id, data))
     handle.onExit((code) => { this.exitCb(opts.id, code); this.handles.delete(opts.id) })
     this.handles.set(opts.id, handle)

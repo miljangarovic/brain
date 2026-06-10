@@ -5,7 +5,12 @@ import type { PtySpawner, PtyHandle } from '@shared/pty'
 import { describeDescendants } from './foregroundProc'
 
 export const nodePtySpawner: PtySpawner = ({ shell, cwd, cols, rows }) => {
-  const resolvedShell = shell || process.env.SHELL || '/bin/bash'
+  // SHELL is never set on Windows (and /bin/bash doesn't exist there) — fall
+  // back to the platform's command processor instead.
+  const platformShell = process.platform === 'win32'
+    ? (process.env.COMSPEC || 'cmd.exe')
+    : (process.env.SHELL || '/bin/bash')
+  const resolvedShell = shell || platformShell
   const resolvedCwd = cwd || os.homedir()
   const proc = pty.spawn(resolvedShell, [], {
     name: 'xterm-color',

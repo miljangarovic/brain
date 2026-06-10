@@ -4,15 +4,21 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { Terminal as TerminalModel } from '@shared/types'
-import { agentStartupCommand } from '../agents'
+import { agentResumeCommand } from '../agents'
 import { getXtermTheme, MONO_FONT } from '../theme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { registerTail, unregisterTail, readXtermTail } from '../attention/tailRegistry'
+import { findPathCandidates } from '../termLinks'
+import { markTouched } from '../attention/touched'
+import { classifyKeyEvent } from './termKeys'
 
 // `resume` is set only for agent terminals restored after an app restart: their
 // PTY spawns resuming the terminal's own prior conversation (by session id when
 // known — claude --resume / codex resume <id> — else the cwd's most recent) so it
 // continues instead of starting fresh. No effect for plain shells or freshly
-// created terminals. The exact command is resolved by agentStartupCommand.
+// created terminals — a fresh mount always uses the terminal's saved
+// startupCommand verbatim (it embeds any --session-id pin, and for reviewers
+// the whole review prompt).
 export function TerminalView({ terminal, active, resume }: { terminal: TerminalModel; active: boolean; resume?: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
@@ -27,12 +33,13 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
   const paste = useCallback(() => {
     const term = xtermRef.current
     if (!term) return
+    markTouched(terminal.id) // right-click paste also counts as engaging the terminal
     // term.paste() (not raw writePty) so bracketed-paste mode is honoured — agents
     // like claude/codex rely on it to receive multi-line pastes as a single block.
     void navigator.clipboard.readText().then((text) => {
       if (text) { term.paste(text); term.focus() }
     })
-  }, [])
+  }, [terminal.id])
   const selectAll = useCallback(() => {
     const term = xtermRef.current
     if (!term) return
@@ -59,43 +66,72 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     fitRef.current = fit
     try { fit.fit() } catch { /* host may be hidden */ }
 
-    window.orchestrix.createPty({
+    // Let attention routing read this terminal's recent output (to tell a
+    // permission prompt from a finished turn) when it goes idle.
+    registerTail(terminal.id, () => readXtermTail(term, 20))
+
+    // Ctrl+click on a printed file path opens it with the system default app.
+    // Plain click stays with the TUI — claude/codex run with mouse tracking on.
+    // Links are offered only for paths that actually exist on disk, resolved
+    // against this terminal's cwd in the main process.
+    const linkProvider = term.registerLinkProvider({
+      provideLinks: (lineNo, cb) => {
+        const lineText = term.buffer.active.getLine(lineNo - 1)?.translateToString(true) ?? ''
+        const cands = findPathCandidates(lineText)
+        if (cands.length === 0) { cb(undefined); return }
+        void window.brain.resolvePathLinks({ cwd: terminal.cwd, candidates: cands.map((c) => c.path) }).then((resolved) => {
+          const links = cands.flatMap((c, i) => {
+            const target = resolved[i]
+            if (!target) return []
+            return [{
+              // xterm link ranges are 1-based with an INCLUSIVE end column.
+              range: { start: { x: c.start + 1, y: lineNo }, end: { x: c.end, y: lineNo } },
+              text: c.text,
+              activate: (e: MouseEvent) => { if (e.ctrlKey || e.metaKey) window.brain.openPath(target) }
+            }]
+          })
+          cb(links.length > 0 ? links : undefined)
+        })
+      }
+    })
+
+    window.brain.createPty({
       id: terminal.id,
       cwd: terminal.cwd,
       shell: terminal.shell ?? '',
       cols: term.cols || 80,
       rows: term.rows || 24,
-      startupCommand: agentStartupCommand({ kind: terminal.kind, sessionId: terminal.sessionId, resume }) ?? terminal.startupCommand
+      startupCommand: (resume ? agentResumeCommand({ kind: terminal.kind, sessionId: terminal.sessionId }) : undefined) ?? terminal.startupCommand
     })
 
-    const offData = window.orchestrix.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
-    const offExit = window.orchestrix.onPtyExit((id) => {
+    const offData = window.brain.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
+    const offExit = window.brain.onPtyExit((id) => {
       if (id === terminal.id) term.write('\r\n\x1b[33m[process exited]\x1b[0m\r\n')
     })
-    const inputDisposable = term.onData((data) => window.orchestrix.writePty(terminal.id, data))
+    const inputDisposable = term.onData((data) => window.brain.writePty(terminal.id, data))
 
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== 'keydown') return true
+      // A real keypress in this terminal marks it "engaged" — attention's idle
+      // signals only fire for terminals you've actually worked in. (Must be a key
+      // event, NOT term.onData: xterm auto-replies to TUI queries via onData,
+      // which would falsely mark every agent touched on startup.)
+      if (e.type === 'keydown') markTouched(terminal.id)
 
-      // Shift+Enter → insert a newline (LF) instead of submitting (CR).
-      // Plain Enter still sends CR ("submit"); claude/codex and most readline/Ink
-      // TUIs treat a bare LF (same as Ctrl+J) as "insert newline".
-      if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey &&
-          (e.code === 'Enter' || e.code === 'NumpadEnter')) {
-        window.orchestrix.writePty(terminal.id, '\n')
-        return false
+      switch (classifyKeyEvent(e)) {
+        case 'newline':
+          window.brain.writePty(terminal.id, '\n')
+          return false
+        case 'copy':
+          copySelection()
+          return false
+        case 'paste':
+          paste()
+          return false
+        case 'swallow':
+          return false
+        default:
+          return true
       }
-
-      // Ctrl+Shift+C / Ctrl+Shift+V copy-paste
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-        copySelection()
-        return false
-      }
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyV') {
-        paste()
-        return false
-      }
-      return true
     })
 
     const ro = new ResizeObserver((entries) => {
@@ -107,7 +143,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
       if (!rect || rect.width === 0 || rect.height === 0) return
       try {
         fit.fit()
-        window.orchestrix.resizePty(terminal.id, term.cols, term.rows)
+        window.brain.resizePty(terminal.id, term.cols, term.rows)
       } catch { /* ignore */ }
     })
     ro.observe(host)
@@ -123,7 +159,9 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
       offData()
       offExit()
       inputDisposable.dispose()
+      linkProvider.dispose()
       ro.disconnect()
+      unregisterTail(terminal.id)
       term.dispose()
     }
     // Mount-once: the PTY lives as long as the terminal exists in the workspace,
@@ -139,7 +177,7 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     if (!term || !fit) return
     try {
       fit.fit()
-      window.orchestrix.resizePty(terminal.id, term.cols, term.rows)
+      window.brain.resizePty(terminal.id, term.cols, term.rows)
       term.focus()
     } catch { /* ignore */ }
   }, [active, terminal.id])

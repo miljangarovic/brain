@@ -1,20 +1,22 @@
 // src/renderer/src/App.tsx
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useStore } from './useStore'
-import { removedIds } from './ptyReaper'
+import { removedIds, pruneRecord } from './ptyReaper'
+import { shouldSpawn } from './spawnGate'
 import {
   createInitialState, addGroup, renameGroup, deleteGroup, toggleGroupCollapsed, moveGroup,
-  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, moveFeature,
-  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
+  addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
+  addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview
 } from './store'
+import { useAttention } from './attention/useAttention'
 import { migrateWorkspace } from './migrate'
 import { createId } from '@shared/id'
-import { AGENTS, detectAgent, type AgentKind } from './agents'
+import { AGENTS, detectAgent, agentLaunchCommand, type AgentKind } from './agents'
 import type { ReviewStatus } from '@shared/types'
 import { useReview } from './review/useReview'
-import { gridLayout } from './layout'
+import { styledGridLayout } from './layout'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { FeatureHeader } from './components/FeatureHeader'
@@ -27,6 +29,7 @@ export default function App() {
   const { state, setState, apply } = useStore()
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [confirm, setConfirm] = useState<{ message: string; action: () => void } | null>(null)
   const askDelete = (message: string, action: () => void) => setConfirm({ message, action })
   // Id of a just-added shell terminal whose rename input the sidebar should auto-open.
@@ -48,7 +51,7 @@ export default function App() {
 
   const [liveAgents, setLiveAgents] = useState<Record<string, AgentKind | undefined>>({})
   useEffect(() => {
-    return window.orchestrix.onPtyProc((id, process) => {
+    return window.brain.onPtyProc((id, process) => {
       setLiveAgents((m) => ({ ...m, [id]: detectAgent(process) ?? undefined }))
     })
   }, [])
@@ -60,7 +63,7 @@ export default function App() {
   // busy also clears its green 'approved' review dot — its next request has started.
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   useEffect(() => {
-    return window.orchestrix.onPtyBusy((id, b) => {
+    return window.brain.onPtyBusy((id, b) => {
       setBusy((m) => ({ ...m, [id]: b }))
       if (b) setReviewStatus((m) => (m[id] === 'approved' ? { ...m, [id]: undefined } : m))
     })
@@ -71,9 +74,14 @@ export default function App() {
     (id: string, status: ReviewStatus | undefined) => setReviewStatus((m) => ({ ...m, [id]: status })),
     []
   )
-  const review = useReview(state, apply, setStatus)
-  useEffect(() => window.orchestrix.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
-  useEffect(() => window.orchestrix.onPtyBusy(review.handleBusy), [review.handleBusy])
+  const review = useReview(state, apply, setStatus, reviewStatus)
+  useEffect(() => window.brain.onFsChanged(review.handleFsChanged), [review.handleFsChanged])
+  useEffect(() => window.brain.onPtyBusy(review.handleBusy), [review.handleBusy])
+
+  const attention = useAttention(state, apply)
+  useEffect(() => window.brain.onPtyBusy(attention.handleBusy), [attention.handleBusy])
+  useEffect(() => window.brain.onPtyExit(attention.handleExit), [attention.handleExit])
+  useEffect(() => window.brain.onNotificationClick(attention.handleNotificationClick), [attention.handleNotificationClick])
 
   // Agent terminals present at first load are "restored" — their PTYs should
   // spawn with the agent's resume command so the previous session continues
@@ -81,20 +89,34 @@ export default function App() {
   // this set, so they launch normally. Held in a ref (it never changes after the
   // initial load and must not trigger re-renders).
   const resumeIdsRef = useRef<Set<string>>(new Set())
+  // Terminals present at first load stay cold (no PTY, no agent resume) until
+  // the user explicitly opens one — booting a big workspace must not launch
+  // everything at once. Terminals created later auto-start (see shouldSpawn).
+  const bootIdsRef = useRef<Set<string>>(new Set())
+  const [startedIds, setStartedIds] = useState<ReadonlySet<string>>(new Set())
+  const markStarted = useCallback((id: string) => {
+    setStartedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+  }, [])
   useEffect(() => {
-    window.orchestrix.loadWorkspace().then((ws) => {
+    window.brain.loadWorkspace().then((ws) => {
       const initial = createInitialState(migrateWorkspace(ws))
       resumeIdsRef.current = new Set(
         allTerminals(initial).filter((t) => t.kind === 'claude' || t.kind === 'codex').map((t) => t.id)
       )
+      bootIdsRef.current = new Set(allTerminals(initial).map((t) => t.id))
       setState(initial)
       setLoaded(true)
+    }).catch((err) => {
+      // `loaded` stays false, keeping the save effect gated off — a failed load
+      // must never let an empty in-memory workspace overwrite the file on disk.
+      console.error('[brain] failed to load workspace:', err)
+      setLoadError(true)
     })
   }, [setState])
 
   useEffect(() => {
     if (!loaded) return
-    window.orchestrix.saveWorkspace(state.workspace)
+    window.brain.saveWorkspace(state.workspace)
   }, [state.workspace, loaded])
 
   // Kill a terminal's PTY only when it actually leaves the workspace (delete
@@ -104,7 +126,15 @@ export default function App() {
   useEffect(() => {
     const ids = new Set(allTerminals(state).map((t) => t.id))
     if (prevTermIds.current) {
-      for (const id of removedIds(prevTermIds.current, ids)) window.orchestrix.killPty(id)
+      const removed = removedIds(prevTermIds.current, ids)
+      for (const id of removed) window.brain.killPty(id)
+      if (removed.length > 0) {
+        // Drop the dead terminals' per-id UI state so these Records don't grow
+        // for the whole session (and a future id reuse can't inherit stale state).
+        setLiveAgents((m) => pruneRecord(m, removed))
+        setBusy((m) => pruneRecord(m, removed))
+        setReviewStatus((m) => pruneRecord(m, removed))
+      }
     }
     prevTermIds.current = ids
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,6 +156,7 @@ export default function App() {
   }
   const startReview = (args: ReviewStartArgs) => {
     if (!reviewReq) return
+    markStarted(reviewReq.id) // the loop relays into the origin's PTY — it must be running
     void review.startReview({ originTerminalId: reviewReq.id, ...args })
     setReviewReq(null)
   }
@@ -150,6 +181,7 @@ export default function App() {
       if (visible.length === 0) return
       const idx = visible.findIndex((t) => t.id === state.activeTerminalId)
       const next = visible[(idx + dir + visible.length) % visible.length]
+      markStarted(next.id)
       apply((s) => setActiveTerminal(s, next.id))
     }
     window.addEventListener('keydown', onKey)
@@ -163,13 +195,13 @@ export default function App() {
     // resumes THIS terminal's session, not the cwd's most-recent one. codex can't,
     // so it launches plain and we detect its session id from the rollout it writes.
     const sessionId = kind === 'claude' ? createId() : undefined
-    apply((s) => addTerminal(s, featureId, { id, name: a.defaultName, startupCommand: a.command, kind, sessionId }))
+    apply((s) => addTerminal(s, featureId, { id, name: a.defaultName, startupCommand: agentLaunchCommand(kind, sessionId), kind, sessionId }))
     if (kind === 'codex') {
       const cwd = state.workspace.groups.find((g) => g.features.some((f) => f.id === featureId))?.cwd ?? ''
       // Exclude ids already on other terminals so a fresh codex never re-grabs a
       // session that's merely being resumed (its rollout looks recent on disk).
       const exclude = allTerminals(state).map((t) => t.sessionId).filter((s): s is string => !!s)
-      void window.orchestrix.captureAgentSession({ kind, cwd, exclude }).then((sid) => {
+      void window.brain.captureAgentSession({ kind, cwd, exclude }).then((sid) => {
         if (sid) apply((s) => setTerminalSessionId(s, id, sid))
       })
     }
@@ -182,13 +214,20 @@ export default function App() {
   // ALL terminals stay mounted so their shells keep running; hidden ones are just
   // omitted from the tab bar / grid (mounted but display:none).
   const terminals = allTerminals(state)
+  const attentionItems = useMemo(() => attention.queue.map((q) => ({
+    terminalId: q.terminalId, state: q.state, lastLine: q.lastLine, path: terminalPath(state, q.terminalId),
+  })), [attention.queue, state.workspace]) // eslint-disable-line react-hooks/exhaustive-deps -- terminalPath reads only state.workspace
+  // Both the tab bar and the grid show the visible (non-hidden) set: X-ing a
+  // tab prunes its pane from the open grid too, and ENTERING grid mode clears
+  // the feature's hidden set (store.toggleFeatureViewMode), so every terminal
+  // returns on the next grid open.
   const featureVisible = (activeFeature?.terminals ?? []).filter((t) => !state.hidden.includes(t.id))
   const gridMode = (activeFeature?.viewMode ?? 'tabs') === 'grid'
   const featureTerminalIds = new Set(featureVisible.map((t) => t.id))
-  const { cols, rows, lastSpan } = gridLayout(featureVisible.length)
-  // Column-major fill leaves any gap at the bottom of the last column, so the last
-  // pane stretches over it to keep the rightmost column full height (odd counts).
-  const lastFeatureTerminalId = featureVisible[featureVisible.length - 1]?.id
+  const { cols, rows, lastSpan, spanFirst, flow: gridFlow } = styledGridLayout(featureVisible.length, activeFeature?.gridStyle ?? 'auto')
+  // Auto-fill leaves any gap in one column (column flow) or one row (row flow);
+  // the spanning pane stretches over it — first or last pane, per gridStyle.
+  const spanTerminalId = spanFirst ? featureVisible[0]?.id : featureVisible[featureVisible.length - 1]?.id
 
   return (
     <div className="flex h-screen text-fg bg-panel">
@@ -199,7 +238,7 @@ export default function App() {
         activeGroupId={state.activeGroupId}
         liveAgents={liveAgents}
         busy={busy}
-        onSelectTerminal={(id) => apply((s) => (isHidden(s, id) ? showTerminal(s, id) : setActiveTerminal(s, id)))}
+        onSelectTerminal={(id) => { markStarted(id); apply((s) => showTerminal(s, id)) }}
         onToggleGroup={(id) => apply((s) => toggleGroupCollapsed(s, id))}
         onToggleFeature={(id) => apply((s) => toggleFeatureCollapsed(s, id))}
         onAddGroup={() => setGroupDialogOpen(true)}
@@ -230,12 +269,19 @@ export default function App() {
         }}
         onOpenInFiles={(gid) => {
           const g = state.workspace.groups.find((x) => x.id === gid)
-          window.orchestrix.openPath(g?.cwd ?? '')
+          window.brain.openPath(g?.cwd ?? '')
         }}
         reviewStatus={reviewStatus}
         onReviewTerminal={(id, reviewer) => setReviewReq({ id, reviewer })}
         pendingRenameTerminalId={renameTerminalId}
         onPendingRenameConsumed={() => setRenameTerminalId(null)}
+        attention={attention.attention}
+        attentionItems={attentionItems}
+        attentionMuted={attention.muted}
+        onAttentionSelect={(id) => { markStarted(id); apply((s) => showTerminal(s, id)); attention.clear(id) }}
+        onAttentionClear={attention.clear}
+        onAttentionClearAll={attention.clearAll}
+        onToggleAttentionMute={attention.toggleMute}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -251,6 +297,8 @@ export default function App() {
             onMoreRounds={(rid) => void review.moreRounds(rid)}
             onAcceptPhase={(rid) => review.acceptPhase(rid)}
             onStopLoop={(rid) => review.stopLoop(rid)}
+            gridStyle={activeFeature.gridStyle ?? 'auto'}
+            onSetGridStyle={(gs) => apply((s) => setFeatureGridStyle(s, activeFeature.id, gs))}
           />
         )}
         <TabBar
@@ -258,19 +306,24 @@ export default function App() {
           activeId={state.activeTerminalId}
           liveAgents={liveAgents}
           busy={busy}
-          onSelect={(id) => apply((s) => setActiveTerminal(s, id))}
+          onSelect={(id) => { markStarted(id); apply((s) => setActiveTerminal(s, id)) }}
           onClose={(id) => apply((s) => hideTerminal(s, id))}
           reviewStatus={reviewStatus}
+          attention={attention.attention}
         />
 
         <div
           className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-2 p-2 bg-panel' : ''}`}
-          style={gridMode ? { gridAutoFlow: 'column', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
+          style={gridMode ? { gridAutoFlow: gridFlow, gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
         >
           {featureVisible.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
-              <span className="text-2xl font-semibold tracking-tight text-fg">OrchestriX</span>
-              <span className="text-sm">{activeGroup ? 'Add a terminal or open one from the sidebar.' : 'Create a project to get started.'}</span>
+              <span className="text-2xl font-semibold tracking-tight text-fg">Brain</span>
+              <span className="text-sm">
+                {loadError
+                  ? 'Workspace failed to load — saving is disabled to protect your data. Restart the app to retry.'
+                  : activeGroup ? 'Add a terminal or open one from the sidebar.' : 'Create a project to get started.'}
+              </span>
             </div>
           )}
           {terminals.map((t) => {
@@ -302,20 +355,27 @@ export default function App() {
                 clearGridDrag()
               }
             } : undefined
+            // Review-linked terminals are exempt from cold start: the loop's
+            // relay writes into the origin's PTY and the reviewer must run to
+            // produce its verdict, so a restored mid-review pair stays live.
+            const started = shouldSpawn(t.id, bootIdsRef.current, startedIds) || isUnderReview(state, t.id)
             return (
               <TerminalPane
                 key={t.id}
                 terminal={t}
                 active={isActive}
                 gridded={griddedHere}
-                gridRowSpan={griddedHere && t.id === lastFeatureTerminalId ? lastSpan : undefined}
+                gridRowSpan={griddedHere && gridFlow === 'column' && t.id === spanTerminalId ? lastSpan : undefined}
+                gridColSpan={griddedHere && gridFlow === 'row' && t.id === spanTerminalId ? lastSpan : undefined}
                 visibleInTabs={inFeature && !gridMode && isActive}
                 busy={!!busy[t.id]}
                 liveAgent={liveAgents[t.id]}
                 reviewStatus={reviewStatus[t.id]}
-                onActivate={() => apply((s) => setActiveTerminal(s, t.id))}
+                onActivate={() => { markStarted(t.id); apply((s) => setActiveTerminal(s, t.id)) }}
                 dnd={dnd}
                 resume={resumeIdsRef.current.has(t.id)}
+                started={started}
+                onStart={() => markStarted(t.id)}
               />
             )
           })}

@@ -1,8 +1,8 @@
-import type { OrchestrixApi } from '@shared/api'
+import type { BrainApi } from '@shared/api'
 
 declare global {
   interface Window {
-    orchestrix: OrchestrixApi
+    brain: BrainApi
   }
 }
 

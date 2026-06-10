@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MYTHOS · Hades — OrchestriX theme mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Spectral:ital,wght@0,300;0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── HADES ─ obsidian, ember, pomegranate ─ engraved dark ────────────────────
+   The app as the hall of the underworld: basalt black, text carved into stone,
+   ember-orange attention that smoulders, the Styx as a living seam of light. */
+:root {
+  --void:        #0b0908;
+  --basalt:      #131010;
+  --basalt-2:    #1a1514;
+  --carve:       #241d1b;
+  --seam:        #2e2422;
+  --ash:         #a89d96;
+  --ash-bright:  #e8ddd4;
+  --ash-dim:     #6b5f58;
+  --ember:       #ff6d3a;
+  --ember-deep:  #c2451d;
+  --ember-soft:  rgba(255,109,58,.12);
+  --pomegranate: #c03546;
+  --gold-dim:    #9a7b3f;
+  --styx:        #58c9b4;
+  --waiting:     #ffb03a;
+  --done:        #6fa8dc;
+  --error:       #e05252;
+  --display: 'Cinzel', serif;
+  --body: 'Spectral', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: var(--body); color: var(--ash);
+  background:
+    radial-gradient(900px 500px at 80% 115%, rgba(194,69,29,.16), transparent 60%),
+    radial-gradient(700px 420px at 8% -10%, rgba(192,53,70,.07), transparent 55%),
+    var(--void);
+  overflow: hidden;
+}
+/* basalt grain */
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .4; z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+/* drifting embers */
+.embers { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+.embers i {
+  position: absolute; bottom: -8px; width: 3px; height: 3px; border-radius: 50%;
+  background: var(--ember); filter: blur(.4px);
+  box-shadow: 0 0 8px 1px rgba(255,109,58,.8);
+  animation: float linear infinite;
+  opacity: 0;
+}
+.embers i:nth-child(1) { left: 12%; animation-duration: 11s; animation-delay: 0s }
+.embers i:nth-child(2) { left: 30%; animation-duration: 14s; animation-delay: 3s }
+.embers i:nth-child(3) { left: 52%; animation-duration: 9s;  animation-delay: 6s }
+.embers i:nth-child(4) { left: 68%; animation-duration: 13s; animation-delay: 1.5s }
+.embers i:nth-child(5) { left: 84%; animation-duration: 10s; animation-delay: 4.5s }
+.embers i:nth-child(6) { left: 93%; animation-duration: 16s; animation-delay: 8s }
+@keyframes float {
+  0% { transform: translateY(0) translateX(0); opacity: 0 }
+  8% { opacity: .9 }
+  60% { opacity: .5 }
+  100% { transform: translateY(-105vh) translateX(-30px); opacity: 0 }
+}
+
+.app { display: flex; height: 100vh; position: relative; z-index: 1; }
+
+/* ── sidebar ── */
+.sidebar {
+  width: 270px; flex: none; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, var(--basalt), var(--void));
+  border-right: 1px solid var(--seam);
+  animation: emerge .9s ease-out both;
+}
+.brand { padding: 20px 16px 12px; text-align: center; position: relative; }
+.brand h1 {
+  font-family: var(--display); font-weight: 700; font-size: 19px;
+  letter-spacing: .42em; text-indent: .42em; color: var(--ash-bright);
+  /* engraved */
+  text-shadow: 0 -1px 0 rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.07);
+}
+.brand small {
+  display: block; margin-top: 4px; font-size: 9px; letter-spacing: .3em;
+  text-transform: uppercase; color: var(--ember-deep);
+}
+/* the Styx — a living seam */
+.styx {
+  height: 1px; margin: 10px 14px;
+  background: linear-gradient(90deg, transparent, var(--ember) 30%, var(--pomegranate) 55%, var(--ember) 75%, transparent);
+  background-size: 200% 100%;
+  animation: flow 6s linear infinite;
+  box-shadow: 0 0 12px rgba(255,109,58,.35);
+}
+@keyframes flow { to { background-position: -200% 0 } }
+
+.bell {
+  margin: 6px 12px 12px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px;
+  background: linear-gradient(180deg, var(--carve), var(--basalt));
+  border: 1px solid var(--seam); border-radius: 3px;
+  cursor: pointer; transition: border-color .25s, box-shadow .25s;
+  animation: emerge .9s .1s ease-out both;
+}
+.bell:hover { border-color: var(--ember-deep); box-shadow: 0 0 18px -6px rgba(255,109,58,.5); }
+.bell svg { width: 15px; height: 15px; stroke: var(--ember); fill: none; stroke-width: 1.8;
+  filter: drop-shadow(0 0 5px rgba(255,109,58,.7)); }
+.bell .label { flex: 1; font-family: var(--display); font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--ash); }
+.bell .count {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 2px;
+  display: grid; place-items: center; font-family: var(--mono); font-size: 12px;
+  color: #1a0c05; background: var(--ember);
+  box-shadow: 0 0 14px rgba(255,109,58,.7);
+  animation: smoulder 2.2s ease-in-out infinite;
+}
+@keyframes smoulder { 0%,100% { box-shadow: 0 0 8px rgba(255,109,58,.5) } 50% { box-shadow: 0 0 20px rgba(255,109,58,.95) } }
+
+.tree { flex: 1; overflow-y: auto; padding: 4px 8px 16px; }
+.row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 2px; cursor: pointer; transition: background .15s;
+}
+.row:hover { background: var(--ember-soft); }
+.row .twist { width: 9px; font-size: 9px; color: var(--ember-deep); flex: none; }
+.project { margin-bottom: 6px; animation: emerge .8s ease-out both; }
+.project:nth-of-type(2) { animation-delay: .15s } .project:nth-of-type(3) { animation-delay: .25s }
+.project > .row { font-family: var(--display); font-size: 13px; font-weight: 600; letter-spacing: .12em; color: var(--ash-bright); }
+.feature { margin-left: 13px; border-left: 1px solid var(--seam); padding-left: 5px; }
+.feature > .row { font-size: 12px; font-style: italic; color: var(--ash-dim); }
+.feature > .row.active { color: var(--ember); background: linear-gradient(90deg, var(--ember-soft), transparent); }
+.term { margin-left: 15px; border-left: 1px solid var(--seam); padding-left: 5px; }
+.term .row { font-size: 13px; color: var(--ash); }
+.term .row.selected {
+  background: linear-gradient(90deg, rgba(255,109,58,.16), transparent);
+  box-shadow: inset 2px 0 0 var(--ember); color: var(--ash-bright);
+}
+.kind { font-family: var(--mono); font-size: 10px; color: var(--gold-dim); width: 14px; text-align: center; flex: none; }
+.name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.dot.waiting { background: var(--waiting); box-shadow: 0 0 9px rgba(255,176,58,.9); animation: smoulder 1.8s infinite; }
+.dot.done    { background: var(--done); box-shadow: 0 0 7px rgba(111,168,220,.7); }
+.dot.error   { background: var(--error); box-shadow: 0 0 8px rgba(224,82,82,.8); }
+.spin {
+  width: 10px; height: 10px; flex: none; border-radius: 50%;
+  border: 1.6px solid var(--seam); border-top-color: var(--ember);
+  animation: rot 1s linear infinite;
+}
+@keyframes rot { to { transform: rotate(360deg) } }
+
+.oath {
+  padding: 12px 16px; border-top: 1px solid var(--seam);
+  font-size: 10.5px; font-style: italic; color: var(--ash-dim); text-align: center;
+}
+
+/* ── main ── */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.tabs {
+  display: flex; gap: 0; padding: 0 14px;
+  background: var(--basalt); border-bottom: 1px solid var(--seam);
+}
+.tab {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 18px; font-size: 12.5px; color: var(--ash-dim);
+  border-right: 1px solid var(--seam); cursor: pointer; position: relative;
+  transition: color .2s, background .2s;
+  animation: emerge .7s ease-out both;
+}
+.tab:first-child { border-left: 1px solid var(--seam); }
+.tab:nth-child(2) { animation-delay: .08s } .tab:nth-child(3) { animation-delay: .16s }
+.tab:hover { color: var(--ash); background: var(--basalt-2); }
+.tab.active { color: var(--ash-bright); background: var(--basalt-2); }
+.tab.active::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--ember), transparent);
+  box-shadow: 0 0 10px rgba(255,109,58,.8);
+}
+.tab .x { color: var(--ash-dim); margin-left: 2px; } .tab .x:hover { color: var(--error); }
+
+.feature-bar { display: flex; align-items: baseline; gap: 12px; padding: 14px 22px 10px; }
+.feature-bar .crumb { font-family: var(--display); font-size: 15px; font-weight: 600; letter-spacing: .14em; color: var(--ash-bright);
+  text-shadow: 0 -1px 0 rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.06); }
+.feature-bar .crumb em { font-style: normal; color: var(--ember); padding: 0 8px; }
+.feature-bar .spacer { flex: 1; }
+.view-toggle {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--ash-dim); border: 1px solid var(--seam); border-radius: 2px;
+  padding: 4px 10px; cursor: pointer; background: none; transition: all .2s;
+}
+.view-toggle:hover { color: var(--ember); border-color: var(--ember-deep); }
+
+/* terminal — a slab over the pit */
+.stage { flex: 1; padding: 0 22px 22px; display: flex; gap: 16px; min-height: 0; }
+.slab {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+  background: linear-gradient(180deg, #100d0c, #0c0a09);
+  border: 1px solid var(--seam); border-radius: 4px;
+  box-shadow: 0 0 0 1px #000, 0 24px 60px -28px rgba(255,109,58,.25), inset 0 1px 0 rgba(255,255,255,.04);
+  animation: emerge 1s .15s ease-out both;
+  position: relative; overflow: hidden;
+}
+.slab::before { /* heat shimmer at the bottom */
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 90px;
+  background: linear-gradient(0deg, rgba(194,69,29,.14), transparent);
+  pointer-events: none;
+}
+.slab-head {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+  border-bottom: 1px solid var(--seam); font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: .14em; color: var(--ash-dim);
+}
+.slab-head .dot { width: 6px; height: 6px; }
+.screen { flex: 1; padding: 14px 18px; overflow: hidden; font-family: var(--mono); font-size: 12.5px; line-height: 1.8; color: var(--ash); }
+.screen .dim { color: var(--ash-dim); }
+.screen .ember { color: var(--ember); }
+.screen .green { color: #8fbf7f; }
+.screen .blue { color: var(--done); }
+.prompt-box {
+  margin: 10px 0; padding: 11px 15px; max-width: 580px;
+  border: 1px solid var(--ember-deep); border-radius: 3px;
+  background: var(--ember-soft);
+  box-shadow: 0 0 24px -8px rgba(255,109,58,.4), inset 0 0 18px -10px rgba(255,109,58,.5);
+}
+.prompt-box .q { color: var(--ash-bright); }
+.choice { color: var(--ash-dim); padding-left: 12px; }
+.choice.sel { color: var(--ember); text-shadow: 0 0 8px rgba(255,109,58,.6); }
+.caret { display: inline-block; width: 8px; height: 15px; background: var(--ember); vertical-align: -2px; animation: blink 1.1s steps(1) infinite; box-shadow: 0 0 8px rgba(255,109,58,.8); }
+@keyframes blink { 50% { opacity: 0 } }
+
+.statusline {
+  display: flex; gap: 18px; padding: 7px 22px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ash-dim); border-top: 1px solid var(--seam); background: var(--basalt);
+}
+.statusline b { color: var(--ember); font-weight: 500; }
+@keyframes emerge { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+</style>
+</head>
+<body>
+<div class="embers"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <h1>HADES</h1>
+      <small>OrchestriX · Mythos II</small>
+    </div>
+    <div class="styx"></div>
+
+    <div class="bell">
+      <svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 20a1.5 1.5 0 0 0 3 0"/></svg>
+      <span class="label">Priziv</span>
+      <span class="count">2</span>
+    </div>
+
+    <nav class="tree">
+      <div class="project">
+        <div class="row"><span class="twist">▾</span><span class="name">ORCHESTRIX</span></div>
+        <div class="feature">
+          <div class="row active"><span class="twist">▾</span><span class="name">attention-routing</span></div>
+          <div class="term">
+            <div class="row selected"><span class="kind">λ</span><span class="name">impl · claude</span><span class="dot waiting"></span></div>
+            <div class="row"><span class="kind">∴</span><span class="name">review: codex</span><span class="spin"></span></div>
+            <div class="row"><span class="kind">$</span><span class="name">shell</span></div>
+          </div>
+        </div>
+        <div class="feature">
+          <div class="row"><span class="twist">▸</span><span class="name">review-pipeline</span></div>
+        </div>
+      </div>
+      <div class="project">
+        <div class="row"><span class="twist">▾</span><span class="name">MAPPIT</span></div>
+        <div class="feature">
+          <div class="row"><span class="twist">▾</span><span class="name">map-engine</span></div>
+          <div class="term">
+            <div class="row"><span class="kind">λ</span><span class="name">claude</span><span class="dot done"></span></div>
+            <div class="row"><span class="kind">$</span><span class="name">deploy</span><span class="dot error"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="project">
+        <div class="row"><span class="twist">▸</span><span class="name">BANKWARDS</span></div>
+      </div>
+    </nav>
+
+    <div class="oath">»Ono što uđe u red, iz reda i izlazi.«</div>
+  </aside>
+
+  <main class="main">
+    <div class="tabs">
+      <div class="tab active"><span class="dot waiting"></span> impl · claude <span class="x">×</span></div>
+      <div class="tab"><span class="spin"></span> review: codex <span class="x">×</span></div>
+      <div class="tab">shell <span class="x">×</span></div>
+    </div>
+
+    <div class="feature-bar">
+      <span class="crumb">ORCHESTRIX <em>⁂</em> ATTENTION-ROUTING</span>
+      <span class="spacer"></span>
+      <button class="view-toggle">⊞ grid</button>
+    </div>
+
+    <div class="stage">
+      <div class="slab">
+        <div class="slab-head"><span class="dot waiting"></span> impl · claude — čeka tvoj odgovor</div>
+        <div class="screen">
+<div><span class="dim">∙</span> <span class="blue">Reading</span> src/renderer/src/attention/useAttention.ts <span class="dim">(119 lines)</span></div>
+<div><span class="dim">∙</span> <span class="green">✓</span> 291 tests passed <span class="dim">· typecheck clean</span></div>
+<div><span class="dim">∙</span> <span class="blue">Edit</span> src/renderer/src/App.tsx</div>
+<div class="prompt-box">
+  <div class="q">Do you want to make this edit to <span class="ember">App.tsx</span>?</div>
+  <div class="choice sel">❯ 1. Yes</div>
+  <div class="choice">  2. Yes, allow all edits during this session</div>
+  <div class="choice">  3. No, and tell Claude what to do differently</div>
+</div>
+<div><span class="ember">›</span> <span class="caret"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="statusline">
+      <span>duša: <b>claude</b></span>
+      <span>session <b>f1d8…</b></span>
+      <span>obol <b>2</b></span>
+      <span style="margin-left:auto">MYTHOS / HADES — obsidian · ember · pomegranate</span>
+    </div>
+  </main>
+</div>
+</body>
+</html>

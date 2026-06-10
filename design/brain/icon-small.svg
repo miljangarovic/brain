@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- BRAIN — simplified mark for 16/24/32 px rasters: solid silhouette,
+       no inner detail (it would turn to mush), cursor kept as the one accent. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22272f"/>
+      <stop offset="1" stop-color="#12151b"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2bbac5"/>
+      <stop offset="1" stop-color="#5fa8f5"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="200" fill="url(#tile)"/>
+  <g transform="translate(512 500) scale(1.22) translate(-512 -512)">
+  <path d="M 488 230
+           C 420 210 352 236 322 288
+           C 252 292 206 348 212 416
+           C 162 454 150 526 186 582
+           C 178 652 226 712 300 724
+           C 336 774 410 790 466 764
+           C 484 756 500 748 512 744
+           C 524 748 540 756 558 764
+           C 614 790 688 774 724 724
+           C 798 712 846 652 838 582
+           C 874 526 862 454 812 416
+           C 818 348 772 292 702 288
+           C 672 236 604 210 536 230
+           C 518 236 506 236 488 230 Z"
+        fill="url(#ink)" stroke="url(#ink)" stroke-width="50" stroke-linejoin="round"/>
+  <rect x="690" y="750" width="130" height="170" rx="24" fill="#eef1f6"/>
+  </g>
+</svg>

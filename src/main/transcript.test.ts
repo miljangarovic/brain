@@ -33,6 +33,42 @@ describe('newestJsonl', () => {
   })
 })
 
+describe('resolveTranscript (codex)', () => {
+  const mkDay = async (home: string, y: string, m: string, d: string) => {
+    const dir = join(home, '.codex', 'sessions', y, m, d)
+    await fs.mkdir(dir, { recursive: true })
+    return dir
+  }
+
+  it('finds the newest rollout across the dated session dirs', async () => {
+    const home = await mktmp()
+    const d1 = await mkDay(home, '2026', '06', '09')
+    const d2 = await mkDay(home, '2026', '06', '10')
+    await fs.writeFile(join(d1, 'rollout-old.jsonl'), '{}', 'utf8')
+    await new Promise((r) => setTimeout(r, 10))
+    await fs.writeFile(join(d2, 'rollout-new.jsonl'), '{}', 'utf8')
+    expect(await resolveTranscript({ home, cwd: '/x', kind: 'codex' })).toBe(join(d2, 'rollout-new.jsonl'))
+    await fs.rm(home, { recursive: true, force: true })
+  })
+
+  it('prefers a resumed (fresher-mtime) rollout sitting in an older day dir', async () => {
+    const home = await mktmp()
+    const d1 = await mkDay(home, '2026', '06', '09')
+    const d2 = await mkDay(home, '2026', '06', '10')
+    await fs.writeFile(join(d2, 'rollout-today.jsonl'), '{}', 'utf8')
+    await new Promise((r) => setTimeout(r, 10))
+    await fs.writeFile(join(d1, 'rollout-resumed.jsonl'), '{}', 'utf8') // resumed → fresher mtime
+    expect(await resolveTranscript({ home, cwd: '/x', kind: 'codex' })).toBe(join(d1, 'rollout-resumed.jsonl'))
+    await fs.rm(home, { recursive: true, force: true })
+  })
+
+  it('returns null when there are no codex sessions at all', async () => {
+    const home = await mktmp()
+    expect(await resolveTranscript({ home, cwd: '/x', kind: 'codex' })).toBeNull()
+    await fs.rm(home, { recursive: true, force: true })
+  })
+})
+
 describe('resolveTranscript', () => {
   it('finds the newest claude session for the cwd', async () => {
     const home = await mktmp()

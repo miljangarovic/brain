@@ -1,15 +1,17 @@
 // src/main/ipc.ts
-import { ipcMain, BrowserWindow, dialog, shell } from 'electron'
+import { ipcMain, BrowserWindow, dialog, shell, Notification } from 'electron'
 import * as os from 'os'
 import { IPC } from '@shared/ipc'
 import { PtyManager } from './ptyManager'
 import { createBusyTracker } from './busyTracker'
-import { loadWorkspace, createDebouncedSaver } from './persistence'
+import { createDebouncedSaver } from './persistence'
 import type { Workspace, ReviewPhase } from '@shared/types'
 import type { PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { createReviewWatcher } from './reviewWatcher'
+import { createNotifier } from './notifications'
 import { resolveTranscript } from './transcript'
+import { resolveExistingPaths } from './pathLinks'
 import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
 
@@ -42,11 +44,15 @@ export function registerIpc(opts: {
   ptyManager.onData((id, data) => { send(IPC.ptyData, { id, data }); busy.touch(id) })
   ptyManager.onExit((id, code) => { send(IPC.ptyExit, { id, code }); busy.end(id) })
 
-  ipcMain.handle(IPC.workspaceLoad, () => loadWorkspace(workspacePath))
+  // loadLatest flushes any pending debounced save first, so a renderer reload
+  // inside the debounce window can't read (and then re-persist) stale state.
+  ipcMain.handle(IPC.workspaceLoad, () => saver.loadLatest())
   ipcMain.on(IPC.workspaceSave, (_e, ws: Workspace) => saver.save(ws))
   ipcMain.on(IPC.ptyCreate, (_e, o: PtyCreateOptions) => ptyManager.create(o))
   ipcMain.on(IPC.ptyInput, (_e, p: { id: string; data: string }) => { ptyManager.write(p.id, p.data); busy.input(p.id) })
-  ipcMain.on(IPC.ptyResize, (_e, p: { id: string; cols: number; rows: number }) => ptyManager.resize(p.id, p.cols, p.rows))
+  // resize also opens the busy tracker's quiet window: the SIGWINCH repaint
+  // burst that follows (e.g. toggling grid view) must not light the spinner.
+  ipcMain.on(IPC.ptyResize, (_e, p: { id: string; cols: number; rows: number }) => { ptyManager.resize(p.id, p.cols, p.rows); busy.resize(p.id) })
   ipcMain.on(IPC.ptyKill, (_e, p: { id: string }) => ptyManager.kill(p.id))
 
   ipcMain.handle(IPC.dialogPickDirectory, async () => {
@@ -94,6 +100,11 @@ export function registerIpc(opts: {
   ipcMain.handle(IPC.reviewResolveTranscript, (_e, p: { cwd: string; kind?: string }) =>
     resolveTranscript({ cwd: p.cwd || os.homedir(), kind: p.kind }))
 
+  // Ctrl+click file links: resolve printed path candidates against the
+  // terminal's cwd and report which actually exist (null = offer no link).
+  ipcMain.handle(IPC.linksResolve, (_e, p: { cwd: string; candidates: string[] }) =>
+    resolveExistingPaths(p?.cwd ?? '', p?.candidates ?? []))
+
   // Best-effort utf8 read for the renderer (e.g. parsing a review file's verdict).
   // Returns null on any error (missing/unreadable) — the caller treats that as "no content".
   ipcMain.handle(IPC.fsRead, async (_e, p: { path: string }) => {
@@ -103,6 +114,22 @@ export function registerIpc(opts: {
   const reviewWatcher = createReviewWatcher((watchId) => send(IPC.fsChanged, { watchId }))
   ipcMain.on(IPC.fsWatch, (_e, p: { watchId: string; path: string }) => reviewWatcher.watch(p.watchId, p.path))
   ipcMain.on(IPC.fsUnwatch, (_e, p: { watchId: string }) => reviewWatcher.unwatch(p.watchId))
+
+  // Native OS notification when an agent needs the user. Click focuses the window
+  // and tells the renderer which terminal to jump to (key === terminalId).
+  const notifier = createNotifier({
+    isSupported: () => Notification.isSupported(),
+    create: ({ title, body }) => new Notification({ title, body }),
+    onClick: (key) => {
+      const win = getWin()
+      if (win && !win.isDestroyed()) {
+        if (win.isMinimized()) win.restore()
+        win.focus()
+      }
+      send(IPC.notificationClick, { key })
+    }
+  })
+  ipcMain.on(IPC.notifyShow, (_e, p: { key: string; title: string; body: string }) => notifier.show(p))
 
   // Detect the session id a freshly launched codex terminal writes, so a later
   // restart resumes exactly that conversation. `claimed` lives for the app run so

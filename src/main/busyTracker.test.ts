@@ -117,4 +117,41 @@ describe('createBusyTracker', () => {
     t.touch('b')
     expect(emit.mock.calls).toEqual([['b', true]])
   })
+
+  it('a resize repaint does not flip an idle terminal busy (no loader on grid toggle)', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400, 1000)
+    t.resize('a')
+    t.touch('a') // SIGWINCH repaint burst
+    t.touch('a')
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('a resize does not interrupt an in-flight busy phase', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400, 1000)
+    t.touch('a') // genuinely working
+    t.resize('a')
+    t.touch('a') // work output keeps flowing
+    expect(emit.mock.calls).toEqual([['a', true]]) // stays busy, no flicker
+    vi.advanceTimersByTime(600)
+    expect(emit).toHaveBeenLastCalledWith('a', false) // idles normally afterwards
+  })
+
+  it('resize suppression expires after the quiet window', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400, 1000)
+    t.resize('a')
+    vi.advanceTimersByTime(1000)
+    t.touch('a')
+    expect(emit.mock.calls).toEqual([['a', true]])
+  })
+
+  it('resize on one terminal does not suppress another', () => {
+    const emit = vi.fn()
+    const t = createBusyTracker(emit, 600, 400, 1000)
+    t.resize('a')
+    t.touch('b')
+    expect(emit.mock.calls).toEqual([['b', true]])
+  })
 })
