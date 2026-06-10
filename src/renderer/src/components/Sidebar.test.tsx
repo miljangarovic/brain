@@ -411,11 +411,20 @@ describe('Sidebar (3-level)', () => {
   // to the nearest end — aiming the exact half-row at the container's edge was a
   // needle-threading exercise (most of the sidebar was a dead zone for the drop).
   describe('feature context menu', () => {
-    it('right-click on a feature opens Rename / New agents / Add document / Archive', () => {
+    it('right-click on a feature opens Rename / New (submenu) / Add document / Archive; New Claude is not a top-level item', () => {
       renderSidebar()
       fireEvent.contextMenu(screen.getByText('auth'))
-      for (const label of ['Rename', 'New Claude', 'New Codex', 'New Terminal', 'Add document…', 'Archive'])
-        expect(screen.getByRole('menuitem', { name: new RegExp(label.replace('…', '')) })).toBeInTheDocument()
+      // top-level items
+      for (const label of ['Rename', 'New', 'Add document', 'Archive'])
+        expect(screen.getByRole('menuitem', { name: new RegExp(label) })).toBeInTheDocument()
+      // flat 'New Claude' must NOT exist at the top level
+      expect(screen.queryByRole('menuitem', { name: 'New Claude' })).not.toBeInTheDocument()
+      // hover 'New' to reveal the submenu
+      const newItem = screen.getByRole('menuitem', { name: 'New' })
+      fireEvent.mouseEnter(newItem.closest('.relative')!)
+      expect(screen.getByRole('menuitem', { name: 'Claude' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Codex' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: 'Terminal' })).toBeInTheDocument()
     })
 
     it('Archive calls onArchiveFeature with the feature id', async () => {
@@ -426,13 +435,17 @@ describe('Sidebar (3-level)', () => {
       expect(onArchiveFeature).toHaveBeenCalledWith('f1')
     })
 
-    it('New Codex launches an agent; Add document calls onAddDocument', async () => {
+    it('New > Codex launches an agent; Add document calls onAddDocument', async () => {
       const onLaunchAgent = vi.fn()
       const onAddDocument = vi.fn()
       renderSidebar({ onLaunchAgent, onAddDocument })
+      // open menu, expand New submenu, click Codex
       fireEvent.contextMenu(screen.getByText('auth'))
-      await userEvent.click(screen.getByRole('menuitem', { name: /New Codex/ }))
+      const newItem = screen.getByRole('menuitem', { name: 'New' })
+      fireEvent.mouseEnter(newItem.closest('.relative')!)
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
       expect(onLaunchAgent).toHaveBeenCalledWith('f1', 'codex')
+      // reopen and click Add document
       fireEvent.contextMenu(screen.getByText('auth'))
       await userEvent.click(screen.getByRole('menuitem', { name: /Add document/ }))
       expect(onAddDocument).toHaveBeenCalledWith('f1')
