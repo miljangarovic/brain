@@ -1,4 +1,4 @@
-import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, GridStyle, createWorkspace } from '@shared/types'
+import { Workspace, Group, Feature, Terminal, TerminalKind, ReviewLink, GridStyle, createWorkspace, FeatureDoc } from '@shared/types'
 import { createId } from '@shared/id'
 
 export interface AppState {
@@ -256,6 +256,37 @@ export function deleteArchivedFeature(state: AppState, featureId: string): AppSt
     workspace: mapGroup(state.workspace, group.id, (g) => ({
       ...g,
       archivedFeatures: (g.archivedFeatures ?? []).filter((f) => f.id !== featureId)
+    }))
+  }
+}
+
+// ---- documents -------------------------------------------------------------
+// Documents are named references to files on disk; the file itself is never
+// touched. All three operate on ACTIVE features only — an archived feature's
+// documents ride along untouched until restore (mapFeature walks g.features).
+export function addDocument(state: AppState, featureId: string, input: { name: string; path: string; id?: string }): AppState {
+  const group = groupOfFeature(state.workspace, featureId)
+  const feature = group?.features.find((f) => f.id === featureId)
+  if (!feature) return state
+  if ((feature.documents ?? []).some((d) => d.path === input.path)) return state // duplicate path: no-op
+  const doc: FeatureDoc = { id: input.id ?? createId(), name: input.name, path: input.path }
+  return { ...state, workspace: mapFeature(state.workspace, featureId, (f) => ({ ...f, documents: [...(f.documents ?? []), doc] })) }
+}
+
+export function renameDocument(state: AppState, featureId: string, docId: string, name: string): AppState {
+  return {
+    ...state,
+    workspace: mapFeature(state.workspace, featureId, (f) => ({
+      ...f, documents: (f.documents ?? []).map((d) => (d.id === docId ? { ...d, name } : d))
+    }))
+  }
+}
+
+export function removeDocument(state: AppState, featureId: string, docId: string): AppState {
+  return {
+    ...state,
+    workspace: mapFeature(state.workspace, featureId, (f) => ({
+      ...f, documents: (f.documents ?? []).filter((d) => d.id !== docId)
     }))
   }
 }

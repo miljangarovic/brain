@@ -6,7 +6,8 @@ import {
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
   patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById,
-  addImportedGroup, addImportedFeature, archiveFeature, restoreFeature, deleteArchivedFeature, setTerminalSessionId
+  addImportedGroup, addImportedFeature, archiveFeature, restoreFeature, deleteArchivedFeature, setTerminalSessionId,
+  addDocument, renameDocument, removeDocument
 } from './store'
 import type { Group, Feature } from '@shared/types'
 import { migrateWorkspace } from './migrate'
@@ -670,5 +671,53 @@ describe('feature archive', () => {
     s = archiveFeature(s, fid)
     const out = setTerminalSessionId(s, tid, 'sid-late')
     expect(out.workspace.groups[0].archivedFeatures![0].terminals[0].sessionId).toBe('sid-late')
+  })
+})
+
+describe('feature documents', () => {
+  const setup = () => {
+    const s = addGroup(createInitialState(), 'proj', '/p')
+    return { s, fid: s.workspace.groups[0].features[0].id }
+  }
+  const docsOf = (s: ReturnType<typeof addGroup>) => s.workspace.groups[0].features[0].documents
+
+  it('addDocument appends a doc with the given id/name/path', () => {
+    const { s, fid } = setup()
+    const out = addDocument(s, fid, { id: 'd1', name: 'spec.md', path: '/p/spec.md' })
+    expect(docsOf(out)).toEqual([{ id: 'd1', name: 'spec.md', path: '/p/spec.md' }])
+  })
+
+  it('addDocument generates an id when none is given', () => {
+    const { s, fid } = setup()
+    const out = addDocument(s, fid, { name: 'spec.md', path: '/p/spec.md' })
+    expect(docsOf(out)![0].id).toBeTruthy()
+  })
+
+  it('addDocument with an already-referenced path is a no-op', () => {
+    let { s, fid } = setup()
+    s = addDocument(s, fid, { name: 'spec.md', path: '/p/spec.md' })
+    const out = addDocument(s, fid, { name: 'again', path: '/p/spec.md' })
+    expect(out).toBe(s)
+  })
+
+  it('renameDocument / removeDocument target the doc by id; the path is untouched', () => {
+    let { s, fid } = setup()
+    s = addDocument(s, fid, { id: 'd1', name: 'spec.md', path: '/p/spec.md' })
+    s = addDocument(s, fid, { id: 'd2', name: 'plan.md', path: '/p/plan.md' })
+    s = renameDocument(s, fid, 'd1', 'Spec')
+    expect(docsOf(s)![0]).toEqual({ id: 'd1', name: 'Spec', path: '/p/spec.md' })
+    s = removeDocument(s, fid, 'd1')
+    expect(docsOf(s)!.map((d) => d.id)).toEqual(['d2'])
+  })
+
+  it('document ops on an archived feature are no-ops (active features only)', () => {
+    let { s, fid } = setup()
+    s = addDocument(s, fid, { id: 'd1', name: 'spec.md', path: '/p/spec.md' })
+    s = archiveFeature(s, fid)
+    expect(addDocument(s, fid, { name: 'x', path: '/x' })).toBe(s)
+    expect(renameDocument(s, fid, 'd1', 'X').workspace).toEqual(s.workspace)
+    expect(removeDocument(s, fid, 'd1').workspace).toEqual(s.workspace)
+    // the archived feature still carries its documents
+    expect(s.workspace.groups[0].archivedFeatures![0].documents).toHaveLength(1)
   })
 })
