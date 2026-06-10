@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BRAIN — brand sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600&family=Karla:ital,wght@0,300;0,400;0,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0e1117; --panel: #161b23; --line: #242b37;
+  --fg: #c3cbdb; --fg-hi: #eef1f6; --fg-dim: #66718a;
+  --blue: #61afef; --cyan: #2bbac5; --indigo: #528bff; --magenta: #d55fde;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Karla', sans-serif; color: var(--fg); background: var(--bg);
+  min-height: 100vh; padding: 64px 36px 90px;
+  background-image:
+    radial-gradient(900px 500px at 75% -15%, rgba(97,175,239,.08), transparent 60%),
+    radial-gradient(700px 480px at -5% 115%, rgba(43,186,197,.06), transparent 55%);
+}
+.sheet { max-width: 980px; margin: 0 auto; }
+.hero {
+  display: flex; align-items: center; gap: 44px; margin-bottom: 64px;
+  animation: in .8s cubic-bezier(.22,1,.36,1) both;
+}
+.hero img { width: 168px; height: 168px; filter: drop-shadow(0 24px 48px rgba(0,0,0,.6)); }
+.wordmark {
+  font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 64px;
+  letter-spacing: -.01em; color: var(--fg-hi); line-height: 1;
+}
+.wordmark .cursor {
+  display: inline-block; width: .14em; height: .82em; margin-left: .08em;
+  background: var(--blue); vertical-align: -2px;
+  box-shadow: 0 0 18px rgba(97,175,239,.8);
+  animation: blink 1.1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0 } }
+.tagline { margin-top: 14px; font-size: 15px; color: var(--fg-dim); letter-spacing: .04em; }
+.tagline b { color: var(--cyan); font-weight: 500; }
+
+h2 {
+  font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 11px;
+  letter-spacing: .34em; text-transform: uppercase; color: var(--fg-dim);
+  margin: 52px 0 18px; display: flex; align-items: center; gap: 14px;
+}
+h2::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+.sizes { display: flex; align-items: flex-end; gap: 28px; padding: 28px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  animation: in .8s .1s cubic-bezier(.22,1,.36,1) both; }
+.sizes figure { text-align: center; }
+.sizes img { display: block; image-rendering: auto; }
+.sizes figcaption { margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--fg-dim); }
+.sizes .note { margin-left: auto; max-width: 220px; font-size: 12px; color: var(--fg-dim); line-height: 1.6; }
+.sizes .note b { color: var(--fg); font-weight: 500; }
+
+.palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+  animation: in .8s .18s cubic-bezier(.22,1,.36,1) both; }
+.swatch { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.swatch .chip { height: 76px; }
+.swatch .info { padding: 10px 13px; }
+.swatch .info b { display: block; font-size: 12.5px; color: var(--fg-hi); font-weight: 500; }
+.swatch .info span { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--fg-dim); }
+
+.ctx { display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  animation: in .8s .26s cubic-bezier(.22,1,.36,1) both; }
+.ctx .demo {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px; display: flex; align-items: center; gap: 14px;
+}
+.ctx .dock { justify-content: center; gap: 18px; background: linear-gradient(180deg, #181d26, #10141b); }
+.ctx .dock img { width: 56px; height: 56px; transition: transform .25s; }
+.ctx .dock img:hover { transform: scale(1.18) translateY(-6px); }
+.ctx .dock .ghost { width: 52px; height: 52px; border-radius: 13px; background: #232a36; opacity: .6; }
+.ctx .titlebar { gap: 10px; font-size: 12.5px; color: var(--fg-dim); }
+.ctx .titlebar img { width: 18px; height: 18px; }
+.ctx .titlebar b { color: var(--fg); font-weight: 500; }
+.ctx .titlebar .dots { margin-left: auto; display: flex; gap: 6px; }
+.ctx .titlebar .dots i { width: 11px; height: 11px; border-radius: 50%; background: #2c3340; }
+
+.story { font-size: 13.5px; line-height: 1.75; color: var(--fg-dim); max-width: 640px;
+  animation: in .8s .32s cubic-bezier(.22,1,.36,1) both; }
+.story b { color: var(--fg); font-weight: 500; }
+.story em { color: var(--blue); font-style: normal; }
+@keyframes in { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="hero">
+    <img src="icon.svg" alt="Brain icon">
+    <div>
+      <div class="wordmark">brain<span class="cursor"></span></div>
+      <div class="tagline">terminal-orkestrator za AI agente — <b>mozak koji kuca</b></div>
+    </div>
+  </div>
+
+  <h2>Ikonica · veličine</h2>
+  <div class="sizes">
+    <figure><img src="icon.svg" width="128" height="128"><figcaption>128 — full</figcaption></figure>
+    <figure><img src="icon.svg" width="64" height="64"><figcaption>64</figcaption></figure>
+    <figure><img src="icon.svg" width="48" height="48"><figcaption>48</figcaption></figure>
+    <figure><img src="icon-small.svg" width="32" height="32"><figcaption>32 — simplified</figcaption></figure>
+    <figure><img src="icon-small.svg" width="24" height="24"><figcaption>24</figcaption></figure>
+    <figure><img src="icon-small.svg" width="16" height="16"><figcaption>16</figcaption></figure>
+    <div class="note"><b>Dva master SVG-a:</b> puni znak za ≥48px; za 16–32px puna silueta bez unutrašnjeg crteža (detalj bi se pretvorio u šum).</div>
+  </div>
+
+  <h2>Paleta</h2>
+  <div class="palette">
+    <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,#2bbac5,#61afef)"></div>
+      <div class="info"><b>Synapse</b><span>#2bbac5 → #61afef</span></div></div>
+    <div class="swatch"><div class="chip" style="background:#528bff"></div>
+      <div class="info"><b>Deep signal</b><span>#528bff</span></div></div>
+    <div class="swatch"><div class="chip" style="background:#d55fde"></div>
+      <div class="info"><b>Spark</b><span>#d55fde · jedna tačka</span></div></div>
+    <div class="swatch"><div class="chip" style="background:linear-gradient(180deg,#20252e,#11141a)"></div>
+      <div class="info"><b>Tile</b><span>#20252e → #11141a</span></div></div>
+  </div>
+
+  <h2>U kontekstu</h2>
+  <div class="ctx">
+    <div class="demo dock">
+      <span class="ghost"></span><span class="ghost"></span>
+      <img src="icon.svg" alt="">
+      <span class="ghost"></span><span class="ghost"></span>
+    </div>
+    <div class="demo titlebar">
+      <img src="icon-small.svg" alt="">
+      <span><b>Brain</b> — orchestriX › attention-routing</span>
+      <span class="dots"><i></i><i></i><i></i></span>
+    </div>
+  </div>
+
+  <h2>Priča znaka</h2>
+  <p class="story">
+    Lijeva hemisfera je <b>organska</b> — vijuge, čovjek koji misli. Desna je
+    <b>circuit-stablo</b> — tri grane sa čvorovima: agenti koje orkestriraš.
+    Donja kontura ne završava — izlazi u <em>terminalsku liniju sa blok-kursorom</em>:
+    mozak koji svoje misli kuca u terminal. Jedna magenta sinapsa je
+    <b>attention</b> — trenutak kad te agent pozove.
+  </p>
+
+</div>
+</body>
+</html>

@@ -45,7 +45,7 @@
   },
   "build": {
     "appId": "com.orchestrix.app",
-    "productName": "OrchestriX",
+    "productName": "Brain",
     "directories": {
       "buildResources": "build",
       "output": "release/${version}"

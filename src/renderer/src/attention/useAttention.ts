@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppState } from '../store'
 import { getTerminalById, allTerminals, isUnderReview, showTerminal } from '../store'
 import { readTail } from './tailRegistry'
-import { isTouched } from './touched'
+import { isTouched, clearTouched } from './touched'
 import { classifyIdle, type AttentionState } from './detect'
 import { decideOnIdle, decideOnExit } from './decide'
 import { upsertItem, removeItem, lastLineOf, type AttentionItem } from './queue'
@@ -27,6 +27,9 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
   const attentionRef = useRef<Record<string, AttentionState | undefined>>({})
   const focusedRef = useRef<boolean>(typeof document !== 'undefined' ? document.hasFocus() : true)
   const startedAt = useRef<number>(Date.now())
+  // When each terminal's current busy phase started — used to tell real work
+  // (seconds of streaming) from redraw blips (sub-second) when it goes idle.
+  const busySince = useRef(new Map<string, number>())
 
   const [focused, setFocused] = useState<boolean>(focusedRef.current)
   useEffect(() => {
@@ -70,16 +73,30 @@ export function useAttention(state: AppState, apply: (fn: (s: AppState) => AppSt
   }
 
   const handleBusy = useCallback((id: string, busy: boolean) => {
-    if (busy) { clearInternal(id); return } // resumed → previous attention is stale
+    if (busy) {
+      busySince.current.set(id, Date.now())
+      clearInternal(id) // resumed → previous attention is stale
+      return
+    }
+    const started = busySince.current.get(id)
+    busySince.current.delete(id)
     if (Date.now() - startedAt.current < STARTUP_GRACE_MS) return
-    // Idle-derived signals fire only for terminals you've actually worked in this
-    // session — a restored agent that merely settles never alerts (no spam on open).
-    if (!isTouched(id)) return
     const { term, ctx } = ctxFor(id)
     if (!term) return
     const tail = readTail(id)
-    const st = decideOnIdle(classifyIdle(tail), ctx)
-    if (st) fire(id, st, lastLineOf(tail))
+    const st = decideOnIdle(classifyIdle(tail), {
+      ...ctx,
+      // Armed = the user typed in this terminal since the last alert; a busy:false
+      // with no busy:true seen by this hook gets span 0 (settle on app open, etc.).
+      armed: isTouched(id),
+      workSpanMs: started === undefined ? 0 : Date.now() - started,
+    })
+    if (st) {
+      fire(id, st, lastLineOf(tail))
+      // Disarm until the user types again — background repaints after this
+      // alert must not re-fire it.
+      clearTouched(id)
+    }
   }, [clearInternal, fire])
 
   const handleExit = useCallback((id: string, code: number) => {

@@ -53,7 +53,7 @@ export function AttentionBell(props: {
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div className="absolute left-0 right-0 z-30 mt-1 rounded-md border border-line bg-panel shadow-lg overflow-hidden">
             {count === 0 ? (
-              <div className="px-3 py-3 text-sm text-fg-muted">Niko te ne čeka.</div>
+              <div className="px-3 py-3 text-sm text-fg-muted">No one is waiting for you.</div>
             ) : (
               <ul className="max-h-80 overflow-y-auto py-1">
                 {items.map((it) => (
@@ -68,7 +68,7 @@ export function AttentionBell(props: {
                     </button>
                     <button
                       aria-label={`Clear ${it.path}`}
-                      title="Ukloni iz liste"
+                      title="Remove from list"
                       onClick={() => onClear(it.terminalId)}
                       className="opacity-0 group-hover:opacity-100 px-1 text-fg-muted hover:text-danger transition"
                     >
@@ -81,7 +81,7 @@ export function AttentionBell(props: {
             <div className="flex items-center justify-between gap-2 border-t border-line px-2 py-1.5">
               <button
                 aria-label={muted ? 'Unmute' : 'Mute'}
-                title={muted ? 'Uključi zvuk' : 'Isključi zvuk'}
+                title={muted ? 'Unmute sound' : 'Mute sound'}
                 onClick={onToggleMute}
                 className="px-1 text-fg-muted hover:text-fg transition"
               >

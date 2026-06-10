@@ -9,6 +9,7 @@ import { getXtermTheme, MONO_FONT } from '../theme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { registerTail, unregisterTail, readXtermTail } from '../attention/tailRegistry'
 import { markTouched } from '../attention/touched'
+import { classifyKeyEvent } from './termKeys'
 
 // `resume` is set only for agent terminals restored after an app restart: their
 // PTY spawns resuming the terminal's own prior conversation (by session id when
@@ -82,33 +83,27 @@ export function TerminalView({ terminal, active, resume }: { terminal: TerminalM
     const inputDisposable = term.onData((data) => window.orchestrix.writePty(terminal.id, data))
 
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== 'keydown') return true
-
       // A real keypress in this terminal marks it "engaged" — attention's idle
       // signals only fire for terminals you've actually worked in. (Must be a key
       // event, NOT term.onData: xterm auto-replies to TUI queries via onData,
       // which would falsely mark every agent touched on startup.)
-      markTouched(terminal.id)
+      if (e.type === 'keydown') markTouched(terminal.id)
 
-      // Shift+Enter → insert a newline (LF) instead of submitting (CR).
-      // Plain Enter still sends CR ("submit"); claude/codex and most readline/Ink
-      // TUIs treat a bare LF (same as Ctrl+J) as "insert newline".
-      if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey &&
-          (e.code === 'Enter' || e.code === 'NumpadEnter')) {
-        window.orchestrix.writePty(terminal.id, '\n')
-        return false
+      switch (classifyKeyEvent(e)) {
+        case 'newline':
+          window.orchestrix.writePty(terminal.id, '\n')
+          return false
+        case 'copy':
+          copySelection()
+          return false
+        case 'paste':
+          paste()
+          return false
+        case 'swallow':
+          return false
+        default:
+          return true
       }
-
-      // Ctrl+Shift+C / Ctrl+Shift+V copy-paste
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-        copySelection()
-        return false
-      }
-      if (e.ctrlKey && e.shiftKey && e.code === 'KeyV') {
-        paste()
-        return false
-      }
-      return true
     })
 
     const ro = new ResizeObserver((entries) => {

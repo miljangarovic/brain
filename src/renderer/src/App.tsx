@@ -286,7 +286,7 @@ export default function App() {
         >
           {featureVisible.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-fg-muted">
-              <span className="text-2xl font-semibold tracking-tight text-fg">OrchestriX</span>
+              <span className="text-2xl font-semibold tracking-tight text-fg">Brain</span>
               <span className="text-sm">{activeGroup ? 'Add a terminal or open one from the sidebar.' : 'Create a project to get started.'}</span>
             </div>
           )}
