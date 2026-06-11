@@ -8,7 +8,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { promises as fsp } from 'fs'
 import { IPC } from '@shared/ipc'
-import type { VoiceStateEvent, WorkspaceSnapshot } from '@shared/voice'
+import type { VoiceStateEvent, VoiceUiConfig, WorkspaceSnapshot } from '@shared/voice'
 import { loadVoiceConfig } from './config'
 import { ensureModel } from './models'
 import { encodeWavPcm16 } from './wav'
@@ -32,7 +32,7 @@ export async function registerVoice(opts: {
   // UI-safe config subset for the renderer (never the Groq key). Registered
   // even when voice is disabled so the invoke resolves to 'off' instead of
   // rejecting — the renderer then binds no mouse listeners.
-  ipcMain.handle(IPC.voiceUiConfig, () => ({
+  ipcMain.handle(IPC.voiceUiConfig, (): VoiceUiConfig => ({
     mouseTrigger: config.enabled ? config.mouseTrigger : 'off'
   }))
 
