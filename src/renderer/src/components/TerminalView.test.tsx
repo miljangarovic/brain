@@ -61,10 +61,12 @@ const api = {
   onPtyExit: vi.fn(() => vi.fn()),
   openPath: vi.fn(),
   resolvePathLinks: vi.fn(async (): Promise<(string | null)[]> => []),
+  claudeSessionExists: vi.fn(async (): Promise<boolean> => true),
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  api.claudeSessionExists.mockResolvedValue(true)
   ;(window as unknown as { brain: typeof api }).brain = api
 })
 
@@ -85,9 +87,10 @@ describe('TerminalView PTY lifecycle', () => {
     expect(api.killPty).not.toHaveBeenCalled()
   })
 
-  it('spawns a restored claude terminal with its resume command', () => {
+  it('spawns a restored claude terminal with its resume command', async () => {
     render(<TerminalView terminal={term} active resume />)
-    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't1', startupCommand: 'claude --continue' }))
+    await vi.waitFor(() =>
+      expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't1', startupCommand: 'claude --continue' })))
   })
 
   it('spawns a restored codex terminal with its resume command', () => {
@@ -115,16 +118,69 @@ describe('TerminalView PTY lifecycle', () => {
     }))
   })
 
-  it('resumes a restored claude terminal by its exact session id', () => {
+  it('resumes a restored claude terminal by its exact session id', async () => {
     const claude: TerminalModel = { id: 't4', name: 'claude', cwd: '/x', startupCommand: 'claude', kind: 'claude', sessionId: 'sess-4' }
     render(<TerminalView terminal={claude} active resume />)
-    expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't4', startupCommand: 'claude --resume sess-4' }))
+    await vi.waitFor(() =>
+      expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't4', startupCommand: 'claude --resume sess-4' })))
   })
 
   it('resumes a restored codex terminal by its detected session id', () => {
     const codex: TerminalModel = { id: 't5', name: 'codex', cwd: '/x', startupCommand: 'codex', kind: 'codex', sessionId: 'sess-5' }
     render(<TerminalView terminal={codex} active resume />)
     expect(api.createPty).toHaveBeenCalledWith(expect.objectContaining({ id: 't5', startupCommand: 'codex resume sess-5' }))
+  })
+})
+
+describe('TerminalView claude resume fallback', () => {
+  it('falls back to a fresh pinned conversation when the pinned session is gone', async () => {
+    api.claudeSessionExists.mockResolvedValue(false)
+    const onSessionFallback = vi.fn()
+    const claude: TerminalModel = { id: 't6', name: 'claude', cwd: '/x', startupCommand: 'claude', kind: 'claude', sessionId: 'dead-1' }
+    render(<TerminalView terminal={claude} active resume onSessionFallback={onSessionFallback} />)
+    await vi.waitFor(() => expect(api.createPty).toHaveBeenCalled())
+    expect(api.claudeSessionExists).toHaveBeenCalledWith('/x', 'dead-1')
+    const cmd = api.createPty.mock.calls[0][0].startupCommand as string
+    expect(cmd).toMatch(/^claude --session-id .+/)
+    expect(cmd).not.toContain('dead-1')
+    const freshId = cmd.replace('claude --session-id ', '')
+    expect(onSessionFallback).toHaveBeenCalledWith('t6', freshId)
+  })
+
+  it('legacy terminal (no pinned id) with no sessions in the cwd starts a fresh pinned conversation', async () => {
+    api.claudeSessionExists.mockResolvedValue(false)
+    render(<TerminalView terminal={term} active resume />)
+    await vi.waitFor(() => expect(api.createPty).toHaveBeenCalled())
+    expect(api.createPty.mock.calls[0][0].startupCommand).toMatch(/^claude --session-id .+/)
+  })
+
+  it('treats a failing existence check as a missing session (fresh beats dead)', async () => {
+    api.claudeSessionExists.mockRejectedValue(new Error('ipc broke'))
+    const claude: TerminalModel = { id: 't7', name: 'claude', cwd: '/x', startupCommand: 'claude', kind: 'claude', sessionId: 'sess-7' }
+    render(<TerminalView terminal={claude} active resume />)
+    await vi.waitFor(() => expect(api.createPty).toHaveBeenCalled())
+    expect(api.createPty.mock.calls[0][0].startupCommand).toMatch(/^claude --session-id .+/)
+  })
+
+  it('never consults the check for codex, shells, or fresh mounts', () => {
+    const codex: TerminalModel = { id: 't5', name: 'codex', cwd: '/x', startupCommand: 'codex', kind: 'codex', sessionId: 'sess-5' }
+    const shell: TerminalModel = { id: 't3', name: 'dev', cwd: '/x', startupCommand: 'npm run dev', kind: 'shell' }
+    render(<TerminalView terminal={codex} active resume />)
+    render(<TerminalView terminal={shell} active resume />)
+    render(<TerminalView terminal={term} active />) // fresh claude mount
+    expect(api.claudeSessionExists).not.toHaveBeenCalled()
+    expect(api.createPty).toHaveBeenCalledTimes(3) // all three spawned synchronously
+  })
+
+  it('does not spawn a PTY when the view unmounts while the check is in flight', async () => {
+    let resolveCheck!: (b: boolean) => void
+    api.claudeSessionExists.mockImplementation(() => new Promise<boolean>((r) => { resolveCheck = r }))
+    const claude: TerminalModel = { id: 't8', name: 'claude', cwd: '/x', startupCommand: 'claude', kind: 'claude', sessionId: 'sess-8' }
+    const { unmount } = render(<TerminalView terminal={claude} active resume />)
+    unmount()
+    resolveCheck(true)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(api.createPty).not.toHaveBeenCalled()
   })
 })
 

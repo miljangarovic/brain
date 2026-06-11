@@ -21,6 +21,7 @@ export const IPC = {
   fsChanged: 'fs:changed',
   ptyBusy: 'pty:busy',
   agentCaptureSession: 'agent:captureSession',
+  claudeSessionExists: 'agent:claudeSessionExists',
   notifyShow: 'notify:show',
   notificationClick: 'notification:click',
   linksResolve: 'links:resolve',
