@@ -2,7 +2,7 @@
 // flight at a time (whisper saturates the machine anyway); a dead child is
 // respawned lazily on the next request. forkImpl is injectable for tests.
 import { utilityProcess } from 'electron'
-import { dirname, join } from 'path'
+import { dirname, join, sep } from 'path'
 
 export interface ChildLike {
   postMessage(msg: unknown): void
@@ -20,9 +20,16 @@ interface Queued { dispatch: () => void; reject: (err: Error) => void }
 // NEXT to it inside the addon package (dist/<platform>-<arch>/). The loader
 // honors LD_LIBRARY_PATH only from process start, so it must be set on the
 // CHILD's env at fork time — setting it inside the child is too late for
-// dlopen. (macOS would need DYLD_LIBRARY_PATH instead; Linux-only for now.)
-const addonLibDir = () =>
-  join(dirname(require.resolve('@kutalia/whisper-node-addon')), '..', `${process.platform}-${process.arch}`)
+// dlopen. In a PACKAGED app require.resolve reports the path inside app.asar
+// — a virtual FS the OS dynamic linker cannot read; the addon is
+// asarUnpack'ed, so the REAL files live under app.asar.unpacked. (macOS
+// would need DYLD_LIBRARY_PATH instead; Linux-only for now.)
+export function libDirFromEntry(entryPath: string): string {
+  const real = entryPath.replace(`${sep}app.asar${sep}`, `${sep}app.asar.unpacked${sep}`)
+  return join(dirname(real), '..', `${process.platform}-${process.arch}`)
+}
+
+const addonLibDir = () => libDirFromEntry(require.resolve('@kutalia/whisper-node-addon'))
 
 export function createTranscriber(opts: { childPath: string; forkImpl?: (path: string) => ChildLike }) {
   const fork = opts.forkImpl ?? ((p: string) => {
