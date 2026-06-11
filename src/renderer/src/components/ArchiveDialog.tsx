@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { Group } from '@shared/types'
 import { TrashIcon } from './icons'
+import { useBackdropDismiss } from './useBackdropDismiss'
 
 export function ArchiveDialog({
   group, onArchive, onRestore, onDeleteArchived, onClose
@@ -23,8 +24,10 @@ export function ArchiveDialog({
   const actionBtn = 'shrink-0 rounded-md px-2.5 py-1 text-xs text-fg ring-1 ring-line hover:bg-hover transition-colors'
   const count = (n: number) => `${n} terminal${n === 1 ? '' : 's'}`
 
+  const backdrop = useBackdropDismiss(onClose)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" {...backdrop}>
       <div className="w-[28rem] max-h-[70vh] overflow-y-auto rounded-xl bg-elevated border border-line p-5 shadow-2xl shadow-black/50" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight text-fg-bright">Archive — {group.name}</h2>
