@@ -21,7 +21,7 @@ export interface RecorderHandle {
   cancel(): void
 }
 
-export async function startRecording(opts: { onAutoStop: () => void }): Promise<RecorderHandle> {
+export async function startRecording(opts: { onAutoStop: () => void; vadAutoStop?: boolean }): Promise<RecorderHandle> {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
   })
@@ -36,6 +36,9 @@ export async function startRecording(opts: { onAutoStop: () => void }): Promise<
 
     const chunks: Float32Array[] = []
     const tracker = new SilenceTracker({ sampleRate: ctx.sampleRate })
+    // Push-to-talk holds the button deliberately — a pause in speech must
+    // not end the take, so PTT passes vadAutoStop: false.
+    const vad = opts.vadAutoStop !== false
     let done = false
     let autoStopFired = false
 
@@ -44,7 +47,7 @@ export async function startRecording(opts: { onAutoStop: () => void }): Promise<
     node.port.onmessage = (e: MessageEvent<Float32Array>) => {
       if (done) return
       chunks.push(e.data)
-      if (!autoStopFired && tracker.push(e.data) === 'stop') {
+      if (vad && !autoStopFired && tracker.push(e.data) === 'stop') {
         autoStopFired = true
         opts.onAutoStop()
       }
