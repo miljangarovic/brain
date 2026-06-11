@@ -23,7 +23,7 @@ The user speaks Serbian (latinica), English, or a mix. Workspace structure (proj
 ${JSON.stringify(snapshot, null, 1)}
 
 Reply with ONLY a JSON object, no prose, shaped as:
-{"action": "switch_feature|toggle_grid|switch_tab|set_grid_style|hide_terminal|add_terminal|close_terminal|rename_feature|rename_terminal|unknown",
+{"action": "switch_feature|toggle_grid|switch_tab|set_grid_style|hide_terminal|add_terminal|close_terminal|rename_feature|rename_terminal|send_prompt|unknown",
  "featureId"?: string, "terminalId"?: string, "kind"?: "shell|claude|codex",
  "prompt"?: string, "name"?: string,
  "gridStyle"?: "auto|auto-left|auto-top|auto-bottom|rows|cols",
@@ -34,6 +34,7 @@ Rules:
 - When no feature/terminal is named, use activeFeatureId / activeTerminalId.
 - Ordinal tab references ("drugi tab", "third tab") count only terminals WITHOUT "hidden": true, in snapshot order, within the active feature. The app may also show open file panes as tabs AFTER the terminals — those are not in the snapshot and cannot be voice targets; if an ordinal exceeds the visible terminal count, use action "unknown".
 - "close/zatvori tab N" or "close the Nth tab" HIDES that terminal (hide_terminal — tabs are hidden, not killed); "zatvori/ugasi terminal X" by name kills it (close_terminal).
+- send_prompt: the user dictates text for an agent that is ALREADY RUNNING ("pošalji prompt …", "reci claude-u da …", "tell claude to …", "send a prompt to terminal X"). Target must be a claude or codex terminal id from the snapshot (default: activeTerminalId); the dictated task goes in "prompt" verbatim, cleaned of filler words. This NEVER creates a terminal — add_terminal does that.
 - add_terminal: "kind" defaults to "claude" when an agent is implied or nothing is said; "prompt" is the task the user dictated for the agent, verbatim, cleaned of filler words.
 - rename_*: "name" is the new name.
 - If the utterance is not one of these commands, or you are genuinely unsure which target is meant, use action "unknown" or set confidence "low".
@@ -44,7 +45,9 @@ Examples:
 "dodaj klod terminal u file panes sa promptom sredi testove" → {"action":"add_terminal","featureId":"<id>","kind":"claude","prompt":"sredi testove","confidence":"high"}
 "close the second tab" → {"action":"hide_terminal","terminalId":"<id of 2nd visible terminal>","confidence":"high"}
 "preimenuj feature u export import" → {"action":"rename_feature","featureId":"<active feature id>","name":"export import","confidence":"high"}
-"change the grid style to columns" → {"action":"set_grid_style","gridStyle":"cols","confidence":"high"}`
+"change the grid style to columns" → {"action":"set_grid_style","gridStyle":"cols","confidence":"high"}
+"pošalji prompt sredi failing testove" → {"action":"send_prompt","terminalId":"<active terminal id>","prompt":"sredi failing testove","confidence":"high"}
+"tell claude in reviewer to summarize the diff" → {"action":"send_prompt","terminalId":"<id of terminal reviewer>","prompt":"summarize the diff","confidence":"high"}`
   return [
     { role: 'system', content: system },
     { role: 'user', content: transcript }
