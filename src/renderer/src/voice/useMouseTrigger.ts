@@ -1,6 +1,7 @@
 // Window-level mouse side-button listener for push-to-talk. Capture phase so
-// xterm.js panes cannot swallow the button; preventDefault stops Electron's
-// history navigation for the configured button only. Tracks a held flag:
+// xterm.js panes cannot swallow the button; preventDefault is intended to stop
+// Chromium's side-button history navigation (single-load SPA today; confirmed
+// manually on Linux/X11) for the configured button only. Tracks a held flag:
 // a mouseup without our mousedown (button pressed outside the window) is a
 // no-op, and window blur mid-hold CANCELS — the mouseup will never arrive,
 // and sending a half-finished utterance is worse than dropping it.
@@ -48,6 +49,9 @@ export function useMouseTrigger(trigger: MouseTrigger, handlers: MouseTriggerHan
     window.addEventListener('mouseup', up, true)
     window.addEventListener('blur', blur)
     return () => {
+      // Cleanup mid-hold (trigger changed / unmount) must cancel like blur
+      // does — the new effect instance starts fresh and would orphan the take.
+      if (held) ref.current.onCancel()
       window.removeEventListener('mousedown', down, true)
       window.removeEventListener('mouseup', up, true)
       window.removeEventListener('blur', blur)

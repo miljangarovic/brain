@@ -71,4 +71,38 @@ describe('useMouseTrigger', () => {
     fire('mousedown', 4)
     expect(t.onDown).not.toHaveBeenCalled()
   })
+
+  it('trigger change mid-hold cancels the held take', () => {
+    const h = { onDown: vi.fn(), onUp: vi.fn(), onCancel: vi.fn() }
+    const hook = renderHook(
+      ({ trigger }: { trigger: MouseTrigger }) => useMouseTrigger(trigger, h),
+      { initialProps: { trigger: 'forward' as MouseTrigger } }
+    )
+    fire('mousedown', 4)
+    hook.rerender({ trigger: 'back' })
+    expect(h.onCancel).toHaveBeenCalledTimes(1)
+    fire('mouseup', 3)
+    expect(h.onUp).not.toHaveBeenCalled()
+  })
+
+  it('blur while not held is a no-op', () => {
+    const t = setup('forward')
+    window.dispatchEvent(new Event('blur'))
+    expect(t.onCancel).not.toHaveBeenCalled()
+  })
+
+  it('handler identity change mid-hold routes the release to the new handlers', () => {
+    const first = { onDown: vi.fn(), onUp: vi.fn(), onCancel: vi.fn() }
+    const second = { onDown: vi.fn(), onUp: vi.fn(), onCancel: vi.fn() }
+    const hook = renderHook(
+      ({ h }: { h: typeof first }) => useMouseTrigger('forward', h),
+      { initialProps: { h: first } }
+    )
+    fire('mousedown', 4)
+    hook.rerender({ h: second })
+    fire('mouseup', 4)
+    expect(second.onUp).toHaveBeenCalledTimes(1)
+    expect(first.onUp).not.toHaveBeenCalled()
+    expect(second.onCancel).not.toHaveBeenCalled() // identity churn must NOT cancel the hold
+  })
 })
