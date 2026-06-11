@@ -62,7 +62,11 @@ const str = (v: unknown): string | undefined => {
 // Mouse side-button push-to-talk trigger; the UI-safe config subset the
 // renderer is allowed to see (never the Groq key).
 export type MouseTrigger = 'forward' | 'back' | 'off'
-export interface VoiceUiConfig { mouseTrigger: MouseTrigger }
+// 'hold' = push-to-talk (press records, release sends). 'click' = toggle —
+// for mice whose firmware emits side-button press only on release (e.g.
+// Logitech MX: held side button is the horizontal-scroll modifier).
+export type MouseTriggerMode = 'hold' | 'click'
+export interface VoiceUiConfig { mouseTrigger: MouseTrigger; mouseTriggerMode: MouseTriggerMode }
 
 export function validateVoiceCommand(raw: unknown): VoiceCommand {
   if (typeof raw !== 'object' || raw === null) return { action: 'unknown', confidence: 'low' }

@@ -143,6 +143,16 @@ describe('TerminalView engagement & input flags', () => {
     expect(isTouched('t1')).toBe(true)
   })
 
+  it('Ctrl+Shift+V calls preventDefault — otherwise the browser-native paste event makes xterm paste a SECOND time', () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { readText: () => Promise.resolve('') }, configurable: true
+    })
+    render(<TerminalView terminal={term} active />)
+    const preventDefault = vi.fn()
+    keyHandler()(key('KeyV', { ctrlKey: true, shiftKey: true, preventDefault }))
+    expect(preventDefault).toHaveBeenCalled()
+  })
+
   it('arms attention on mousedown (answering an agent menu with the mouse)', () => {
     clearTouched('t1')
     const { container } = render(<TerminalView terminal={term} active />)
