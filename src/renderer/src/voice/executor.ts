@@ -185,6 +185,10 @@ function planHigh(cmd: VoiceCommand, s: AppState, ctx: PlanContext): ExecPlan {
         descriptor: { type: 'sendPrompt', terminalId: t.id, prompt }
       }
     }
+    // Batch-2 actions land in follow-up commits; the stub keeps the switch exhaustive.
+    case 'cycle_tab': case 'close_tabs': case 'add_feature': case 'archive_feature':
+    case 'review_accept': case 'review_more_rounds': case 'review_stop':
+      return err('Not supported yet')
     case 'unknown':
       return err("Didn't understand the command")
   }
