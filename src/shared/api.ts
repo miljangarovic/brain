@@ -3,7 +3,7 @@ import type { PtyCreateOptions } from './pty'
 import type { ReviewPhase } from './types'
 import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from './exportTypes'
 import type { FileLoadResult } from './files'
-import type { VoiceResult, VoiceStateEvent, WorkspaceSnapshot } from './voice'
+import type { VoiceResult, VoiceStateEvent, VoiceUiConfig, WorkspaceSnapshot } from './voice'
 
 export interface BrainApi {
   loadWorkspace(): Promise<Workspace>
@@ -63,4 +63,5 @@ export interface BrainApi {
   onVoiceState(cb: (ev: VoiceStateEvent) => void): () => void
   onVoiceResult(cb: (r: VoiceResult) => void): () => void
   cancelVoice(): void
+  getVoiceUiConfig(): Promise<VoiceUiConfig>
 }

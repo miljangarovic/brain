@@ -582,3 +582,25 @@ export function terminalPath(s: AppState, id: string): string {
     }
   return ''
 }
+
+// Visible panes of a feature in tab order: terminals not hidden, then open file
+// panes — the exact list the tab bar renders (App.tsx tabItems). Defaults to
+// the active feature.
+export const visiblePanes = (s: AppState, featureId?: string): { id: string; file: boolean }[] => {
+  const f = featureId
+    ? s.workspace.groups.flatMap((g) => g.features).find((x) => x.id === featureId) ?? null
+    : getActiveFeature(s)
+  return [
+    ...(f?.terminals.filter((t) => !s.hidden.includes(t.id)).map((t) => ({ id: t.id, file: false })) ?? []),
+    ...((f?.files ?? []).map((p) => ({ id: p.id, file: true })))
+  ]
+}
+
+// The pane `dir` steps away from the active one, wrapping; null when the
+// active feature has no visible panes.
+export const cyclePane = (s: AppState, dir: 1 | -1): { id: string; file: boolean } | null => {
+  const visible = visiblePanes(s)
+  if (visible.length === 0) return null
+  const idx = visible.findIndex((v) => v.id === s.activeTerminalId)
+  return visible[(idx + dir + visible.length) % visible.length]
+}

@@ -5,7 +5,7 @@ import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
 import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from '../shared/exportTypes'
 import type { FileLoadResult } from '../shared/files'
-import type { VoiceResult, VoiceStateEvent, WorkspaceSnapshot } from '../shared/voice'
+import type { VoiceResult, VoiceStateEvent, VoiceUiConfig, WorkspaceSnapshot } from '../shared/voice'
 
 // pty:data / pty:exit are consumed by EVERY mounted terminal, and all terminals
 // stay mounted — so one ipcRenderer listener per terminal trips the default
@@ -93,7 +93,8 @@ const api: BrainApi = {
     ipcRenderer.on(IPC.voiceResult, listener)
     return () => ipcRenderer.removeListener(IPC.voiceResult, listener)
   },
-  cancelVoice: () => ipcRenderer.send(IPC.voiceCancel)
+  cancelVoice: () => ipcRenderer.send(IPC.voiceCancel),
+  getVoiceUiConfig: () => ipcRenderer.invoke(IPC.voiceUiConfig) as Promise<VoiceUiConfig>
 }
 
 contextBridge.exposeInMainWorld('brain', api)

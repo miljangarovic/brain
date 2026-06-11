@@ -17,4 +17,14 @@ describe('parseVoiceConfig', () => {
     const c = parseVoiceConfig({ shortcut: 7, enabled: 'yes', modelId: ['x'] })
     expect(c).toEqual(DEFAULT_VOICE_CONFIG)
   })
+  it('accepts mouseTrigger literals', () => {
+    expect(parseVoiceConfig({ mouseTrigger: 'back' }).mouseTrigger).toBe('back')
+    expect(parseVoiceConfig({ mouseTrigger: 'off' }).mouseTrigger).toBe('off')
+    expect(parseVoiceConfig({ mouseTrigger: 'forward' }).mouseTrigger).toBe('forward')
+  })
+  it('falls back to forward for invalid mouseTrigger', () => {
+    expect(parseVoiceConfig({ mouseTrigger: 'middle' }).mouseTrigger).toBe('forward')
+    expect(parseVoiceConfig({ mouseTrigger: 7 }).mouseTrigger).toBe('forward')
+    expect(parseVoiceConfig({}).mouseTrigger).toBe('forward')
+  })
 })

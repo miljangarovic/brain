@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { AppState } from '../store'
 import type { AgentKind } from '../agents'
+import type { ReviewStatus } from '@shared/types'
 import { buildSnapshot } from './snapshot'
 import { planCommand } from './executor'
 import { runDescriptor, type RunDeps } from './run'
@@ -15,9 +16,12 @@ export interface VoiceDeps {
   apply: (fn: (s: AppState) => AppState) => void
   markStarted: (id: string) => void
   stopReviewLoop: (terminalId: string) => void
+  acceptPhase: (reviewerId: string) => void
+  moreRounds: (reviewerId: string) => void
   launchAgent: (featureId: string, kind: AgentKind, opts?: { prompt?: string; name?: string }) => void
   liveAgents: Record<string, AgentKind | undefined>
   sendPrompt: (terminalId: string, prompt: string) => void
+  reviewStatus: Record<string, ReviewStatus | undefined>
 }
 
 export function useVoice(deps: VoiceDeps) {
@@ -25,6 +29,7 @@ export function useVoice(deps: VoiceDeps) {
   const recRef = useRef<RecorderHandle | null>(null)
   const startingRef = useRef(false)
   const cancelEpochRef = useRef(0)
+  const releasedRef = useRef(false)
   const depsRef = useRef(deps)
   depsRef.current = deps
   const uiRef = useRef(ui)
@@ -67,6 +72,37 @@ export function useVoice(deps: VoiceDeps) {
     dispatch({ type: 'dismiss' })
   }, [])
 
+  // Push-to-talk: hold a mouse side button to record, release to send.
+  // VAD auto-stop is disabled — the button delimits the take.
+  const pressStart = useCallback(() => {
+    releasedRef.current = false
+    if (startingRef.current) return
+    // A PTT press is a new activation: cancel anything in flight (an active
+    // shortcut-initiated recording, transcription, confirm overlay).
+    if (recRef.current || uiRef.current.kind !== 'idle') cancel()
+    startingRef.current = true
+    const epoch = cancelEpochRef.current
+    void startRecording({ onAutoStop: () => void finish(), vadAutoStop: false })
+      .then((rec) => {
+        startingRef.current = false
+        // A cancel (blur mid-hold, new activation) while the mic was still
+        // opening must not leave a hot recorder behind — VAD is off, it would
+        // record unbounded and the next activation would SEND that audio.
+        if (epoch !== cancelEpochRef.current) { rec.cancel(); return }
+        recRef.current = rec
+        dispatch({ type: 'listen' })
+        // The button can come back up before getUserMedia resolves — that
+        // release must still end the take or it would record forever.
+        if (releasedRef.current) void finish()
+      })
+      .catch(() => { startingRef.current = false; dispatch({ type: 'mic-error', message: 'Microphone unavailable — check system permissions' }) })
+  }, [cancel, finish])
+
+  const pressEnd = useCallback(() => {
+    releasedRef.current = true
+    if (recRef.current) void finish()
+  }, [finish])
+
   const confirm = useCallback((editedPrompt?: string) => {
     const s = uiRef.current
     if (s.kind !== 'confirm') return
@@ -90,8 +126,17 @@ export function useVoice(deps: VoiceDeps) {
         d = { ...d, prompt: p }
       }
     }
+    if (d.type === 'review' && d.op !== 'stop'
+      && depsRef.current.reviewStatus[d.reviewerId] !== 'needs-decision') {
+      // The executor's needs-decision gate is plan-time state; re-check it now —
+      // the loop may have moved on while the confirm overlay sat open. Dispatch
+      // 'executed' (not 'plan-error': the reducer ignores plan-error outside
+      // active states) so the overlay resolves into an explanatory toast.
+      dispatch({ type: 'executed', toast: 'Review is no longer waiting for a decision' })
+      return
+    }
     runDescriptor(d, runDeps())
-    const toast = d.type === 'state' ? d.toast
+    const toast = 'toast' in d ? d.toast
       : d.type === 'closeTerminal' ? 'Terminal closed'
       : d.type === 'sendPrompt' ? 'Prompt sent'
       : 'Terminal launched'
@@ -105,7 +150,7 @@ export function useVoice(deps: VoiceDeps) {
     // (main's gen guard could not catch it) must not execute silently.
     const k = uiRef.current.kind
     if (k !== 'processing' && k !== 'downloading') return
-    const plan = planCommand(command, depsRef.current.state, { liveAgents: depsRef.current.liveAgents })
+    const plan = planCommand(command, depsRef.current.state, { liveAgents: depsRef.current.liveAgents, reviewStatus: depsRef.current.reviewStatus })
     if (plan.type === 'run') {
       runDescriptor(plan.descriptor, runDeps())
       dispatch({ type: 'executed', toast: plan.descriptor.toast })
@@ -126,5 +171,5 @@ export function useVoice(deps: VoiceDeps) {
     return () => clearTimeout(t)
   }, [ui])
 
-  return { ui, toggle, cancel, confirm }
+  return { ui, toggle, cancel, confirm, pressStart, pressEnd }
 }

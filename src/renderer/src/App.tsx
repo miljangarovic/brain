@@ -9,7 +9,7 @@ import {
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview,
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview, cyclePane,
   addImportedGroup, addImportedFeature,
   archiveFeature, restoreFeature, deleteArchivedFeature, addDocument, renameDocument, removeDocument,
   openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane, featureIdOfTerminal
@@ -34,6 +34,8 @@ import { ConfirmDialog } from './components/ConfirmDialog'
 import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
 import { ArchiveDialog } from './components/ArchiveDialog'
 import { useVoice } from './voice/useVoice'
+import { useMouseTrigger } from './voice/useMouseTrigger'
+import type { MouseTrigger } from '@shared/voice'
 import { VoiceOverlay } from './components/VoiceOverlay'
 import { envelopePrompt } from './voice/inject'
 import { submitToPty } from './review/submit'
@@ -281,15 +283,9 @@ export default function App() {
         e.preventDefault(); cycleTab(-1)
       }
     }
-    const cycleTab = (dir: number) => {
-      const f = getActiveFeature(state)
-      const visible: { id: string; file: boolean }[] = [
-        ...(f?.terminals.filter((t) => !state.hidden.includes(t.id)).map((t) => ({ id: t.id, file: false })) ?? []),
-        ...((f?.files ?? []).map((p) => ({ id: p.id, file: true })))
-      ]
-      if (visible.length === 0) return
-      const idx = visible.findIndex((v) => v.id === state.activeTerminalId)
-      const next = visible[(idx + dir + visible.length) % visible.length]
+    const cycleTab = (dir: 1 | -1) => {
+      const next = cyclePane(state, dir)
+      if (!next) return
       if (!next.file) markStarted(next.id)
       apply((s) => setActiveTerminal(s, next.id))
     }
@@ -322,13 +318,23 @@ export default function App() {
     // the same paste-then-Enter mechanism the review pipeline uses.
     submitToPty(terminalId, envelopePrompt(prompt))
   }
+  const [mouseTrigger, setMouseTrigger] = useState<MouseTrigger>('off')
+  useEffect(() => {
+    // Rejection (e.g. invoke racing main's handler registration) keeps 'off'.
+    window.brain.getVoiceUiConfig().then((c) => setMouseTrigger(c.mouseTrigger), () => {})
+  }, [])
+
   const voice = useVoice({
     state, apply, markStarted,
     stopReviewLoop: (id) => review.stopLoop(id),
+    acceptPhase: (id) => review.acceptPhase(id),
+    moreRounds: (id) => void review.moreRounds(id),
     launchAgent,
     liveAgents,
-    sendPrompt: sendPromptToAgent
+    sendPrompt: sendPromptToAgent,
+    reviewStatus
   })
+  useMouseTrigger(mouseTrigger, { onDown: voice.pressStart, onUp: voice.pressEnd, onCancel: voice.cancel })
   const finishExport = (res: ExportRunResult) => {
     transferRef.current = false
     setExportProgress(null)

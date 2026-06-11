@@ -9,9 +9,11 @@
 import type { AppState } from '../store'
 import {
   setActiveFeature, toggleFeatureViewMode, setActiveTerminal, setFeatureGridStyle,
-  hideTerminal, showTerminal, renameFeature, renameTerminal, getTerminalById
+  hideTerminal, showTerminal, renameFeature, renameTerminal, getTerminalById,
+  closeFile, featureIdOfTerminal, findFilePane, visiblePanes, cyclePane,
+  addFeature, archiveFeature
 } from '../store'
-import type { Feature, TerminalKind } from '@shared/types'
+import type { Feature, TerminalKind, ReviewStatus } from '@shared/types'
 import type { VoiceCommand } from '@shared/voice'
 import type { AgentKind } from '../agents'
 
@@ -23,8 +25,17 @@ export type StateDescriptor = {
   // gate spawning (see App.tsx onSelectTerminal / cycleTab).
   startIds?: string[]
 }
+// Review-loop control delegated to useReview via App (effectful, like
+// closeTerminal/addTerminal — never reimplemented here).
+export type ReviewDescriptor = {
+  type: 'review'
+  op: 'accept' | 'more-rounds' | 'stop'
+  reviewerId: string
+  toast: string
+}
 export type ExecDescriptor =
   | StateDescriptor
+  | ReviewDescriptor
   | { type: 'closeTerminal'; terminalId: string }
   | { type: 'addTerminal'; featureId: string; kind: TerminalKind; name?: string; prompt?: string }
   | { type: 'sendPrompt'; terminalId: string; prompt: string }
@@ -33,10 +44,13 @@ export type ExecDescriptor =
 // terminals currently host a RUNNING agent (App tracks this from pty:proc
 // events). REQUIRED parameter — an optional one would let stale call sites
 // silently skip the liveness gate.
-export interface PlanContext { liveAgents: Record<string, AgentKind | undefined> }
+export interface PlanContext {
+  liveAgents: Record<string, AgentKind | undefined>
+  reviewStatus: Record<string, ReviewStatus | undefined>
+}
 
 export type ExecPlan =
-  | { type: 'run'; descriptor: StateDescriptor }
+  | { type: 'run'; descriptor: StateDescriptor | ReviewDescriptor }
   | { type: 'confirm'; summary: string; editablePrompt?: string; descriptor: ExecDescriptor }
   | { type: 'error'; message: string }
 
@@ -183,6 +197,108 @@ function planHigh(cmd: VoiceCommand, s: AppState, ctx: PlanContext): ExecPlan {
         summary: `Send to "${t.name}"`,
         editablePrompt: prompt,
         descriptor: { type: 'sendPrompt', terminalId: t.id, prompt }
+      }
+    }
+    case 'review_accept':
+    case 'review_more_rounds':
+    case 'review_stop': {
+      const f = findFeature(s, cmd.featureId ?? s.activeFeatureId ?? undefined)
+      if (!f) return err('No feature selected')
+      const reviewer = f.terminals.find((t) => !!t.review)
+      if (!reviewer) return err(`No review running in "${f.name}"`)
+      // Accept/more-rounds are meaningful exactly when the loop paused for a
+      // decision (the GUI shows those buttons only then — FeatureHeader):
+      // mid-review, accept would tear down the reviewer and discard its
+      // in-flight critique, and moreRounds would inject a second request into
+      // the reviewer's PTY. Stop is always available, like the GUI's Stop.
+      if (cmd.action !== 'review_stop' && ctx.reviewStatus[reviewer.id] !== 'needs-decision') {
+        return err('Review is not waiting for a decision')
+      }
+      if (cmd.action === 'review_accept') {
+        return {
+          type: 'run',
+          descriptor: { type: 'review', op: 'accept', reviewerId: reviewer.id, toast: `Review accepted: ${f.name}` }
+        }
+      }
+      if (cmd.action === 'review_more_rounds') {
+        return {
+          type: 'run',
+          descriptor: { type: 'review', op: 'more-rounds', reviewerId: reviewer.id, toast: `More review rounds: ${f.name}` }
+        }
+      }
+      return {
+        type: 'confirm',
+        summary: `Stop the review in "${f.name}"`,
+        descriptor: { type: 'review', op: 'stop', reviewerId: reviewer.id, toast: `Review stopped: ${f.name}` }
+      }
+    }
+    case 'cycle_tab': {
+      const dir = cmd.direction === 'prev' ? -1 : 1
+      const next = cyclePane(s, dir)
+      if (!next) return err('No tabs to cycle')
+      const name = next.file
+        ? findFilePane(s, next.id)?.pane.name ?? 'file'
+        : getTerminalById(s, next.id)?.name ?? ''
+      return {
+        type: 'run',
+        descriptor: {
+          type: 'state',
+          run: (st) => setActiveTerminal(st, next.id),
+          toast: `→ ${name}`,
+          ...(next.file ? {} : { startIds: [next.id] })
+        }
+      }
+    }
+    case 'close_tabs': {
+      // The kept tab: a named terminal, else the active pane (terminal or file).
+      const anchorId = cmd.terminalId ?? s.activeTerminalId
+      if (!anchorId) return err('No tab to keep')
+      const anchorTerm = getTerminalById(s, anchorId)
+      if (cmd.terminalId && !anchorTerm) return err('Terminal not found — try again')
+      const panes = visiblePanes(s, anchorTerm ? featureIdOfTerminal(s, anchorId) ?? undefined : undefined)
+      const scope = cmd.scope ?? 'others'
+      const idx = panes.findIndex((p) => p.id === anchorId)
+      const targets =
+        scope === 'others' ? panes.filter((p) => p.id !== anchorId)
+        : idx === -1 ? []
+        : scope === 'left' ? panes.slice(0, idx)
+        : panes.slice(idx + 1)
+      if (targets.length === 0) return err('No tabs to close')
+      const keptName = anchorTerm?.name ?? findFilePane(s, anchorId)?.pane.name ?? ''
+      return {
+        type: 'run',
+        descriptor: {
+          type: 'state',
+          run: (st) => {
+            const closed = targets.reduce((acc, p) => (p.file ? closeFile(acc, p.id) : hideTerminal(acc, p.id)), st)
+            // A terminal anchor may itself be hidden ("zatvori sve osim X"):
+            // showTerminal both un-hides and activates it.
+            return anchorTerm ? showTerminal(closed, anchorId) : closed
+          },
+          toast: `Closed ${targets.length} tab${targets.length === 1 ? '' : 's'} — kept ${keptName}`,
+          ...(anchorTerm ? { startIds: [anchorId] } : {})
+        }
+      }
+    }
+    case 'add_feature': {
+      if (!cmd.name) return err('No feature name understood')
+      const gid = cmd.groupId ?? s.activeGroupId
+      const g = gid ? s.workspace.groups.find((x) => x.id === gid) : null
+      if (!g) return err('No project to add the feature to')
+      const name = cmd.name
+      return {
+        type: 'confirm',
+        summary: `New feature "${name}" in project "${g.name}"`,
+        descriptor: { type: 'state', run: (st) => addFeature(st, g.id, name), toast: `Feature created: ${name}` }
+      }
+    }
+    case 'archive_feature': {
+      const f = findFeature(s, cmd.featureId ?? s.activeFeatureId ?? undefined)
+      if (!f) return err('Feature not found — try again')
+      return {
+        type: 'confirm',
+        summary: `Archive feature "${f.name}"? Its terminals will close.`,
+        descriptor: { type: 'state', run: (st) => archiveFeature(st, f.id), toast: `Archived: ${f.name}` }
       }
     }
     case 'unknown':
