@@ -24,7 +24,8 @@ const deps = (s: AppState) => ({
   apply: vi.fn(),
   markStarted: vi.fn(),
   stopReviewLoop: vi.fn(),
-  launchAgent: vi.fn()
+  launchAgent: vi.fn(),
+  sendPrompt: vi.fn()
 })
 
 describe('runDescriptor', () => {
@@ -70,5 +71,13 @@ describe('runDescriptor', () => {
     const added = after.workspace.groups[0].features[0].terminals.at(-1)
     expect(added?.startupCommand).toBe('npm test')
     expect(added?.name).toBe('shell')
+  })
+  it('sendPrompt descriptor delegates to deps.sendPrompt only', () => {
+    const { s } = fixture()
+    const d = deps(s)
+    runDescriptor({ type: 'sendPrompt', terminalId: 'tx', prompt: 'sredi testove' }, d)
+    expect(d.sendPrompt).toHaveBeenCalledWith('tx', 'sredi testove')
+    expect(d.apply).not.toHaveBeenCalled()
+    expect(d.launchAgent).not.toHaveBeenCalled()
   })
 })

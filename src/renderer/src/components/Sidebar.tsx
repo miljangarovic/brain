@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Group, ReviewStatus } from '@shared/types'
 import type { AgentKind } from '../agents'
-import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon, ClaudeIcon, CodexIcon, ShellIcon, DocIcon, ArchiveIcon, FileCodeIcon } from './icons'
+import { TerminalKindIcon, GridIcon, TrashIcon, SpinnerIcon, ClaudeIcon, CodexIcon, ShellIcon, DocIcon, ArchiveIcon, FileCodeIcon, MicIcon } from './icons'
 import { ContextMenu } from './ContextMenu'
 import { AddMenuButton } from './AddMenuButton'
 import { ReviewStatusDot } from './ReviewStatusDot'
@@ -564,19 +564,22 @@ export function Sidebar(props: {
         })}
       </div>
 
-      <div className="p-2 border-t border-line flex gap-2">
-        <button aria-label="New Project" onClick={onAddGroup}
-          className="flex-1 rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
-          + New Project
-        </button>
-        <button aria-label="Import project or feature" title="Import an exported project/feature zip" onClick={onImport}
-          className="rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
-          Import…
-        </button>
+      <div className="p-2 border-t border-line flex flex-col gap-2">
         <button aria-label="Voice command" title="Voice command (Ctrl+Alt+Space)" onClick={onVoice}
-          className="rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
-          🎤
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
+          <MicIcon className="text-sm" />
+          Voice
         </button>
+        <div className="flex gap-2">
+          <button aria-label="New Project" onClick={onAddGroup}
+            className="flex-1 rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
+            + New Project
+          </button>
+          <button aria-label="Import project or feature" title="Import an exported project/feature zip" onClick={onImport}
+            className="rounded-md border border-dashed border-divider bg-transparent px-2 py-1 text-xs text-fg-muted outline-none transition hover:border-accent hover:text-accent">
+            Import…
+          </button>
+        </div>
       </div>
 
       {menu && (() => {

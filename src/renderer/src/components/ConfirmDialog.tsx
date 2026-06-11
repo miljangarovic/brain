@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useBackdropDismiss } from './useBackdropDismiss'
 
 export function ConfirmDialog({
   message, confirmLabel = 'Delete', onConfirm, onCancel
@@ -25,8 +26,10 @@ export function ConfirmDialog({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onCancel])
 
+  const backdrop = useBackdropDismiss(onCancel)
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm" {...backdrop}>
       <div className="w-[24rem] rounded-xl bg-elevated border border-line p-5 shadow-2xl shadow-black/50" onClick={(e) => e.stopPropagation()}>
         <p className="mb-4 text-sm text-fg-bright">{message}</p>
         <div className="flex justify-end gap-2">

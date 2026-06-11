@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { planCommand } from './executor'
 import {
   createInitialState, addGroup, addFeature, addTerminal, hideTerminal,
-  toggleFeatureViewMode
+  toggleFeatureViewMode, setActiveTerminal
 } from '../store'
 import type { VoiceCommand } from '@shared/voice'
+import type { AgentKind } from '../agents'
 
 function fixture() {
   let s = createInitialState()
@@ -21,10 +22,12 @@ function fixture() {
 const cmd = (c: Partial<VoiceCommand> & { action: VoiceCommand['action'] }): VoiceCommand =>
   ({ confidence: 'high', ...c })
 
+const ctx = (liveAgents: Record<string, AgentKind | undefined> = {}) => ({ liveAgents })
+
 describe('planCommand — immediate actions', () => {
   it('switch_feature → run setActiveFeature, startIds = first visible terminal', () => {
     const { s, f1, t1 } = fixture()
-    const p = planCommand(cmd({ action: 'switch_feature', featureId: f1 }), s)
+    const p = planCommand(cmd({ action: 'switch_feature', featureId: f1 }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
     expect(p.descriptor.startIds).toEqual([t1])
     expect(p.descriptor.run(s).activeFeatureId).toBe(f1)
@@ -35,7 +38,7 @@ describe('planCommand — immediate actions', () => {
     s = hideTerminal(s, t1)
     // hide the second terminal too so f1 has no visible terminals
     s = hideTerminal(s, s.workspace.groups[0].features[1].terminals[1].id)
-    const p = planCommand(cmd({ action: 'switch_feature', featureId: f1 }), s)
+    const p = planCommand(cmd({ action: 'switch_feature', featureId: f1 }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
     expect(p.descriptor.startIds).toBeUndefined()
     expect(p.descriptor.run(s).activeFeatureId).toBe(f1)
@@ -43,7 +46,7 @@ describe('planCommand — immediate actions', () => {
   it('toggle_grid defaults to the active feature and notes restored hidden terminals', () => {
     let { s, t2 } = fixture()
     s = hideTerminal(s, t2)
-    const p = planCommand(cmd({ action: 'toggle_grid' }), s)
+    const p = planCommand(cmd({ action: 'toggle_grid' }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
     expect(p.descriptor.toast).toContain('restored')
     const after = p.descriptor.run(s)
@@ -52,14 +55,14 @@ describe('planCommand — immediate actions', () => {
   it('toggle_grid leaving grid has no restored note', () => {
     let { s, f1 } = fixture()
     s = toggleFeatureViewMode(s, f1) // now grid
-    const p = planCommand(cmd({ action: 'toggle_grid', featureId: f1 }), s)
+    const p = planCommand(cmd({ action: 'toggle_grid', featureId: f1 }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
     expect(p.descriptor.toast).not.toContain('restored')
   })
   it('switch_tab on a hidden terminal un-hides it (showTerminal)', () => {
     let { s, t2 } = fixture()
     s = hideTerminal(s, t2)
-    const p = planCommand(cmd({ action: 'switch_tab', terminalId: t2 }), s)
+    const p = planCommand(cmd({ action: 'switch_tab', terminalId: t2 }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
     const after = p.descriptor.run(s)
     expect(after.hidden).not.toContain(t2)
@@ -68,14 +71,14 @@ describe('planCommand — immediate actions', () => {
   })
   it('set_grid_style requires a gridStyle', () => {
     const { s } = fixture()
-    expect(planCommand(cmd({ action: 'set_grid_style' }), s).type).toBe('error')
-    const p = planCommand(cmd({ action: 'set_grid_style', gridStyle: 'cols' }), s)
+    expect(planCommand(cmd({ action: 'set_grid_style' }), s, ctx()).type).toBe('error')
+    const p = planCommand(cmd({ action: 'set_grid_style', gridStyle: 'cols' }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
     expect(p.descriptor.run(s).workspace.groups[0].features[1].gridStyle).toBe('cols')
   })
   it('hide_terminal defaults to the active terminal', () => {
     const { s, t2 } = fixture() // addTerminal activates the last-added → t2 active
-    const p = planCommand(cmd({ action: 'hide_terminal' }), s)
+    const p = planCommand(cmd({ action: 'hide_terminal' }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
     expect(p.descriptor.run(s).hidden).toContain(t2)
   })
@@ -84,32 +87,32 @@ describe('planCommand — immediate actions', () => {
 describe('planCommand — confirm actions', () => {
   it('add_terminal defaults kind=claude, feature=active, carries the prompt editable', () => {
     const { s, f1 } = fixture()
-    const p = planCommand(cmd({ action: 'add_terminal', prompt: 'sredi testove' }), s)
+    const p = planCommand(cmd({ action: 'add_terminal', prompt: 'sredi testove' }), s, ctx())
     if (p.type !== 'confirm') throw new Error('expected confirm')
     expect(p.editablePrompt).toBe('sredi testove')
     expect(p.descriptor).toMatchObject({ type: 'addTerminal', featureId: f1, kind: 'claude', prompt: 'sredi testove' })
   })
   it('close_terminal → confirm with closeTerminal descriptor', () => {
     const { s, t2 } = fixture()
-    const p = planCommand(cmd({ action: 'close_terminal', terminalId: t2 }), s)
+    const p = planCommand(cmd({ action: 'close_terminal', terminalId: t2 }), s, ctx())
     if (p.type !== 'confirm') throw new Error('expected confirm')
     expect(p.descriptor).toEqual({ type: 'closeTerminal', terminalId: t2 })
     expect(p.summary).toContain('shell')
   })
   it('rename_feature → confirm with a pure state descriptor', () => {
     const { s, f1 } = fixture()
-    const p = planCommand(cmd({ action: 'rename_feature', featureId: f1, name: 'panes-v2' }), s)
+    const p = planCommand(cmd({ action: 'rename_feature', featureId: f1, name: 'panes-v2' }), s, ctx())
     if (p.type !== 'confirm') throw new Error('expected confirm')
     if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
     expect(p.descriptor.run(s).workspace.groups[0].features[1].name).toBe('panes-v2')
   })
   it('rename_terminal without a name → error', () => {
     const { s, t1 } = fixture()
-    expect(planCommand(cmd({ action: 'rename_terminal', terminalId: t1 }), s).type).toBe('error')
+    expect(planCommand(cmd({ action: 'rename_terminal', terminalId: t1 }), s, ctx()).type).toBe('error')
   })
   it('low confidence downgrades an immediate action to confirm', () => {
     const { s, f1 } = fixture()
-    const p = planCommand(cmd({ action: 'switch_feature', featureId: f1, confidence: 'low' }), s)
+    const p = planCommand(cmd({ action: 'switch_feature', featureId: f1, confidence: 'low' }), s, ctx())
     expect(p.type).toBe('confirm')
   })
 })
@@ -117,15 +120,54 @@ describe('planCommand — confirm actions', () => {
 describe('planCommand — invalid input', () => {
   it('unknown → error', () => {
     const { s } = fixture()
-    expect(planCommand(cmd({ action: 'unknown' }), s).type).toBe('error')
+    expect(planCommand(cmd({ action: 'unknown' }), s, ctx()).type).toBe('error')
   })
   it('stale/wrong ids → error', () => {
     const { s } = fixture()
-    expect(planCommand(cmd({ action: 'switch_feature', featureId: 'gone' }), s).type).toBe('error')
-    expect(planCommand(cmd({ action: 'switch_tab', terminalId: 'gone' }), s).type).toBe('error')
+    expect(planCommand(cmd({ action: 'switch_feature', featureId: 'gone' }), s, ctx()).type).toBe('error')
+    expect(planCommand(cmd({ action: 'switch_tab', terminalId: 'gone' }), s, ctx()).type).toBe('error')
   })
   it('switch_feature without featureId → error', () => {
     const { s } = fixture()
-    expect(planCommand(cmd({ action: 'switch_feature' }), s).type).toBe('error')
+    expect(planCommand(cmd({ action: 'switch_feature' }), s, ctx()).type).toBe('error')
+  })
+})
+
+describe('planCommand — send_prompt', () => {
+  it('live claude target → confirm with editable prompt and sendPrompt descriptor', () => {
+    const { s, t1 } = fixture()
+    const p = planCommand(cmd({ action: 'send_prompt', terminalId: t1, prompt: 'sredi testove' }), s, ctx({ [t1]: 'claude' }))
+    if (p.type !== 'confirm') throw new Error('expected confirm, got ' + p.type)
+    expect(p.editablePrompt).toBe('sredi testove')
+    expect(p.summary).toContain('Send to "claude"')
+    expect(p.descriptor).toEqual({ type: 'sendPrompt', terminalId: t1, prompt: 'sredi testove' })
+  })
+  it('cold (not running) agent → error pointing at add_terminal', () => {
+    const { s, t1 } = fixture()
+    const p = planCommand(cmd({ action: 'send_prompt', terminalId: t1, prompt: 'x' }), s, ctx())
+    if (p.type !== 'error') throw new Error('expected error')
+    expect(p.message).toMatch(/not running/)
+  })
+  it('shell target → error', () => {
+    const { s, t2 } = fixture()
+    const p = planCommand(cmd({ action: 'send_prompt', terminalId: t2, prompt: 'x' }), s, ctx())
+    if (p.type !== 'error') throw new Error('expected error')
+    expect(p.message).toMatch(/claude\/codex/)
+  })
+  it('missing prompt → error', () => {
+    const { s, t1 } = fixture()
+    const p = planCommand(cmd({ action: 'send_prompt', terminalId: t1 }), s, ctx({ [t1]: 'claude' }))
+    if (p.type !== 'error') throw new Error('expected error')
+    // Message asserted so this test FAILS against Task 1's placeholder case
+    // ("Didn't understand the command") and only passes with the real case.
+    expect(p.message).toMatch(/No prompt/)
+  })
+  it('defaults to the active terminal', () => {
+    let { s, t1 } = fixture()
+    s = setActiveTerminal(s, t1)
+    const p = planCommand(cmd({ action: 'send_prompt', prompt: 'nastavi' }), s, ctx({ [t1]: 'claude' }))
+    if (p.type !== 'confirm') throw new Error('expected confirm')
+    if (p.descriptor.type !== 'sendPrompt') throw new Error('expected sendPrompt descriptor')
+    expect(p.descriptor.terminalId).toBe(t1)
   })
 })

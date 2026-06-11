@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { NewGroupDialog } from './NewGroupDialog'
 
@@ -28,6 +28,24 @@ describe('NewGroupDialog', () => {
     render(<NewGroupDialog onCreate={() => {}} onCancel={onCancel} />)
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onCancel).toHaveBeenCalled()
+  })
+
+  it('does not close when a drag from inside the dialog releases on the backdrop', () => {
+    const onCancel = vi.fn()
+    const { container } = render(<NewGroupDialog onCreate={() => {}} onCancel={onCancel} />)
+    const backdrop = container.firstElementChild as HTMLElement
+    fireEvent.mouseDown(backdrop.firstElementChild as HTMLElement)
+    fireEvent.click(backdrop)
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('closes on a click that starts and ends on the backdrop', () => {
+    const onCancel = vi.fn()
+    const { container } = render(<NewGroupDialog onCreate={() => {}} onCancel={onCancel} />)
+    const backdrop = container.firstElementChild as HTMLElement
+    fireEvent.mouseDown(backdrop)
+    fireEvent.click(backdrop)
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
   it('closes on Escape', async () => {

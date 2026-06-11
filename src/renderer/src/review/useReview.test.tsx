@@ -116,6 +116,20 @@ describe('useReview verdict gating', () => {
   })
 })
 
+describe('useReview reviewer naming', () => {
+  it('names the reviewer terminal after the origin terminal, not the reviewer agent', async () => {
+    const state = mkState(false)
+    state.workspace.groups[0].features[0].terminals[0].name = 'auth-api'
+    const { result, apply } = setup({ state })
+    await act(async () => {})
+    await act(() => result.current.startReview({ originTerminalId: 'origin', reviewer: 'codex', phase: 'impl', maxRounds: 3 }))
+    const updater = apply.mock.calls.at(-1)![0]
+    const next = updater(mkState(false))
+    const reviewer = next.workspace.groups[0].features[0].terminals.find((t: { review?: unknown }) => t.review)
+    expect(reviewer?.name).toBe('review: auth-api')
+  })
+})
+
 describe('useReview reviewer session pinning', () => {
   it('pins a claude reviewer session id at spawn (no --continue fallback on restore)', async () => {
     const { result, apply } = setup({ state: mkState(false) })

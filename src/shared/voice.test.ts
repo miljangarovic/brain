@@ -37,4 +37,8 @@ describe('validateVoiceCommand', () => {
     expect(validateVoiceCommand({ action: 'unknown', confidence: 'high' }))
       .toEqual({ action: 'unknown', confidence: 'low' })
   })
+  it('passes send_prompt through', () => {
+    expect(validateVoiceCommand({ action: 'send_prompt', terminalId: 't1', prompt: 'sredi testove', confidence: 'high' }))
+      .toEqual({ action: 'send_prompt', terminalId: 't1', prompt: 'sredi testove', confidence: 'high' })
+  })
 })

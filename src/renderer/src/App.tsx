@@ -35,6 +35,8 @@ import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
 import { ArchiveDialog } from './components/ArchiveDialog'
 import { useVoice } from './voice/useVoice'
 import { VoiceOverlay } from './components/VoiceOverlay'
+import { envelopePrompt } from './voice/inject'
+import { submitToPty } from './review/submit'
 
 export default function App() {
   const { state, setState, apply } = useStore()
@@ -159,6 +161,10 @@ export default function App() {
   const attention = useAttention(state, apply)
   useEffect(() => window.brain.onPtyBusy(guardBusy(attention.handleBusy)), [attention.handleBusy, guardBusy])
   useEffect(() => window.brain.onPtyExit(attention.handleExit), [attention.handleExit])
+  useEffect(() => window.brain.onPtyExit((id) => {
+    // a dead pty has no live agent — voice send_prompt gates read this
+    setLiveAgents((m) => ({ ...m, [id]: undefined }))
+  }), [])
   useEffect(() => window.brain.onNotificationClick(attention.handleNotificationClick), [attention.handleNotificationClick])
 
   // Agent terminals present at first load are "restored" — their PTYs should
@@ -309,10 +315,19 @@ export default function App() {
       })
     }
   }
+  const sendPromptToAgent = (terminalId: string, prompt: string) => {
+    // Surface the target so the user watches the agent take the prompt.
+    apply((s) => showTerminal(s, terminalId))
+    // submitToPty = write text, lone CR after the calibrated SUBMIT_DELAY_MS —
+    // the same paste-then-Enter mechanism the review pipeline uses.
+    submitToPty(terminalId, envelopePrompt(prompt))
+  }
   const voice = useVoice({
     state, apply, markStarted,
     stopReviewLoop: (id) => review.stopLoop(id),
-    launchAgent
+    launchAgent,
+    liveAgents,
+    sendPrompt: sendPromptToAgent
   })
   const finishExport = (res: ExportRunResult) => {
     transferRef.current = false

@@ -122,6 +122,16 @@ describe('Sidebar (3-level)', () => {
     expect(onAddGroup).toHaveBeenCalled()
   })
 
+  it('renders the voice button with a mic icon, above New Project and Import', () => {
+    renderSidebar()
+    const voice = screen.getByLabelText('Voice command')
+    expect(voice.querySelector('[data-testid="icon-mic"]')).toBeInTheDocument()
+    expect(voice.textContent).not.toContain('🎤')
+    const newProject = screen.getByLabelText('New Project')
+    // voice button precedes (sits above) the New Project / Import row
+    expect(voice.compareDocumentPosition(newProject) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('adds a feature to a group', async () => {
     const onAddFeature = vi.fn()
     renderSidebar({ onAddFeature })

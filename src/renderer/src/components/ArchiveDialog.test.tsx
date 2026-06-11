@@ -46,6 +46,15 @@ describe('ArchiveDialog', () => {
     expect(screen.getByText('Nothing archived yet.')).toBeInTheDocument()
   })
 
+  it('does not close when a drag from inside the dialog releases on the backdrop', () => {
+    const onClose = vi.fn()
+    const { container } = renderDialog({ onClose })
+    const backdrop = container.firstElementChild as HTMLElement
+    fireEvent.mouseDown(backdrop.firstElementChild as HTMLElement)
+    fireEvent.click(backdrop)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it('closes on Escape, the X button, and a backdrop click — but not an inner click', async () => {
     const onClose = vi.fn()
     const { container } = renderDialog({ onClose })

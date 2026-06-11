@@ -14,12 +14,19 @@ export interface RunDeps {
   markStarted: (id: string) => void
   stopReviewLoop: (terminalId: string) => void
   launchAgent: (featureId: string, kind: AgentKind, opts?: { prompt?: string; name?: string }) => void
+  // Injects a prompt into a live agent terminal's PTY (App implements it via
+  // review/submit.ts submitToPty + inject.ts envelopePrompt).
+  sendPrompt: (terminalId: string, prompt: string) => void
 }
 
 export function runDescriptor(d: ExecDescriptor, deps: RunDeps): void {
   if (d.type === 'state') {
     d.startIds?.forEach(deps.markStarted)
     deps.apply(d.run)
+    return
+  }
+  if (d.type === 'sendPrompt') {
+    deps.sendPrompt(d.terminalId, d.prompt)
     return
   }
   if (d.type === 'closeTerminal') {
