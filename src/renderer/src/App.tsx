@@ -319,9 +319,12 @@ export default function App() {
   const voice = useVoice({
     state, apply, markStarted,
     stopReviewLoop: (id) => review.stopLoop(id),
+    acceptPhase: (id) => review.acceptPhase(id),
+    moreRounds: (id) => void review.moreRounds(id),
     launchAgent,
     liveAgents,
-    sendPrompt: sendPromptToAgent
+    sendPrompt: sendPromptToAgent,
+    reviewStatus
   })
   const finishExport = (res: ExportRunResult) => {
     transferRef.current = false
