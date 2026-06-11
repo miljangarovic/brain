@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { buildIntentMessages, parseIntentResponse, parseIntent, VoiceIntentError } from './intent'
+import { aliasSnapshot, buildIntentMessages, parseIntentResponse, parseIntent, VoiceIntentError } from './intent'
 import type { WorkspaceSnapshot } from '@shared/voice'
 
 const snap: WorkspaceSnapshot = {
@@ -41,6 +41,41 @@ describe('buildIntentMessages', () => {
   })
 })
 
+const uuidSnap: WorkspaceSnapshot = {
+  groups: [{
+    id: 'd174078d-8e32-4c20-b82d-2ae227381faf', name: 'mappit', features: [{
+      id: 'aaaa1111-2222-3333-4444-555566667777', name: 'file-panes', terminals: [
+        { id: 'bbbb1111-2222-3333-4444-555566667777', name: 'claude', kind: 'claude' },
+        { id: 'cccc1111-2222-3333-4444-555566667777', name: 'shell', kind: 'shell', hidden: true }
+      ]
+    }]
+  }],
+  activeFeatureId: 'aaaa1111-2222-3333-4444-555566667777',
+  activeTerminalId: 'bbbb1111-2222-3333-4444-555566667777'
+}
+
+describe('aliasSnapshot', () => {
+  it('replaces UUIDs with short aliases and keeps names/kinds/hidden', () => {
+    const { aliased } = aliasSnapshot(uuidSnap)
+    expect(aliased.groups[0].id).toBe('g1')
+    expect(aliased.groups[0].features[0].id).toBe('f1')
+    expect(aliased.groups[0].features[0].terminals.map((t) => t.id)).toEqual(['t1', 't2'])
+    expect(aliased.groups[0].features[0].terminals[1].hidden).toBe(true)
+    expect(aliased.groups[0].name).toBe('mappit')
+  })
+  it('aliases the active ids consistently', () => {
+    const { aliased } = aliasSnapshot(uuidSnap)
+    expect(aliased.activeFeatureId).toBe('f1')
+    expect(aliased.activeTerminalId).toBe('t1')
+  })
+  it('toReal maps every alias back to its UUID', () => {
+    const { toReal } = aliasSnapshot(uuidSnap)
+    expect(toReal['f1']).toBe('aaaa1111-2222-3333-4444-555566667777')
+    expect(toReal['t2']).toBe('cccc1111-2222-3333-4444-555566667777')
+    expect(toReal['g1']).toBe('d174078d-8e32-4c20-b82d-2ae227381faf')
+  })
+})
+
 describe('parseIntentResponse', () => {
   it('parses plain JSON', () => {
     expect(parseIntentResponse('{"action":"toggle_grid","featureId":"f1","confidence":"high"}'))
@@ -74,10 +109,34 @@ describe('parseIntent', () => {
     expect((init as RequestInit).method).toBe('POST')
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer gsk_x' })
   })
+  it('the LLM sees aliases (never UUIDs) in a COMPACT snapshot, and answers translate back to real ids', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(ok('{"action":"switch_feature","featureId":"f1","confidence":"high"}'))
+    const cmd = await parseIntent({ transcript: 'prebaci na file panes', snapshot: uuidSnap, apiKey: 'k', model: 'm', fetchImpl })
+    expect(cmd.featureId).toBe('aaaa1111-2222-3333-4444-555566667777')
+    const body = JSON.parse((fetchImpl.mock.calls[0][1] as RequestInit).body as string)
+    const system = body.messages[0].content as string
+    expect(system).toContain('"id":"g1"')
+    expect(system).toContain('"groups":[{"id":"g1"')          // compact, not pretty-printed
+    expect(system).not.toContain('d174078d-8e32-4c20-b82d')   // no UUIDs reach the LLM
+  })
+  it('an alias the map does not know passes through untouched (stale-id path)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(ok('{"action":"switch_tab","terminalId":"t99","confidence":"high"}'))
+    const cmd = await parseIntent({ transcript: 'x', snapshot: uuidSnap, apiKey: 'k', model: 'm', fetchImpl })
+    expect(cmd.terminalId).toBe('t99')
+  })
   it('429 → rate-limit error', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 429 } as Response)
     await expect(parseIntent({ transcript: 'x', snapshot: snap, apiKey: 'k', model: 'm', fetchImpl }))
       .rejects.toMatchObject({ kind: 'rate-limit' })
+  })
+  it("429 surfaces Groq's own reason and retry time instead of an invented one", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false, status: 429,
+      text: async () => JSON.stringify({ error: { message: 'Rate limit reached for model m on tokens per minute (TPM): Limit 12000. Please try again in 7.66s.' } }),
+      headers: { get: (h: string) => (h === 'retry-after' ? '8' : null) }
+    } as unknown as Response)
+    await expect(parseIntent({ transcript: 'x', snapshot: snap, apiKey: 'k', model: 'm', fetchImpl }))
+      .rejects.toMatchObject({ kind: 'rate-limit', message: expect.stringContaining('7.66s') })
   })
   it('401/403 → auth error', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401 } as Response)
