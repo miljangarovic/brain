@@ -34,6 +34,8 @@ import { ConfirmDialog } from './components/ConfirmDialog'
 import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
 import { ArchiveDialog } from './components/ArchiveDialog'
 import { useVoice } from './voice/useVoice'
+import { useMouseTrigger } from './voice/useMouseTrigger'
+import type { MouseTrigger } from '@shared/voice'
 import { VoiceOverlay } from './components/VoiceOverlay'
 import { envelopePrompt } from './voice/inject'
 import { submitToPty } from './review/submit'
@@ -322,6 +324,12 @@ export default function App() {
     // the same paste-then-Enter mechanism the review pipeline uses.
     submitToPty(terminalId, envelopePrompt(prompt))
   }
+  const [mouseTrigger, setMouseTrigger] = useState<MouseTrigger>('off')
+  useEffect(() => {
+    // Rejection (e.g. invoke racing main's handler registration) keeps 'off'.
+    window.brain.getVoiceUiConfig().then((c) => setMouseTrigger(c.mouseTrigger), () => {})
+  }, [])
+
   const voice = useVoice({
     state, apply, markStarted,
     stopReviewLoop: (id) => review.stopLoop(id),
@@ -329,6 +337,7 @@ export default function App() {
     liveAgents,
     sendPrompt: sendPromptToAgent
   })
+  useMouseTrigger(mouseTrigger, { onDown: voice.pressStart, onUp: voice.pressEnd, onCancel: voice.cancel })
   const finishExport = (res: ExportRunResult) => {
     transferRef.current = false
     setExportProgress(null)
