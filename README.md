@@ -116,7 +116,50 @@ are remembered across restarts.
 
 ## Voice commands
 
-- **Voice commands** — control the app by voice (Serbian or English): switch features, toggle the grid, launch agent terminals with a spoken prompt, drive review loops (accept / more rounds / stop), cycle and bulk-close tabs, create or archive features. Local whisper.cpp transcription — audio never leaves the machine; only the transcript and workspace names are sent to Groq for intent parsing. Press `Ctrl+Alt+Space` or click the mic button.
+- **Voice commands** — control the app by voice (Serbian or English): switch features, toggle the grid, launch agent terminals with a spoken prompt, drive review loops (accept / more rounds / stop), cycle and bulk-close tabs, create or archive features. Local whisper.cpp transcription — audio never leaves the machine; only the transcript and workspace names are sent to Groq for intent parsing. Press `Ctrl+Alt+Space`, click the mic button, or use a mouse side button (see below).
+
+### Voice setup (Groq API key)
+
+Transcription is fully local (the whisper model downloads on first use,
+~1.1 GB), but intent parsing needs a **free** Groq API key:
+
+1. Go to <https://console.groq.com> and sign in (free tier: ~2000 requests/day,
+   no card required).
+2. **API Keys → Create API Key**, copy the `gsk_...` value (it is shown only
+   once).
+3. Create `voice.json` in the app's **user-data directory** — the same folder
+   that holds `workspace.json` (see [Persistence](#persistence) for all
+   platforms; on Linux that's `~/.config/Brain/` for the installed app and
+   `~/.config/brain/` when running from source — **mind the capital B**):
+
+```json
+{
+  "groqApiKey": "gsk_..."
+}
+```
+
+4. Restart the app — `voice.json` is read once at startup.
+
+Alternatively, the `GROQ_API_KEY` environment variable overrides the file.
+The key is read in the main process only and never reaches the renderer,
+the repo, or the packaged build.
+
+### Voice config reference (`voice.json`)
+
+| Field | Default | Meaning |
+|---|---|---|
+| `groqApiKey` | — | Groq key for intent parsing (required for commands to execute) |
+| `mouseTrigger` | `"forward"` | Mouse side button that drives voice: `"forward"`, `"back"`, or `"off"` |
+| `mouseTriggerMode` | `"hold"` | `"hold"` = push-to-talk (press records, release sends); `"click"` = first click starts listening, silence or a second click ends it |
+| `shortcut` | `"Ctrl+Alt+Space"` | Global shortcut (X11) |
+| `language` | `"sr"` | Whisper transcription language |
+| `modelId` | `"sagicc-large-v3-sr-q5_0"` | Whisper model (Serbian-tuned large-v3) |
+| `enabled` | `true` | `false` disables voice entirely |
+
+> **Logitech MX note:** on MX mice a held side button doubles as the
+> horizontal-scroll modifier, so the firmware emits the button press only on
+> release — push-to-talk (`"hold"`) cannot work there. Use
+> `"mouseTriggerMode": "click"` instead.
 
 ## Hierarchy
 
