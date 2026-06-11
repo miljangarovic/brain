@@ -4,16 +4,20 @@
 
 **Goal:** A tenth voice action, `send_prompt`, that injects a spoken prompt into an already-running claude/codex terminal via the existing PTY input path and auto-submits after the confirm overlay.
 
-**Architecture:** Pure additions to the existing voice pipeline — a new `VOICE_ACTIONS` entry, two intent-prompt examples, a `send_prompt` confirm case in the executor (gated on App's `liveAgents` map, passed in as a new REQUIRED `PlanContext` parameter), a `sendPrompt` delegate descriptor in `run.ts`, and an App-level injector that writes `promptWrites(prompt)` through `window.brain.writePty` (text first, `'\r'` 50 ms later). No new IPC channels; no main-process changes.
+**Architecture:** Pure additions to the existing voice pipeline — a new `VOICE_ACTIONS` entry, two intent-prompt examples, a `send_prompt` confirm case in the executor (gated on App's `liveAgents` map, passed in as a new REQUIRED `PlanContext` parameter), a `sendPrompt` delegate descriptor in `run.ts`, and an App-level injector that sends `envelopePrompt(prompt)` through the EXISTING `submitToPty` helper (write text, lone `'\r'` after the calibrated `SUBMIT_DELAY_MS`). No new IPC channels; no main-process changes.
 
-**Tech Stack:** Existing voice modules (TypeScript, vitest); `pty:input` IPC (`BrainApi.writePty`).
+**Tech Stack:** Existing voice modules (TypeScript, vitest); `pty:input` IPC via `review/submit.ts`'s `submitToPty`.
 
 **Spec:** `docs/superpowers/specs/2026-06-11-voice-send-prompt-design.md`
+
+**Deviations from spec (review-mandated):**
+1. Submission reuses `src/renderer/src/review/submit.ts` (`submitToPty`, `SUBMIT_DELAY_MS = 100`) instead of the spec's inline ~50 ms timeout — the repo already calibrated this exact paste-then-Enter race for the same claude/codex TUIs; a second magic number for the same race would be a defect. (`submitToPty` omits the `user` flag; the pty handler treats `user !== false` as user input, so busy semantics are identical.)
+2. A fire-time liveness RE-CHECK in `useVoice.confirm()` (beyond the spec's plan-time gate): the confirm overlay can sit open while the agent exits — injecting then would type the prompt + Enter into the leftover SHELL and execute it as a command. The re-check shows an honest error toast instead of silently no-opping. Residual window: pty:proc detection latency (~the same lag that feeds `liveAgents`) — accepted, not closable from the renderer.
 
 **File map:**
 - Modify: `src/shared/voice.ts` (+1 action), `src/shared/voice.test.ts` (+1 test)
 - Modify: `src/main/voice/intent.ts` (prompt: action list, rule, 2 examples), `src/main/voice/intent.test.ts` (+1 assertion)
-- Create: `src/renderer/src/voice/inject.ts` + `inject.test.ts` (pure write-sequence helper)
+- Create: `src/renderer/src/voice/inject.ts` + `inject.test.ts` (pure bracketed-paste envelope helper)
 - Modify: `src/renderer/src/voice/executor.ts` (PlanContext + case), `executor.test.ts` (ctx at all call sites, +5 tests)
 - Modify: `src/renderer/src/voice/run.ts` (+descriptor), `run.test.ts` (+1 test)
 - Modify: `src/renderer/src/voice/useVoice.ts` (deps, ctx, confirm branch), `src/renderer/src/App.tsx` (injector + wiring)
@@ -25,6 +29,7 @@
 **Files:**
 - Modify: `src/shared/voice.ts`, `src/shared/voice.test.ts`
 - Modify: `src/main/voice/intent.ts`, `src/main/voice/intent.test.ts`
+- Modify: `src/renderer/src/voice/executor.ts` (placeholder case — keeps the switch exhaustive until Task 3)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -81,6 +86,18 @@ In `src/main/voice/intent.ts`, three edits to the system prompt inside `buildInt
 "tell claude in reviewer to summarize the diff" → {"action":"send_prompt","terminalId":"<id of terminal reviewer>","prompt":"summarize the diff","confidence":"high"}
 ```
 
+In `src/renderer/src/voice/executor.ts`: widening `VoiceAction` makes `planHigh`'s
+switch non-exhaustive → `tsc` error TS2366 ("Function lacks ending return
+statement") at THIS task's typecheck step. Keep it exhaustive with a
+placeholder grouping — replace the existing `case 'unknown':` lines with:
+
+```ts
+    // send_prompt is wired in Task 3 (needs PlanContext); reject until then.
+    case 'send_prompt':
+    case 'unknown':
+      return err("Didn't understand the command")
+```
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run src/shared/voice.test.ts src/main/voice/intent.test.ts`
@@ -90,7 +107,7 @@ Expected: PASS (9 shared + 8 intent).
 
 ```bash
 npm run typecheck
-git add src/shared/voice.ts src/shared/voice.test.ts src/main/voice/intent.ts src/main/voice/intent.test.ts
+git add src/shared/voice.ts src/shared/voice.test.ts src/main/voice/intent.ts src/main/voice/intent.test.ts src/renderer/src/voice/executor.ts
 git commit -m "feat(voice): send_prompt action in schema and intent prompt"
 ```
 
@@ -106,14 +123,14 @@ git commit -m "feat(voice): send_prompt action in schema and intent prompt"
 
 ```ts
 import { describe, it, expect } from 'vitest'
-import { promptWrites } from './inject'
+import { envelopePrompt } from './inject'
 
-describe('promptWrites', () => {
-  it('single-line: text then a separate carriage return', () => {
-    expect(promptWrites('sredi testove')).toEqual(['sredi testove', '\r'])
+describe('envelopePrompt', () => {
+  it('single-line passes through unchanged', () => {
+    expect(envelopePrompt('sredi testove')).toBe('sredi testove')
   })
   it('multiline rides in a bracketed-paste envelope', () => {
-    expect(promptWrites('line1\nline2')).toEqual(['\x1b[200~line1\nline2\x1b[201~', '\r'])
+    expect(envelopePrompt('line1\nline2')).toBe('\x1b[200~line1\nline2\x1b[201~')
   })
 })
 ```
@@ -126,13 +143,13 @@ Expected: FAIL — `Cannot find module './inject'`
 - [ ] **Step 3: Implement** — `src/renderer/src/voice/inject.ts`:
 
 ```ts
-// Write sequence for injecting a prompt into a live agent's PTY. Multiline
-// text rides in a bracketed-paste envelope so embedded newlines don't submit
-// early; the submit ('\r') is a SEPARATE write — the caller delays it a beat
-// so the TUI processes the paste before the Enter.
-export function promptWrites(prompt: string): [text: string, submit: string] {
-  const text = prompt.includes('\n') ? `\x1b[200~${prompt}\x1b[201~` : prompt
-  return [text, '\r']
+// Bracketed-paste envelope for injecting a prompt into a live agent's PTY:
+// multiline text must not let embedded newlines submit early. Submission
+// itself goes through review/submit.ts's submitToPty — text first, lone CR
+// after its calibrated SUBMIT_DELAY_MS (do NOT reintroduce a second delay
+// constant for the same paste-then-Enter race).
+export function envelopePrompt(prompt: string): string {
+  return prompt.includes('\n') ? `\x1b[200~${prompt}\x1b[201~` : prompt
 }
 ```
 
@@ -145,7 +162,7 @@ Expected: PASS (2 tests).
 
 ```bash
 git add src/renderer/src/voice/inject.ts src/renderer/src/voice/inject.test.ts
-git commit -m "feat(voice): prompt injection write-sequence helper"
+git commit -m "feat(voice): bracketed-paste envelope for prompt injection"
 ```
 
 ---
@@ -191,7 +208,7 @@ describe('planCommand — send_prompt', () => {
     const p = planCommand(cmd({ action: 'send_prompt', terminalId: t1, prompt: 'sredi testove' }), s, ctx({ [t1]: 'claude' }))
     if (p.type !== 'confirm') throw new Error('expected confirm, got ' + p.type)
     expect(p.editablePrompt).toBe('sredi testove')
-    expect(p.summary).toContain('claude')
+    expect(p.summary).toContain('Send to "claude"')
     expect(p.descriptor).toEqual({ type: 'sendPrompt', terminalId: t1, prompt: 'sredi testove' })
   })
   it('cold (not running) agent → error pointing at add_terminal', () => {
@@ -208,7 +225,11 @@ describe('planCommand — send_prompt', () => {
   })
   it('missing prompt → error', () => {
     const { s, t1 } = fixture()
-    expect(planCommand(cmd({ action: 'send_prompt', terminalId: t1 }), s, ctx({ [t1]: 'claude' })).type).toBe('error')
+    const p = planCommand(cmd({ action: 'send_prompt', terminalId: t1 }), s, ctx({ [t1]: 'claude' }))
+    if (p.type !== 'error') throw new Error('expected error')
+    // Message asserted so this test FAILS against Task 1's placeholder case
+    // ("Didn't understand the command") and only passes with the real case.
+    expect(p.message).toMatch(/No prompt/)
   })
   it('defaults to the active terminal', () => {
     let { s, t1 } = fixture()
@@ -224,7 +245,7 @@ describe('planCommand — send_prompt', () => {
 - [ ] **Step 2: Run to verify the new tests fail**
 
 Run: `npx vitest run src/renderer/src/voice/executor.test.ts`
-Expected: the 5 new tests FAIL — the current `planHigh` switch has no `send_prompt` case, so it returns `undefined` and the assertions throw (vitest does not typecheck, so the extra `ctx` argument is simply ignored at runtime). Existing 15 still pass.
+Expected: the 5 new tests FAIL — Task 1's placeholder grouping routes `send_prompt` to the unknown-error plan, so the confirm-expecting tests throw `expected confirm, got error` and the error-expecting tests fail on their message assertions (vitest does not typecheck, so the extra `ctx` argument is simply ignored at runtime). Existing 15 still pass.
 
 - [ ] **Step 3: Implement the executor case**
 
@@ -269,7 +290,7 @@ export function planCommand(cmd: VoiceCommand, s: AppState, ctx: PlanContext): E
 function planHigh(cmd: VoiceCommand, s: AppState, ctx: PlanContext): ExecPlan {
 ```
 
-4. Add the case before `case 'unknown':`
+4. Replace Task 1's placeholder grouping (`case 'send_prompt': case 'unknown': return err(...)`) with the real case, restoring `case 'unknown':` to its own line below it:
 
 ```ts
     case 'send_prompt': {
@@ -375,11 +396,20 @@ export interface VoiceDeps {
       const { prompt: _replaced, ...rest } = d
       d = editedPrompt.trim() ? { ...rest, prompt: editedPrompt } : rest
     }
-    if (d.type === 'sendPrompt' && editedPrompt !== undefined) {
-      const p = editedPrompt.trim()
-      // An emptied prompt means there is nothing to send — treat as cancel.
-      if (!p) { dispatch({ type: 'dismiss' }); return }
-      d = { ...d, prompt: p }
+    if (d.type === 'sendPrompt') {
+      // Fire-time liveness RE-CHECK (deviation 2): the agent may have exited
+      // while the confirm overlay sat open — injecting then would type the
+      // prompt + Enter into the leftover SHELL and execute it as a command.
+      if (!depsRef.current.liveAgents[d.terminalId]) {
+        dispatch({ type: 'state', ev: { phase: 'error', message: 'Agent is no longer running — prompt not sent' } })
+        return
+      }
+      if (editedPrompt !== undefined) {
+        const p = editedPrompt.trim()
+        // An emptied prompt means there is nothing to send — treat as cancel.
+        if (!p) { dispatch({ type: 'dismiss' }); return }
+        d = { ...d, prompt: p }
+      }
     }
     runDescriptor(d, runDeps())
     const toast = d.type === 'state' ? d.toast
@@ -396,10 +426,11 @@ export interface VoiceDeps {
 
 In `src/renderer/src/App.tsx`:
 
-1. Add the import:
+1. Add the imports:
 
 ```ts
-import { promptWrites } from './voice/inject'
+import { envelopePrompt } from './voice/inject'
+import { submitToPty } from './review/submit'
 ```
 
 2. Add the injector right above the existing `const voice = useVoice({...})`:
@@ -408,11 +439,9 @@ import { promptWrites } from './voice/inject'
   const sendPromptToAgent = (terminalId: string, prompt: string) => {
     // Surface the target so the user watches the agent take the prompt.
     apply((s) => showTerminal(s, terminalId))
-    const [text, submit] = promptWrites(prompt)
-    window.brain.writePty(terminalId, text, true)
-    // Submit separately after a beat — the TUI needs to process the paste
-    // before the Enter, or it can swallow the newline into the input.
-    setTimeout(() => window.brain.writePty(terminalId, submit, true), 50)
+    // submitToPty = write text, lone CR after the calibrated SUBMIT_DELAY_MS —
+    // the same paste-then-Enter mechanism the review pipeline uses.
+    submitToPty(terminalId, envelopePrompt(prompt))
   }
 ```
 
@@ -459,3 +488,5 @@ git commit -m "feat(voice): send_prompt — inject spoken prompt into a running 
 - [ ] "pošalji prompt …" while a shell tab is active → error about claude/codex targets.
 - [ ] Send while the agent is mid-response → the prompt queues in the CLI input (no corruption).
 - [ ] English phrasing: "tell claude to run the tests".
+- [ ] CODEX target: "pošalji prompt … u codex terminal" — single-line AND multiline both land and submit correctly (codex's paste/queue behavior is asserted from claude parity but never verified live — this line is the verification).
+- [ ] Agent exited while the confirm overlay was open → Enter shows "Agent is no longer running — prompt not sent" and nothing lands in the shell.
