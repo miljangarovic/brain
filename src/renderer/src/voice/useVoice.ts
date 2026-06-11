@@ -25,6 +25,7 @@ export function useVoice(deps: VoiceDeps) {
   const recRef = useRef<RecorderHandle | null>(null)
   const startingRef = useRef(false)
   const cancelEpochRef = useRef(0)
+  const releasedRef = useRef(false)
   const depsRef = useRef(deps)
   depsRef.current = deps
   const uiRef = useRef(ui)
@@ -66,6 +67,32 @@ export function useVoice(deps: VoiceDeps) {
     window.brain.cancelVoice()
     dispatch({ type: 'dismiss' })
   }, [])
+
+  // Push-to-talk: hold a mouse side button to record, release to send.
+  // VAD auto-stop is disabled — the button delimits the take.
+  const pressStart = useCallback(() => {
+    if (startingRef.current) return
+    // A PTT press is a new activation: cancel anything in flight (an active
+    // shortcut-initiated recording, transcription, confirm overlay).
+    if (recRef.current || uiRef.current.kind !== 'idle') cancel()
+    releasedRef.current = false
+    startingRef.current = true
+    void startRecording({ onAutoStop: () => void finish(), vadAutoStop: false })
+      .then((rec) => {
+        recRef.current = rec
+        startingRef.current = false
+        dispatch({ type: 'listen' })
+        // The button can come back up before getUserMedia resolves — that
+        // release must still end the take or it would record forever.
+        if (releasedRef.current) void finish()
+      })
+      .catch(() => { startingRef.current = false; dispatch({ type: 'mic-error', message: 'Microphone unavailable — check system permissions' }) })
+  }, [cancel, finish])
+
+  const pressEnd = useCallback(() => {
+    releasedRef.current = true
+    if (recRef.current) void finish()
+  }, [finish])
 
   const confirm = useCallback((editedPrompt?: string) => {
     const s = uiRef.current
@@ -126,5 +153,5 @@ export function useVoice(deps: VoiceDeps) {
     return () => clearTimeout(t)
   }, [ui])
 
-  return { ui, toggle, cancel, confirm }
+  return { ui, toggle, cancel, confirm, pressStart, pressEnd }
 }
