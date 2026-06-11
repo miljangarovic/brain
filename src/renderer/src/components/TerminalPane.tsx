@@ -28,7 +28,7 @@ export interface PaneDnd {
 }
 
 export function TerminalPane({
-  terminal, active, gridded, gridRowSpan, gridColSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume, started, onStart, onOpenFile
+  terminal, active, gridded, gridRowSpan, gridColSpan, visibleInTabs, busy, liveAgent, reviewStatus, onActivate, dnd, resume, started, onStart, onOpenFile, onSessionFallback
 }: {
   terminal: Terminal
   active: boolean
@@ -45,6 +45,7 @@ export function TerminalPane({
   started: boolean          // false → boot-restored and never opened: render a cold placeholder, no PTY
   onStart: () => void
   onOpenFile?: (path: string) => void
+  onSessionFallback?: (terminalId: string, sessionId: string) => void
 }) {
   const gridStyle = gridded
     ? {
@@ -87,7 +88,7 @@ export function TerminalPane({
       )}
       <div className={gridded ? 'relative flex-1 min-h-0' : 'absolute inset-0'}>
         {started ? (
-          <TerminalView terminal={terminal} active={active} resume={resume} onOpenFile={onOpenFile} />
+          <TerminalView terminal={terminal} active={active} resume={resume} onOpenFile={onOpenFile} onSessionFallback={onSessionFallback} />
         ) : (
           // Cold pane: the shell/agent spawns only when the user opens it.
           // Mounting TerminalView is what creates the PTY, so we render this

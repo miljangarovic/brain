@@ -616,6 +616,7 @@ export default function App() {
                 started={started}
                 onStart={() => markStarted(t.id)}
                 onOpenFile={(path) => openFileIn(featureIdOfTerminal(state, t.id), path)}
+                onSessionFallback={(id, sid) => apply((s) => setTerminalSessionId(s, id, sid))}
               />
             )
           })}
