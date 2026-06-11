@@ -48,6 +48,11 @@ const str = (v: unknown): string | undefined => {
   return t.length > 0 ? t : undefined
 }
 
+// Mouse side-button push-to-talk trigger; the UI-safe config subset the
+// renderer is allowed to see (never the Groq key).
+export type MouseTrigger = 'forward' | 'back' | 'off'
+export interface VoiceUiConfig { mouseTrigger: MouseTrigger }
+
 export function validateVoiceCommand(raw: unknown): VoiceCommand {
   if (typeof raw !== 'object' || raw === null) return { action: 'unknown', confidence: 'low' }
   const o = raw as Record<string, unknown>
