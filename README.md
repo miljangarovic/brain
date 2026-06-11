@@ -116,7 +116,7 @@ are remembered across restarts.
 
 ## Voice commands
 
-- **Voice commands** — control the app by voice (Serbian or English): switch features, toggle the grid, launch agent terminals with a spoken prompt. Local whisper.cpp transcription — audio never leaves the machine; only the transcript and workspace names are sent to Groq for intent parsing. Press `Ctrl+Alt+Space` or click the mic button.
+- **Voice commands** — control the app by voice (Serbian or English): switch features, toggle the grid, launch agent terminals with a spoken prompt, drive review loops (accept / more rounds / stop), cycle and bulk-close tabs, create or archive features. Local whisper.cpp transcription — audio never leaves the machine; only the transcript and workspace names are sent to Groq for intent parsing. Press `Ctrl+Alt+Space` or click the mic button.
 
 ## Hierarchy
 
