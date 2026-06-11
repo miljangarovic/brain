@@ -145,6 +145,11 @@ export function TerminalView({ terminal, active, resume, onOpenFile }: { termina
           copySelection()
           return false
         case 'paste':
+          // Returning false only stops XTERM's processing — the BROWSER
+          // default still runs, and Chromium fires a native 'paste' event for
+          // Ctrl+Shift+V that xterm's own paste listener writes to the PTY a
+          // SECOND time. Kill the native path at its source.
+          e.preventDefault()
           paste()
           return false
         case 'swallow':
