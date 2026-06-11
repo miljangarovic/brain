@@ -12,7 +12,7 @@ import { pathsExist } from './pathsExist'
 import { loadFile, saveFile } from './fileLoad'
 import { createReviewWatcher } from './reviewWatcher'
 import { createNotifier } from './notifications'
-import { resolveTranscript } from './transcript'
+import { resolveTranscript, claudeSessionExists } from './transcript'
 import { resolveExistingPaths } from './pathLinks'
 import { codexSessionsDir, findCodexSessionId } from './codexSession'
 import { promises as fsp } from 'fs'
@@ -111,6 +111,9 @@ export function registerIpc(opts: {
 
   ipcMain.handle(IPC.reviewResolveTranscript, (_e, p: { cwd: string; kind?: string }) =>
     resolveTranscript({ cwd: p.cwd || os.homedir(), kind: p.kind }))
+
+  ipcMain.handle(IPC.claudeSessionExists, (_e, p: { cwd: string; sessionId?: string }) =>
+    claudeSessionExists({ cwd: p.cwd || os.homedir(), sessionId: p.sessionId }))
 
   // Ctrl+click file links: resolve printed path candidates against the
   // terminal's cwd and report which actually exist (null = offer no link).
