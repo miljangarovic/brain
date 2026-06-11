@@ -81,7 +81,13 @@ async function download(
     await fsp.rename(part, path)
     return path
   } catch (err) {
-    ws?.destroy()
+    if (ws) {
+      const stream = ws
+      // destroy() alone races the lazy fd open — .part could materialize
+      // AFTER the rm below. 'close' fires once the stream (and its fd, if
+      // any) is fully torn down.
+      await new Promise<void>((resolve) => { stream.once('close', () => resolve()); stream.destroy() })
+    }
     void reader?.cancel().catch(() => { /* connection already dead */ })
     await fsp.rm(part, { force: true })
     throw err

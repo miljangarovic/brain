@@ -15,7 +15,7 @@ export interface RunDeps {
   stopReviewLoop: (terminalId: string) => void
   launchAgent: (featureId: string, kind: AgentKind, opts?: { prompt?: string; name?: string }) => void
   // Injects a prompt into a live agent terminal's PTY (App implements it via
-  // writePty — see promptWrites for the write sequence).
+  // review/submit.ts submitToPty + inject.ts envelopePrompt).
   sendPrompt: (terminalId: string, prompt: string) => void
 }
 
