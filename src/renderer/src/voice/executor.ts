@@ -9,7 +9,8 @@
 import type { AppState } from '../store'
 import {
   setActiveFeature, toggleFeatureViewMode, setActiveTerminal, setFeatureGridStyle,
-  hideTerminal, showTerminal, renameFeature, renameTerminal, getTerminalById
+  hideTerminal, showTerminal, renameFeature, renameTerminal, getTerminalById,
+  closeFile, featureIdOfTerminal, findFilePane, visiblePanes, cyclePane
 } from '../store'
 import type { Feature, TerminalKind, ReviewStatus } from '@shared/types'
 import type { VoiceCommand } from '@shared/voice'
@@ -230,8 +231,56 @@ function planHigh(cmd: VoiceCommand, s: AppState, ctx: PlanContext): ExecPlan {
         descriptor: { type: 'review', op: 'stop', reviewerId: reviewer.id, toast: `Review stopped: ${f.name}` }
       }
     }
+    case 'cycle_tab': {
+      const dir = cmd.direction === 'prev' ? -1 : 1
+      const next = cyclePane(s, dir)
+      if (!next) return err('No tabs to cycle')
+      const name = next.file
+        ? findFilePane(s, next.id)?.pane.name ?? 'file'
+        : getTerminalById(s, next.id)?.name ?? ''
+      return {
+        type: 'run',
+        descriptor: {
+          type: 'state',
+          run: (st) => setActiveTerminal(st, next.id),
+          toast: `→ ${name}`,
+          ...(next.file ? {} : { startIds: [next.id] })
+        }
+      }
+    }
+    case 'close_tabs': {
+      // The kept tab: a named terminal, else the active pane (terminal or file).
+      const anchorId = cmd.terminalId ?? s.activeTerminalId
+      if (!anchorId) return err('No tab to keep')
+      const anchorTerm = getTerminalById(s, anchorId)
+      if (cmd.terminalId && !anchorTerm) return err('Terminal not found — try again')
+      const panes = visiblePanes(s, anchorTerm ? featureIdOfTerminal(s, anchorId) ?? undefined : undefined)
+      const scope = cmd.scope ?? 'others'
+      const idx = panes.findIndex((p) => p.id === anchorId)
+      const targets =
+        scope === 'others' ? panes.filter((p) => p.id !== anchorId)
+        : idx === -1 ? []
+        : scope === 'left' ? panes.slice(0, idx)
+        : panes.slice(idx + 1)
+      if (targets.length === 0) return err('No tabs to close')
+      const keptName = anchorTerm?.name ?? findFilePane(s, anchorId)?.pane.name ?? ''
+      return {
+        type: 'run',
+        descriptor: {
+          type: 'state',
+          run: (st) => {
+            const closed = targets.reduce((acc, p) => (p.file ? closeFile(acc, p.id) : hideTerminal(acc, p.id)), st)
+            // A terminal anchor may itself be hidden ("zatvori sve osim X"):
+            // showTerminal both un-hides and activates it.
+            return anchorTerm ? showTerminal(closed, anchorId) : closed
+          },
+          toast: `Closed ${targets.length} tab${targets.length === 1 ? '' : 's'} — kept ${keptName}`,
+          ...(anchorTerm ? { startIds: [anchorId] } : {})
+        }
+      }
+    }
     // Batch-2 actions land in follow-up commits; the stub keeps the switch exhaustive.
-    case 'cycle_tab': case 'close_tabs': case 'add_feature': case 'archive_feature':
+    case 'add_feature': case 'archive_feature':
       return err('Not supported yet')
     case 'unknown':
       return err("Didn't understand the command")

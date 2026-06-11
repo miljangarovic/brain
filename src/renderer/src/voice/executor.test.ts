@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { planCommand } from './executor'
 import {
   createInitialState, addGroup, addFeature, addTerminal, hideTerminal,
-  toggleFeatureViewMode, setActiveTerminal
+  toggleFeatureViewMode, setActiveTerminal, openFile, setActiveFeature
 } from '../store'
 import type { VoiceCommand } from '@shared/voice'
 import type { AgentKind } from '../agents'
@@ -218,5 +218,69 @@ describe('planCommand — review control', () => {
     const { s, f2 } = fixture()
     expect(planCommand(cmd({ action: 'review_accept', featureId: f2 }), s, ctx()).type).toBe('error')
     expect(planCommand(cmd({ action: 'review_stop', featureId: f2 }), s, ctx()).type).toBe('error')
+  })
+})
+
+describe('planCommand — tab actions', () => {
+  it('cycle_tab next moves to the following terminal with startIds', () => {
+    let { s, t1, t2 } = fixture()
+    s = setActiveTerminal(s, t1)
+    const p = planCommand(cmd({ action: 'cycle_tab', direction: 'next' }), s, ctx())
+    if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
+    expect(p.descriptor.startIds).toEqual([t2])
+    expect(p.descriptor.run(s).activeTerminalId).toBe(t2)
+  })
+  it('cycle_tab lands on a file pane without startIds (direction defaults to next)', () => {
+    let { s, f1, t2 } = fixture()
+    s = openFile(s, f1, { path: '/code/readme.md' })
+    s = setActiveTerminal(s, t2)
+    const p = planCommand(cmd({ action: 'cycle_tab' }), s, ctx())
+    if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
+    expect(p.descriptor.startIds).toBeUndefined()
+    expect(p.descriptor.run(s).activeTerminalId).toBe(s.workspace.groups[0].features[1].files![0].id)
+  })
+  it('cycle_tab with no visible panes → error', () => {
+    let { s, f2 } = fixture()
+    s = setActiveFeature(s, f2) // 'voice' has no terminals
+    expect(planCommand(cmd({ action: 'cycle_tab', direction: 'next' }), s, ctx()).type).toBe('error')
+  })
+  it('close_tabs others keeps the active tab, hides terminals and closes file panes', () => {
+    let { s, f1, t1, t2 } = fixture()
+    s = openFile(s, f1, { path: '/code/readme.md' })
+    s = setActiveTerminal(s, t1)
+    const p = planCommand(cmd({ action: 'close_tabs', scope: 'others' }), s, ctx())
+    if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
+    const after = p.descriptor.run(s)
+    expect(after.hidden).toContain(t2)
+    expect(after.hidden).not.toContain(t1)
+    expect(after.workspace.groups[0].features[1].files).toEqual([])
+    expect(after.activeTerminalId).toBe(t1)
+    expect(p.descriptor.toast).toContain('2')
+  })
+  it('close_tabs right hides only tabs after the active one', () => {
+    let { s, t1, t2 } = fixture()
+    s = setActiveTerminal(s, t1)
+    const p = planCommand(cmd({ action: 'close_tabs', scope: 'right' }), s, ctx())
+    if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
+    expect(p.descriptor.run(s).hidden).toEqual([t2])
+  })
+  it('close_tabs with a NAMED terminal keeps it, hides the rest, activates it', () => {
+    const { s, t1, t2 } = fixture() // active = t2 (last added)
+    const p = planCommand(cmd({ action: 'close_tabs', terminalId: t1 }), s, ctx())
+    if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
+    const after = p.descriptor.run(s)
+    expect(after.hidden).toEqual([t2])
+    expect(after.activeTerminalId).toBe(t1)
+    expect(p.descriptor.startIds).toEqual([t1])
+  })
+  it('close_tabs with nothing to close → error', () => {
+    let { s, t1 } = fixture()
+    s = setActiveTerminal(s, t1)
+    expect(planCommand(cmd({ action: 'close_tabs', scope: 'left' }), s, ctx()).type).toBe('error')
   })
 })
