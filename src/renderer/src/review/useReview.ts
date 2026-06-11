@@ -94,7 +94,7 @@ export function useReview(
     // not fall back to "most recent in cwd" (which is usually the origin's).
     const reviewerSessionId = a.reviewer === 'claude' ? createId() : undefined
     apply((s) => addTerminal(s, featureId, {
-      id: reviewerId, name: `review: ${a.reviewer}`, kind: a.reviewer,
+      id: reviewerId, name: `review: ${origin?.name ?? a.reviewer}`, kind: a.reviewer,
       startupCommand: buildReviewerCommand(agentLaunchCommand(a.reviewer, reviewerSessionId), startup),
       review: link, sessionId: reviewerSessionId
     }))
