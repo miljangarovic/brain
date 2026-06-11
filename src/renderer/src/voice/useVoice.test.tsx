@@ -47,9 +47,12 @@ function setup() {
     apply: vi.fn(),
     markStarted: vi.fn(),
     stopReviewLoop: vi.fn(),
+    acceptPhase: vi.fn(),
+    moreRounds: vi.fn(),
     launchAgent: vi.fn(),
     liveAgents: {},
-    sendPrompt: vi.fn()
+    sendPrompt: vi.fn(),
+    reviewStatus: {}
   }))
 }
 
