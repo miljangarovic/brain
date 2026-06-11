@@ -58,6 +58,8 @@ const api: BrainApi = {
     return () => ipcRenderer.removeListener(IPC.fsChanged, listener)
   },
   captureAgentSession: (opts) => ipcRenderer.invoke(IPC.agentCaptureSession, opts) as Promise<string | null>,
+  claudeSessionExists: (cwd, sessionId) =>
+    ipcRenderer.invoke(IPC.claudeSessionExists, { cwd, sessionId }) as Promise<boolean>,
   showNotification: (opts) => ipcRenderer.send(IPC.notifyShow, opts),
   onNotificationClick: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, p: { key: string }) => cb(p.key)

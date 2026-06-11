@@ -52,3 +52,16 @@ export async function resolveTranscript(opts: { home?: string; cwd: string; kind
   if (opts.kind === 'codex') return newestCodexRollout(home)
   return newestJsonl(claudeProjectDir(home, opts.cwd))
 }
+
+// Whether the claude conversation a restored terminal would resume still
+// exists: the exact <sessionId>.jsonl when an id is pinned, else any session
+// in the cwd's project dir (the `--continue` target). Missing → the caller
+// falls back to a fresh conversation instead of spawning a doomed resume.
+export async function claudeSessionExists(opts: { home?: string; cwd: string; sessionId?: string }): Promise<boolean> {
+  const home = opts.home ?? homedir()
+  const dir = claudeProjectDir(home, opts.cwd)
+  if (opts.sessionId) {
+    try { await fs.access(join(dir, `${opts.sessionId}.jsonl`)); return true } catch { return false }
+  }
+  return (await newestJsonl(dir)) !== null
+}

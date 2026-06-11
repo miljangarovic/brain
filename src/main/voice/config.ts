@@ -3,7 +3,7 @@
 // must never reach the renderer.
 import { promises as fsp } from 'fs'
 import { join } from 'path'
-import type { MouseTrigger } from '../../shared/voice'
+import type { MouseTrigger, MouseTriggerMode } from '../../shared/voice'
 
 export interface VoiceConfig {
   enabled: boolean
@@ -13,6 +13,7 @@ export interface VoiceConfig {
   groqApiKey?: string
   language: string
   mouseTrigger: MouseTrigger
+  mouseTriggerMode: MouseTriggerMode
 }
 
 export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
@@ -21,7 +22,8 @@ export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
   modelId: 'sagicc-large-v3-sr-q5_0',
   groqModel: 'llama-3.3-70b-versatile',
   language: 'sr',
-  mouseTrigger: 'forward'
+  mouseTrigger: 'forward',
+  mouseTriggerMode: 'hold'
 }
 
 export function parseVoiceConfig(raw: unknown): VoiceConfig {
@@ -35,6 +37,7 @@ export function parseVoiceConfig(raw: unknown): VoiceConfig {
   if (typeof o.groqApiKey === 'string' && o.groqApiKey) c.groqApiKey = o.groqApiKey
   if (typeof o.language === 'string' && o.language) c.language = o.language
   if (o.mouseTrigger === 'forward' || o.mouseTrigger === 'back' || o.mouseTrigger === 'off') c.mouseTrigger = o.mouseTrigger
+  if (o.mouseTriggerMode === 'hold' || o.mouseTriggerMode === 'click') c.mouseTriggerMode = o.mouseTriggerMode
   return c
 }
 

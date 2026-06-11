@@ -33,7 +33,8 @@ export async function registerVoice(opts: {
   // even when voice is disabled so the invoke resolves to 'off' instead of
   // rejecting — the renderer then binds no mouse listeners.
   ipcMain.handle(IPC.voiceUiConfig, (): VoiceUiConfig => ({
-    mouseTrigger: config.enabled ? config.mouseTrigger : 'off'
+    mouseTrigger: config.enabled ? config.mouseTrigger : 'off',
+    mouseTriggerMode: config.mouseTriggerMode
   }))
 
   if (!config.enabled) {

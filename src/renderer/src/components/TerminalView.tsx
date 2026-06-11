@@ -4,7 +4,8 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { Terminal as TerminalModel } from '@shared/types'
-import { agentResumeCommand } from '../agents'
+import { agentResumeCommand, agentLaunchCommand } from '../agents'
+import { createId } from '@shared/id'
 import { getXtermTheme, MONO_FONT } from '../theme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { registerTail, unregisterTail, readXtermTail } from '../attention/tailRegistry'
@@ -26,7 +27,15 @@ const USER_INPUT_WINDOW_MS = 150
 // created terminals — a fresh mount always uses the terminal's saved
 // startupCommand verbatim (it embeds any --session-id pin, and for reviewers
 // the whole review prompt).
-export function TerminalView({ terminal, active, resume, onOpenFile }: { terminal: TerminalModel; active: boolean; resume?: boolean; onOpenFile?: (path: string) => void }) {
+export function TerminalView({ terminal, active, resume, onOpenFile, onSessionFallback }: {
+  terminal: TerminalModel
+  active: boolean
+  resume?: boolean
+  onOpenFile?: (path: string) => void
+  // A restore found the pinned claude session gone and spawned a fresh
+  // conversation instead — `sessionId` is the new pin to persist.
+  onSessionFallback?: (terminalId: string, sessionId: string) => void
+}) {
   const hostRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -36,6 +45,10 @@ export function TerminalView({ terminal, active, resume, onOpenFile }: { termina
   // callback pointed at the LATEST onOpenFile (the prop closes over App state).
   const onOpenFileRef = useRef(onOpenFile)
   useEffect(() => { onOpenFileRef.current = onOpenFile })
+  // Same ref pattern: the fallback fires from an async check after mount and
+  // must see the latest callback, not the one closed over at mount time.
+  const onSessionFallbackRef = useRef(onSessionFallback)
+  useEffect(() => { onSessionFallbackRef.current = onSessionFallback })
 
   // Clipboard actions, shared by the keyboard shortcuts and the right-click menu.
   const copySelection = useCallback(() => {
@@ -110,14 +123,37 @@ export function TerminalView({ terminal, active, resume, onOpenFile }: { termina
       }
     })
 
-    window.brain.createPty({
+    const spawn = (startupCommand?: string) => window.brain.createPty({
       id: terminal.id,
       cwd: terminal.cwd,
       shell: terminal.shell ?? '',
       cols: term.cols || 80,
       rows: term.rows || 24,
-      startupCommand: (resume ? agentResumeCommand({ kind: terminal.kind, sessionId: terminal.sessionId }) : undefined) ?? terminal.startupCommand
+      startupCommand
     })
+    let spawnCancelled = false
+    if (resume && terminal.kind === 'claude') {
+      // The pinned session can be gone (~/.claude wiped, conversation expired):
+      // `claude --resume <id>` prints "No conversation found" and exits, leaving
+      // a dead terminal. Check first; when it's missing, start a fresh
+      // conversation under a NEW pinned id and persist it. A failed check
+      // counts as missing — fresh beats dead.
+      void window.brain.claudeSessionExists(terminal.cwd, terminal.sessionId)
+        .catch(() => false)
+        .then((exists) => {
+          if (spawnCancelled) return
+          if (exists) {
+            spawn(agentResumeCommand({ kind: terminal.kind, sessionId: terminal.sessionId }) ?? terminal.startupCommand)
+            return
+          }
+          const freshId = createId()
+          term.write('\x1b[33m[previous session not found — starting fresh]\x1b[0m\r\n')
+          onSessionFallbackRef.current?.(terminal.id, freshId)
+          spawn(agentLaunchCommand('claude', freshId))
+        })
+    } else {
+      spawn((resume ? agentResumeCommand({ kind: terminal.kind, sessionId: terminal.sessionId }) : undefined) ?? terminal.startupCommand)
+    }
 
     const offData = window.brain.onPtyData((id, data) => { if (id === terminal.id) term.write(data) })
     const offExit = window.brain.onPtyExit((id) => {
@@ -145,6 +181,11 @@ export function TerminalView({ terminal, active, resume, onOpenFile }: { termina
           copySelection()
           return false
         case 'paste':
+          // Returning false only stops XTERM's processing — the BROWSER
+          // default still runs, and Chromium fires a native 'paste' event for
+          // Ctrl+Shift+V that xterm's own paste listener writes to the PTY a
+          // SECOND time. Kill the native path at its source.
+          e.preventDefault()
           paste()
           return false
         case 'swallow':
@@ -176,6 +217,7 @@ export function TerminalView({ terminal, active, resume, onOpenFile }: { termina
       // workspace — App kills it when the terminal is actually removed. On a
       // remount the new mount's createPty is a no-op (the PTY still exists) and
       // simply re-attaches to the live shell.
+      spawnCancelled = true // a session check still in flight must not spawn into a dead view
       offData()
       offExit()
       inputDisposable.dispose()

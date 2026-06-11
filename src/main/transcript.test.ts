@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { claudeProjectDir, newestJsonl, resolveTranscript } from './transcript'
+import { claudeProjectDir, newestJsonl, resolveTranscript, claudeSessionExists } from './transcript'
 
 const mktmp = async () => {
   const dir = join(tmpdir(), `ttor-tr-${Math.random().toString(36).slice(2)}`)
@@ -65,6 +65,41 @@ describe('resolveTranscript (codex)', () => {
   it('returns null when there are no codex sessions at all', async () => {
     const home = await mktmp()
     expect(await resolveTranscript({ home, cwd: '/x', kind: 'codex' })).toBeNull()
+    await fs.rm(home, { recursive: true, force: true })
+  })
+})
+
+describe('claudeSessionExists', () => {
+  it('true when the pinned session file exists', async () => {
+    const home = await mktmp()
+    const proj = claudeProjectDir(home, '/work/app')
+    await fs.mkdir(proj, { recursive: true })
+    await fs.writeFile(join(proj, 'sess-1.jsonl'), '{}', 'utf8')
+    expect(await claudeSessionExists({ home, cwd: '/work/app', sessionId: 'sess-1' })).toBe(true)
+    await fs.rm(home, { recursive: true, force: true })
+  })
+
+  it('false when the pinned session file is gone (other sessions do not count)', async () => {
+    const home = await mktmp()
+    const proj = claudeProjectDir(home, '/work/app')
+    await fs.mkdir(proj, { recursive: true })
+    await fs.writeFile(join(proj, 'other.jsonl'), '{}', 'utf8')
+    expect(await claudeSessionExists({ home, cwd: '/work/app', sessionId: 'sess-1' })).toBe(false)
+    await fs.rm(home, { recursive: true, force: true })
+  })
+
+  it('without an id: true when the cwd has any session (the --continue target)', async () => {
+    const home = await mktmp()
+    const proj = claudeProjectDir(home, '/work/app')
+    await fs.mkdir(proj, { recursive: true })
+    await fs.writeFile(join(proj, 'any.jsonl'), '{}', 'utf8')
+    expect(await claudeSessionExists({ home, cwd: '/work/app' })).toBe(true)
+    await fs.rm(home, { recursive: true, force: true })
+  })
+
+  it('without an id: false when the project dir is empty or missing', async () => {
+    const home = await mktmp()
+    expect(await claudeSessionExists({ home, cwd: '/work/none' })).toBe(false)
     await fs.rm(home, { recursive: true, force: true })
   })
 })

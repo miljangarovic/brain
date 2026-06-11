@@ -35,7 +35,7 @@ import { ReviewDialog, type ReviewStartArgs } from './components/ReviewDialog'
 import { ArchiveDialog } from './components/ArchiveDialog'
 import { useVoice } from './voice/useVoice'
 import { useMouseTrigger } from './voice/useMouseTrigger'
-import type { MouseTrigger } from '@shared/voice'
+import type { VoiceUiConfig } from '@shared/voice'
 import { VoiceOverlay } from './components/VoiceOverlay'
 import { envelopePrompt } from './voice/inject'
 import { submitToPty } from './review/submit'
@@ -318,10 +318,10 @@ export default function App() {
     // the same paste-then-Enter mechanism the review pipeline uses.
     submitToPty(terminalId, envelopePrompt(prompt))
   }
-  const [mouseTrigger, setMouseTrigger] = useState<MouseTrigger>('off')
+  const [voiceUi, setVoiceUi] = useState<VoiceUiConfig>({ mouseTrigger: 'off', mouseTriggerMode: 'hold' })
   useEffect(() => {
     // Rejection (e.g. invoke racing main's handler registration) keeps 'off'.
-    window.brain.getVoiceUiConfig().then((c) => setMouseTrigger(c.mouseTrigger), () => {})
+    window.brain.getVoiceUiConfig().then(setVoiceUi, () => {})
   }, [])
 
   const voice = useVoice({
@@ -334,7 +334,11 @@ export default function App() {
     sendPrompt: sendPromptToAgent,
     reviewStatus
   })
-  useMouseTrigger(mouseTrigger, { onDown: voice.pressStart, onUp: voice.pressEnd, onCancel: voice.cancel })
+  // 'click' = toggle on release, for mice whose firmware defers side-button
+  // press until release (Logitech MX hold-to-hscroll) — hold-PTT can't work there.
+  useMouseTrigger(voiceUi.mouseTrigger, voiceUi.mouseTriggerMode === 'click'
+    ? { onDown: () => {}, onUp: voice.toggle, onCancel: () => {} }
+    : { onDown: voice.pressStart, onUp: voice.pressEnd, onCancel: voice.cancel })
   const finishExport = (res: ExportRunResult) => {
     transferRef.current = false
     setExportProgress(null)
@@ -612,6 +616,7 @@ export default function App() {
                 started={started}
                 onStart={() => markStarted(t.id)}
                 onOpenFile={(path) => openFileIn(featureIdOfTerminal(state, t.id), path)}
+                onSessionFallback={(id, sid) => apply((s) => setTerminalSessionId(s, id, sid))}
               />
             )
           })}

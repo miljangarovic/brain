@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { EventEmitter } from 'events'
-import { createTranscriber, type ChildLike } from './transcriber'
+import { createTranscriber, libDirFromEntry, type ChildLike } from './transcriber'
 
 class FakeChild extends EventEmitter implements ChildLike {
   sent: { id: number; wavPath: string }[] = []
@@ -83,5 +83,17 @@ describe('createTranscriber', () => {
     await expect(p2).rejects.toThrow(/disposed|exited/)
     await expect(t.transcribe({ wavPath: '/3.wav', modelPath: '/m.bin', language: 'sr' })).rejects.toThrow(/disposed/)
     expect(forkImpl).toHaveBeenCalledTimes(1)   // dispose never forks
+  })
+})
+
+describe('libDirFromEntry', () => {
+  const suffix = `dist/${process.platform}-${process.arch}`
+  it('dev path: lib dir is dist/<platform>-<arch> next to dist/js', () => {
+    expect(libDirFromEntry('/repo/node_modules/@kutalia/whisper-node-addon/dist/js/index.js'))
+      .toBe(`/repo/node_modules/@kutalia/whisper-node-addon/${suffix}`)
+  })
+  it('packaged path: app.asar rewritten to app.asar.unpacked (ld.so reads real files only)', () => {
+    expect(libDirFromEntry('/opt/Brain/resources/app.asar/node_modules/@kutalia/whisper-node-addon/dist/js/index.js'))
+      .toBe(`/opt/Brain/resources/app.asar.unpacked/node_modules/@kutalia/whisper-node-addon/${suffix}`)
   })
 })
