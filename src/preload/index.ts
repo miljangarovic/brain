@@ -5,6 +5,7 @@ import type { Workspace } from '../shared/types'
 import type { PtyCreateOptions } from '../shared/pty'
 import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from '../shared/exportTypes'
 import type { FileLoadResult } from '../shared/files'
+import type { VoiceResult, VoiceStateEvent, WorkspaceSnapshot } from '../shared/voice'
 
 // pty:data / pty:exit are consumed by EVERY mounted terminal, and all terminals
 // stay mounted — so one ipcRenderer listener per terminal trips the default
@@ -75,6 +76,24 @@ const api: BrainApi = {
   loadFile: (path) => ipcRenderer.invoke(IPC.fileLoad, { path }) as Promise<FileLoadResult>,
   saveFile: (path, content) => ipcRenderer.invoke(IPC.fileSave, { path, content }) as Promise<{ ok: true } | { ok: false; error: string }>,
   openExternal: (url) => ipcRenderer.send(IPC.shellOpenExternal, { url }),
+  onVoiceStart: (cb) => {
+    const listener = () => cb()
+    ipcRenderer.on(IPC.voiceStart, listener)
+    return () => ipcRenderer.removeListener(IPC.voiceStart, listener)
+  },
+  sendVoiceAudio: (pcm: Float32Array, snapshot: WorkspaceSnapshot) =>
+    ipcRenderer.send(IPC.voiceAudio, { pcm, snapshot }),
+  onVoiceState: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, ev: VoiceStateEvent) => cb(ev)
+    ipcRenderer.on(IPC.voiceState, listener)
+    return () => ipcRenderer.removeListener(IPC.voiceState, listener)
+  },
+  onVoiceResult: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, r: VoiceResult) => cb(r)
+    ipcRenderer.on(IPC.voiceResult, listener)
+    return () => ipcRenderer.removeListener(IPC.voiceResult, listener)
+  },
+  cancelVoice: () => ipcRenderer.send(IPC.voiceCancel)
 }
 
 contextBridge.exposeInMainWorld('brain', api)

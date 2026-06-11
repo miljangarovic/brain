@@ -5,6 +5,7 @@ import { existsSync } from 'fs'
 import { PtyManager } from './ptyManager'
 import { nodePtySpawner } from './nodePtySpawner'
 import { registerIpc } from './ipc'
+import { registerVoice } from './voice'
 
 let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager(nodePtySpawner)
@@ -56,6 +57,13 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+
+  // Voice commands: global shortcut + transcribe/intent pipeline. Errors here
+  // must never block app startup (missing model, bad config, …).
+  void registerVoice({
+    getWin: () => mainWindow,
+    userDataDir: app.getPath('userData')
+  }).catch((err) => console.error('voice registration failed:', err))
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

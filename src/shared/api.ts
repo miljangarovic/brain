@@ -3,6 +3,7 @@ import type { PtyCreateOptions } from './pty'
 import type { ReviewPhase } from './types'
 import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from './exportTypes'
 import type { FileLoadResult } from './files'
+import type { VoiceResult, VoiceStateEvent, WorkspaceSnapshot } from './voice'
 
 export interface BrainApi {
   loadWorkspace(): Promise<Workspace>
@@ -53,4 +54,13 @@ export interface BrainApi {
   saveFile(path: string, content: string): Promise<{ ok: true } | { ok: false; error: string }>
   // http(s) links from rendered markdown — openPath only handles filesystem paths.
   openExternal(url: string): void
+  // Voice commands. onVoiceStart fires on the global shortcut (main side
+  // focuses the window first); audio goes back as 16 kHz mono PCM plus the
+  // names snapshot the intent LLM needs. cancelVoice invalidates any
+  // in-flight transcription/parse (late results are dropped in main).
+  onVoiceStart(cb: () => void): () => void
+  sendVoiceAudio(pcm: Float32Array, snapshot: WorkspaceSnapshot): void
+  onVoiceState(cb: (ev: VoiceStateEvent) => void): () => void
+  onVoiceResult(cb: (r: VoiceResult) => void): () => void
+  cancelVoice(): void
 }

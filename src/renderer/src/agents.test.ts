@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AGENTS, agentResumeCommand, agentLaunchCommand, agentContinueCommand } from './agents'
+import { AGENTS, agentResumeCommand, agentLaunchCommand, agentContinueCommand, agentLaunchCommandWithPrompt } from './agents'
 
 describe('AGENTS', () => {
   it('defines claude and codex with label, command and default name', () => {
@@ -64,5 +64,19 @@ describe('agentContinueCommand', () => {
 
   it('single quotes in the path are shell-escaped', () => {
     expect(agentContinueCommand('codex', "/data/it's.md")).toContain(`'Read /data/it'\\''s.md`)
+  })
+})
+
+describe('agentLaunchCommandWithPrompt', () => {
+  it('appends a single-quoted prompt to the launch command', () => {
+    expect(agentLaunchCommandWithPrompt('claude', 'sid-1', 'sredi testove'))
+      .toBe(`claude --session-id sid-1 'sredi testove'`)
+  })
+  it('escapes single quotes in the prompt', () => {
+    expect(agentLaunchCommandWithPrompt('codex', undefined, "fix 'all' tests"))
+      .toBe(`codex 'fix '\\''all'\\'' tests'`)
+  })
+  it('no prompt → plain launch command', () => {
+    expect(agentLaunchCommandWithPrompt('claude', undefined, undefined)).toBe('claude')
   })
 })

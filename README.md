@@ -114,6 +114,10 @@ that immediately starts that agent (`claude` / `codex` are expected on the
 PATH). Terminals running an agent carry its icon in the sidebar and tabs, and
 are remembered across restarts.
 
+## Voice commands
+
+- **Voice commands** — control the app by voice (Serbian or English): switch features, toggle the grid, launch agent terminals with a spoken prompt. Local whisper.cpp transcription — audio never leaves the machine; only the transcript and workspace names are sent to Groq for intent parsing. Press `Ctrl+Alt+Space` or click the mic button.
+
 ## Hierarchy
 
 Project (with a working directory) → Feature → Terminal. A terminal inherits the
