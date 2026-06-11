@@ -10,7 +10,8 @@ import type { AppState } from '../store'
 import {
   setActiveFeature, toggleFeatureViewMode, setActiveTerminal, setFeatureGridStyle,
   hideTerminal, showTerminal, renameFeature, renameTerminal, getTerminalById,
-  closeFile, featureIdOfTerminal, findFilePane, visiblePanes, cyclePane
+  closeFile, featureIdOfTerminal, findFilePane, visiblePanes, cyclePane,
+  addFeature, archiveFeature
 } from '../store'
 import type { Feature, TerminalKind, ReviewStatus } from '@shared/types'
 import type { VoiceCommand } from '@shared/voice'
@@ -279,9 +280,27 @@ function planHigh(cmd: VoiceCommand, s: AppState, ctx: PlanContext): ExecPlan {
         }
       }
     }
-    // Batch-2 actions land in follow-up commits; the stub keeps the switch exhaustive.
-    case 'add_feature': case 'archive_feature':
-      return err('Not supported yet')
+    case 'add_feature': {
+      if (!cmd.name) return err('No feature name understood')
+      const gid = cmd.groupId ?? s.activeGroupId
+      const g = gid ? s.workspace.groups.find((x) => x.id === gid) : null
+      if (!g) return err('No project to add the feature to')
+      const name = cmd.name
+      return {
+        type: 'confirm',
+        summary: `New feature "${name}" in project "${g.name}"`,
+        descriptor: { type: 'state', run: (st) => addFeature(st, g.id, name), toast: `Feature created: ${name}` }
+      }
+    }
+    case 'archive_feature': {
+      const f = findFeature(s, cmd.featureId ?? s.activeFeatureId ?? undefined)
+      if (!f) return err('Feature not found — try again')
+      return {
+        type: 'confirm',
+        summary: `Archive feature "${f.name}"? Its terminals will close.`,
+        descriptor: { type: 'state', run: (st) => archiveFeature(st, f.id), toast: `Archived: ${f.name}` }
+      }
+    }
     case 'unknown':
       return err("Didn't understand the command")
   }

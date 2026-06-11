@@ -221,6 +221,42 @@ describe('planCommand — review control', () => {
   })
 })
 
+describe('planCommand — feature lifecycle', () => {
+  it('add_feature → confirm; run appends and activates the feature in the named project', () => {
+    const { s } = fixture()
+    const gid = s.workspace.groups[0].id
+    const p = planCommand(cmd({ action: 'add_feature', groupId: gid, name: 'search' }), s, ctx())
+    if (p.type !== 'confirm') throw new Error('expected confirm, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
+    expect(p.summary).toContain('search')
+    expect(p.summary).toContain('mappit')
+    const after = p.descriptor.run(s)
+    expect(after.workspace.groups[0].features.map((f) => f.name)).toContain('search')
+    expect(after.activeFeatureId).toBe(after.workspace.groups[0].features.at(-1)!.id)
+  })
+  it('add_feature defaults to the active project and requires a name', () => {
+    const { s } = fixture()
+    expect(planCommand(cmd({ action: 'add_feature' }), s, ctx()).type).toBe('error')
+    expect(planCommand(cmd({ action: 'add_feature', name: 'search' }), s, ctx()).type).toBe('confirm')
+  })
+  it('archive_feature → confirm; run moves the feature to the group archive', () => {
+    const { s, f2 } = fixture()
+    const p = planCommand(cmd({ action: 'archive_feature', featureId: f2 }), s, ctx())
+    if (p.type !== 'confirm') throw new Error('expected confirm, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
+    expect(p.summary).toContain('voice')
+    const after = p.descriptor.run(s)
+    expect(after.workspace.groups[0].features.map((f) => f.id)).not.toContain(f2)
+    expect((after.workspace.groups[0].archivedFeatures ?? []).map((f) => f.id)).toContain(f2)
+  })
+  it('archive_feature defaults to the active feature', () => {
+    const { s } = fixture() // f1 ('file-panes') is active
+    const p = planCommand(cmd({ action: 'archive_feature' }), s, ctx())
+    if (p.type !== 'confirm') throw new Error('expected confirm, got ' + p.type)
+    expect(p.summary).toContain('file-panes')
+  })
+})
+
 describe('planCommand — tab actions', () => {
   it('cycle_tab next moves to the following terminal with startIds', () => {
     let { s, t1, t2 } = fixture()
