@@ -22,6 +22,7 @@ describe('buildIntentMessages', () => {
     expect(system.content).toContain('"f1"')
     expect(system.content).toContain('file-panes')
     expect(system.content).toContain('switch_feature')
+    expect(system.content).toContain('send_prompt')
     expect(system.content).toContain('hidden')
     expect(system.content).toContain('activeFeatureId')
     expect(user.role).toBe('user')

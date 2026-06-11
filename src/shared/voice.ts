@@ -6,7 +6,7 @@ import type { GridStyle, TerminalKind } from './types'
 export const VOICE_ACTIONS = [
   'switch_feature', 'toggle_grid', 'switch_tab', 'set_grid_style',
   'hide_terminal', 'add_terminal', 'close_terminal',
-  'rename_feature', 'rename_terminal', 'unknown'
+  'rename_feature', 'rename_terminal', 'send_prompt', 'unknown'
 ] as const
 export type VoiceAction = (typeof VOICE_ACTIONS)[number]
 

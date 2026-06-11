@@ -158,6 +158,8 @@ function planHigh(cmd: VoiceCommand, s: AppState): ExecPlan {
         descriptor: { type: 'state', run: (st) => renameTerminal(st, t.id, name), toast: `Renamed: ${name}` }
       }
     }
+    // send_prompt is wired in Task 3 (needs PlanContext); reject until then.
+    case 'send_prompt':
     case 'unknown':
       return err("Didn't understand the command")
   }
