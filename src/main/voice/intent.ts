@@ -60,7 +60,8 @@ Examples:
 "napravi novi feature search u mapitu" → {"action":"add_feature","groupId":"<id of mappit>","name":"search","confidence":"high"}
 "arhiviraj file panes" → {"action":"archive_feature","featureId":"<id of file-panes>","confidence":"high"}
 "prihvati review" → {"action":"review_accept","confidence":"high"}
-"daj još rundi review-a" → {"action":"review_more_rounds","confidence":"high"}`
+"daj još rundi review-a" → {"action":"review_more_rounds","confidence":"high"}
+"prekini review" → {"action":"review_stop","confidence":"high"}`
   return [
     { role: 'system', content: system },
     { role: 'user', content: transcript }
