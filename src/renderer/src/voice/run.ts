@@ -43,7 +43,6 @@ export function runDescriptor(d: ExecDescriptor, deps: RunDeps): void {
     else deps.apply((s) => removeTerminal(s, d.terminalId))
     return
   }
-  // addTerminal (review descriptors are routed by run.ts in Task 4)
   if (d.type === 'addTerminal') {
     if (d.kind === 'shell') {
       deps.apply((s) => addTerminal(s, d.featureId, {
