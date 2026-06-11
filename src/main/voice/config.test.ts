@@ -27,4 +27,13 @@ describe('parseVoiceConfig', () => {
     expect(parseVoiceConfig({ mouseTrigger: 7 }).mouseTrigger).toBe('forward')
     expect(parseVoiceConfig({}).mouseTrigger).toBe('forward')
   })
+  it('accepts mouseTriggerMode literals', () => {
+    expect(parseVoiceConfig({ mouseTriggerMode: 'click' }).mouseTriggerMode).toBe('click')
+    expect(parseVoiceConfig({ mouseTriggerMode: 'hold' }).mouseTriggerMode).toBe('hold')
+  })
+  it('falls back to hold for invalid mouseTriggerMode', () => {
+    expect(parseVoiceConfig({ mouseTriggerMode: 'toggle' }).mouseTriggerMode).toBe('hold')
+    expect(parseVoiceConfig({ mouseTriggerMode: 1 }).mouseTriggerMode).toBe('hold')
+    expect(parseVoiceConfig({}).mouseTriggerMode).toBe('hold')
+  })
 })
