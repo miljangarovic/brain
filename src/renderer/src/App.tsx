@@ -161,6 +161,10 @@ export default function App() {
   const attention = useAttention(state, apply)
   useEffect(() => window.brain.onPtyBusy(guardBusy(attention.handleBusy)), [attention.handleBusy, guardBusy])
   useEffect(() => window.brain.onPtyExit(attention.handleExit), [attention.handleExit])
+  useEffect(() => window.brain.onPtyExit((id) => {
+    // a dead pty has no live agent — voice send_prompt gates read this
+    setLiveAgents((m) => ({ ...m, [id]: undefined }))
+  }), [])
   useEffect(() => window.brain.onNotificationClick(attention.handleNotificationClick), [attention.handleNotificationClick])
 
   // Agent terminals present at first load are "restored" — their PTYs should
