@@ -71,11 +71,11 @@ export function useVoice(deps: VoiceDeps) {
   // Push-to-talk: hold a mouse side button to record, release to send.
   // VAD auto-stop is disabled — the button delimits the take.
   const pressStart = useCallback(() => {
+    releasedRef.current = false
     if (startingRef.current) return
     // A PTT press is a new activation: cancel anything in flight (an active
     // shortcut-initiated recording, transcription, confirm overlay).
     if (recRef.current || uiRef.current.kind !== 'idle') cancel()
-    releasedRef.current = false
     startingRef.current = true
     void startRecording({ onAutoStop: () => void finish(), vadAutoStop: false })
       .then((rec) => {

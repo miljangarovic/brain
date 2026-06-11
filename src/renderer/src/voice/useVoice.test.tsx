@@ -106,4 +106,22 @@ describe('push-to-talk', () => {
     expect(startRecording).toHaveBeenCalledTimes(2)
     expect(h.result.current.ui.kind).toBe('listening')
   })
+
+  it('mic failure on pressStart surfaces the mic-error state', async () => {
+    startRecording.mockRejectedValue(new Error('denied'))
+    const h = setup()
+    await act(async () => { h.result.current.pressStart() })
+    expect(h.result.current.ui.kind).toBe('error')
+  })
+
+  it('re-press during mic startup adopts the pending take instead of killing it', async () => {
+    let resolveRec!: (r: RecorderHandle) => void
+    startRecording.mockReturnValue(new Promise<RecorderHandle>((r) => { resolveRec = r }))
+    const h = setup()
+    await act(async () => { h.result.current.pressStart() })
+    await act(async () => { h.result.current.pressEnd() })   // release…
+    await act(async () => { h.result.current.pressStart() }) // …and press again before the mic resolved
+    await act(async () => { resolveRec(mkRec()) })
+    expect(h.result.current.ui.kind).toBe('listening')        // still recording for the held button
+  })
 })
