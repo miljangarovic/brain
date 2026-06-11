@@ -16,6 +16,17 @@ const snap: WorkspaceSnapshot = {
 }
 
 describe('buildIntentMessages', () => {
+  it('teaches the batch-2 actions and their fields', () => {
+    const [system] = buildIntentMessages('x', snap)
+    for (const a of ['cycle_tab', 'close_tabs', 'add_feature', 'archive_feature',
+                     'review_accept', 'review_more_rounds', 'review_stop']) {
+      expect(system.content).toContain(a)
+    }
+    expect(system.content).toContain('"direction"')
+    expect(system.content).toContain('"scope"')
+    expect(system.content).toContain('"groupId"')
+  })
+
   it('embeds snapshot ids/names, active ids, hidden flags and the transcript', () => {
     const [system, user] = buildIntentMessages('prebaci na file panes', snap)
     expect(system.role).toBe('system')

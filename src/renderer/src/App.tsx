@@ -9,7 +9,7 @@ import {
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview,
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview, cyclePane,
   addImportedGroup, addImportedFeature,
   archiveFeature, restoreFeature, deleteArchivedFeature, addDocument, renameDocument, removeDocument,
   openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane, featureIdOfTerminal
@@ -283,15 +283,9 @@ export default function App() {
         e.preventDefault(); cycleTab(-1)
       }
     }
-    const cycleTab = (dir: number) => {
-      const f = getActiveFeature(state)
-      const visible: { id: string; file: boolean }[] = [
-        ...(f?.terminals.filter((t) => !state.hidden.includes(t.id)).map((t) => ({ id: t.id, file: false })) ?? []),
-        ...((f?.files ?? []).map((p) => ({ id: p.id, file: true })))
-      ]
-      if (visible.length === 0) return
-      const idx = visible.findIndex((v) => v.id === state.activeTerminalId)
-      const next = visible[(idx + dir + visible.length) % visible.length]
+    const cycleTab = (dir: 1 | -1) => {
+      const next = cyclePane(state, dir)
+      if (!next) return
       if (!next.file) markStarted(next.id)
       apply((s) => setActiveTerminal(s, next.id))
     }
@@ -333,9 +327,12 @@ export default function App() {
   const voice = useVoice({
     state, apply, markStarted,
     stopReviewLoop: (id) => review.stopLoop(id),
+    acceptPhase: (id) => review.acceptPhase(id),
+    moreRounds: (id) => void review.moreRounds(id),
     launchAgent,
     liveAgents,
-    sendPrompt: sendPromptToAgent
+    sendPrompt: sendPromptToAgent,
+    reviewStatus
   })
   useMouseTrigger(mouseTrigger, { onDown: voice.pressStart, onUp: voice.pressEnd, onCancel: voice.cancel })
   const finishExport = (res: ExportRunResult) => {

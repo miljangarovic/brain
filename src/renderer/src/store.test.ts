@@ -8,7 +8,8 @@ import {
   patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById,
   addImportedGroup, addImportedFeature, archiveFeature, restoreFeature, deleteArchivedFeature, setTerminalSessionId,
   addDocument, renameDocument, removeDocument,
-  openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane
+  openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane,
+  visiblePanes, cyclePane
 } from './store'
 
 import type { Group, Feature } from '@shared/types'
@@ -814,6 +815,42 @@ describe('file panes', () => {
     const archived = archiveFeature(s, fid)
     expect(findFilePane(archived, 'p1')).toBeNull() // active features only
     expect(archived.workspace.groups[0].archivedFeatures![0].files).toHaveLength(1)
+  })
+})
+
+describe('visiblePanes / cyclePane', () => {
+  function fix() {
+    let s = createInitialState()
+    s = addGroup(s, 'p', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 't1' })
+    s = addTerminal(s, fid, { name: 't2' })
+    s = openFile(s, fid, { path: '/p/readme.md' })
+    const f = s.workspace.groups[0].features[0]
+    return { s, fid, t1: f.terminals[0].id, t2: f.terminals[1].id, p1: f.files![0].id }
+  }
+  it('lists visible terminals then file panes, skipping hidden', () => {
+    let { s, t1, t2, p1 } = fix()
+    s = hideTerminal(s, t1)
+    expect(visiblePanes(s).map((v) => v.id)).toEqual([t2, p1])
+    expect(visiblePanes(s).map((v) => v.file)).toEqual([false, true])
+  })
+  it('visiblePanes takes an explicit featureId', () => {
+    const { s, fid, t1, t2, p1 } = fix()
+    expect(visiblePanes(s, fid).map((v) => v.id)).toEqual([t1, t2, p1])
+  })
+  it('cyclePane wraps forward from the last pane to the first', () => {
+    let { s, t1, p1 } = fix()
+    s = setActiveTerminal(s, p1)
+    expect(cyclePane(s, 1)?.id).toBe(t1)
+  })
+  it('cyclePane steps backward and is null with no visible panes', () => {
+    let { s, t2, p1 } = fix()
+    s = setActiveTerminal(s, p1)
+    expect(cyclePane(s, -1)?.id).toBe(t2)
+    let empty = createInitialState()
+    empty = addGroup(empty, 'q', '/q')
+    expect(cyclePane(empty, 1)).toBeNull()
   })
 })
 

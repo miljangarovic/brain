@@ -25,7 +25,9 @@ const deps = (s: AppState) => ({
   markStarted: vi.fn(),
   stopReviewLoop: vi.fn(),
   launchAgent: vi.fn(),
-  sendPrompt: vi.fn()
+  sendPrompt: vi.fn(),
+  acceptPhase: vi.fn(),
+  moreRounds: vi.fn()
 })
 
 describe('runDescriptor', () => {
@@ -79,5 +81,16 @@ describe('runDescriptor', () => {
     expect(d.sendPrompt).toHaveBeenCalledWith('tx', 'sredi testove')
     expect(d.apply).not.toHaveBeenCalled()
     expect(d.launchAgent).not.toHaveBeenCalled()
+  })
+  it('review accept / more-rounds / stop route to the review deps, never apply', () => {
+    const { s } = fixture()
+    const d = deps(s)
+    runDescriptor({ type: 'review', op: 'accept', reviewerId: 'r1', toast: 'x' }, d)
+    expect(d.acceptPhase).toHaveBeenCalledWith('r1')
+    runDescriptor({ type: 'review', op: 'more-rounds', reviewerId: 'r1', toast: 'x' }, d)
+    expect(d.moreRounds).toHaveBeenCalledWith('r1')
+    runDescriptor({ type: 'review', op: 'stop', reviewerId: 'r1', toast: 'x' }, d)
+    expect(d.stopReviewLoop).toHaveBeenCalledWith('r1')
+    expect(d.apply).not.toHaveBeenCalled()
   })
 })

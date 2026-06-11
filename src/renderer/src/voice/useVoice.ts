@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { AppState } from '../store'
 import type { AgentKind } from '../agents'
+import type { ReviewStatus } from '@shared/types'
 import { buildSnapshot } from './snapshot'
 import { planCommand } from './executor'
 import { runDescriptor, type RunDeps } from './run'
@@ -15,9 +16,12 @@ export interface VoiceDeps {
   apply: (fn: (s: AppState) => AppState) => void
   markStarted: (id: string) => void
   stopReviewLoop: (terminalId: string) => void
+  acceptPhase: (reviewerId: string) => void
+  moreRounds: (reviewerId: string) => void
   launchAgent: (featureId: string, kind: AgentKind, opts?: { prompt?: string; name?: string }) => void
   liveAgents: Record<string, AgentKind | undefined>
   sendPrompt: (terminalId: string, prompt: string) => void
+  reviewStatus: Record<string, ReviewStatus | undefined>
 }
 
 export function useVoice(deps: VoiceDeps) {
@@ -122,8 +126,17 @@ export function useVoice(deps: VoiceDeps) {
         d = { ...d, prompt: p }
       }
     }
+    if (d.type === 'review' && d.op !== 'stop'
+      && depsRef.current.reviewStatus[d.reviewerId] !== 'needs-decision') {
+      // The executor's needs-decision gate is plan-time state; re-check it now —
+      // the loop may have moved on while the confirm overlay sat open. Dispatch
+      // 'executed' (not 'plan-error': the reducer ignores plan-error outside
+      // active states) so the overlay resolves into an explanatory toast.
+      dispatch({ type: 'executed', toast: 'Review is no longer waiting for a decision' })
+      return
+    }
     runDescriptor(d, runDeps())
-    const toast = d.type === 'state' ? d.toast
+    const toast = 'toast' in d ? d.toast
       : d.type === 'closeTerminal' ? 'Terminal closed'
       : d.type === 'sendPrompt' ? 'Prompt sent'
       : 'Terminal launched'
@@ -137,7 +150,7 @@ export function useVoice(deps: VoiceDeps) {
     // (main's gen guard could not catch it) must not execute silently.
     const k = uiRef.current.kind
     if (k !== 'processing' && k !== 'downloading') return
-    const plan = planCommand(command, depsRef.current.state, { liveAgents: depsRef.current.liveAgents })
+    const plan = planCommand(command, depsRef.current.state, { liveAgents: depsRef.current.liveAgents, reviewStatus: depsRef.current.reviewStatus })
     if (plan.type === 'run') {
       runDescriptor(plan.descriptor, runDeps())
       dispatch({ type: 'executed', toast: plan.descriptor.toast })
