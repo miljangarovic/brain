@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useBackdropDismiss } from './useBackdropDismiss'
 
 export interface NewGroupInput {
   name: string
@@ -33,8 +34,10 @@ export function NewGroupDialog({
 
   const field = 'mt-1 w-full rounded-md bg-field px-2.5 py-1.5 text-fg-bright placeholder-fg-muted outline-none ring-1 ring-line focus:ring-accent transition'
 
+  const backdrop = useBackdropDismiss(onCancel)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" {...backdrop}>
       <div className="w-[26rem] rounded-xl bg-elevated border border-line p-5 shadow-2xl shadow-black/50" onClick={(e) => e.stopPropagation()}>
         <h2 className="mb-4 text-lg font-semibold tracking-tight text-fg-bright">New Project</h2>
 

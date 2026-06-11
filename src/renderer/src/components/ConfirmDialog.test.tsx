@@ -19,6 +19,24 @@ describe('ConfirmDialog', () => {
     expect(onCancel).toHaveBeenCalled()
   })
 
+  it('does not close when a drag from inside the dialog releases on the backdrop', () => {
+    const onCancel = vi.fn()
+    const { container } = render(<ConfirmDialog message="m" onConfirm={() => {}} onCancel={onCancel} />)
+    const backdrop = container.firstElementChild as HTMLElement
+    fireEvent.mouseDown(backdrop.firstElementChild as HTMLElement)
+    fireEvent.click(backdrop)
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('closes on a click that starts and ends on the backdrop', () => {
+    const onCancel = vi.fn()
+    const { container } = render(<ConfirmDialog message="m" onConfirm={() => {}} onCancel={onCancel} />)
+    const backdrop = container.firstElementChild as HTMLElement
+    fireEvent.mouseDown(backdrop)
+    fireEvent.click(backdrop)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
   it('Escape dismisses only the topmost dialog: capture+stop keeps it from underlying listeners', () => {
     // Simulate an underlying listener registered before render (e.g. ArchiveDialog mounted first)
     const underneath = vi.fn()
