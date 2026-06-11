@@ -77,10 +77,15 @@ export function useVoice(deps: VoiceDeps) {
     // shortcut-initiated recording, transcription, confirm overlay).
     if (recRef.current || uiRef.current.kind !== 'idle') cancel()
     startingRef.current = true
+    const epoch = cancelEpochRef.current
     void startRecording({ onAutoStop: () => void finish(), vadAutoStop: false })
       .then((rec) => {
-        recRef.current = rec
         startingRef.current = false
+        // A cancel (blur mid-hold, new activation) while the mic was still
+        // opening must not leave a hot recorder behind — VAD is off, it would
+        // record unbounded and the next activation would SEND that audio.
+        if (epoch !== cancelEpochRef.current) { rec.cancel(); return }
+        recRef.current = rec
         dispatch({ type: 'listen' })
         // The button can come back up before getUserMedia resolves — that
         // release must still end the take or it would record forever.

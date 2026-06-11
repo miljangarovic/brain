@@ -124,4 +124,18 @@ describe('push-to-talk', () => {
     await act(async () => { resolveRec(mkRec()) })
     expect(h.result.current.ui.kind).toBe('listening')        // still recording for the held button
   })
+
+  it('cancel while the mic is opening discards the resolved recorder', async () => {
+    let resolveRec!: (r: RecorderHandle) => void
+    startRecording.mockReturnValue(new Promise<RecorderHandle>((r) => { resolveRec = r }))
+    const rec = mkRec()
+    const h = setup()
+    await act(async () => { h.result.current.pressStart() })
+    await act(async () => { h.result.current.cancel() })      // blur mid-hold routes here
+    await act(async () => { resolveRec(rec) })
+    expect(rec.cancel).toHaveBeenCalled()
+    expect(h.result.current.ui.kind).toBe('idle')
+    await act(async () => { h.result.current.pressEnd() })
+    expect(brain.sendVoiceAudio).not.toHaveBeenCalled()
+  })
 })
