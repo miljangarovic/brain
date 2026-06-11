@@ -35,6 +35,9 @@ export interface BrainApi {
   // it created (currently codex only — claude pins its id up front). Returns null
   // if none is found within the capture window.
   captureAgentSession(opts: { kind: string; cwd: string; exclude?: string[] }): Promise<string | null>
+  // Does the claude session a restored terminal would resume still exist?
+  // With an id: that exact conversation; without: any session in the cwd.
+  claudeSessionExists(cwd: string, sessionId?: string): Promise<boolean>
   showNotification(opts: { key: string; title: string; body: string }): void
   onNotificationClick(cb: (key: string) => void): () => void
   // Resolve printed path candidates against a terminal's cwd; index-aligned
