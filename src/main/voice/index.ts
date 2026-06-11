@@ -29,11 +29,18 @@ export async function registerVoice(opts: {
   }
   const sendState = (ev: VoiceStateEvent) => send(IPC.voiceState, ev)
 
+  // UI-safe config subset for the renderer (never the Groq key). Registered
+  // even when voice is disabled so the invoke resolves to 'off' instead of
+  // rejecting — the renderer then binds no mouse listeners.
+  ipcMain.handle(IPC.voiceUiConfig, () => ({
+    mouseTrigger: config.enabled ? config.mouseTrigger : 'off'
+  }))
+
   if (!config.enabled) {
     // The sidebar mic button renders regardless of config — answer its audio
     // with a clear error instead of leaving the pill stuck on "Transcribing…".
     ipcMain.on(IPC.voiceAudio, () => sendState({ phase: 'error', message: 'Voice is disabled in voice.json' }))
-    return { dispose: () => {} }
+    return { dispose: () => { ipcMain.removeHandler(IPC.voiceUiConfig) } }
   }
 
   const transcriber = createTranscriber({ childPath: join(__dirname, 'transcriberChild.js') })
@@ -109,6 +116,7 @@ export async function registerVoice(opts: {
   return {
     dispose: () => {
       globalShortcut.unregister(config.shortcut)
+      ipcMain.removeHandler(IPC.voiceUiConfig)
       transcriber.dispose()
     }
   }

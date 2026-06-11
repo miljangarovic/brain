@@ -35,5 +35,6 @@ export const IPC = {
   voiceAudio: 'voice:audio',
   voiceState: 'voice:state',
   voiceResult: 'voice:result',
-  voiceCancel: 'voice:cancel'
+  voiceCancel: 'voice:cancel',
+  voiceUiConfig: 'voice:ui-config'
 } as const
