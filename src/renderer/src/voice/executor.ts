@@ -11,7 +11,7 @@ import {
   setActiveFeature, toggleFeatureViewMode, setActiveTerminal, setFeatureGridStyle,
   hideTerminal, showTerminal, renameFeature, renameTerminal, getTerminalById
 } from '../store'
-import type { Feature, TerminalKind } from '@shared/types'
+import type { Feature, TerminalKind, ReviewStatus } from '@shared/types'
 import type { VoiceCommand } from '@shared/voice'
 import type { AgentKind } from '../agents'
 
@@ -23,8 +23,17 @@ export type StateDescriptor = {
   // gate spawning (see App.tsx onSelectTerminal / cycleTab).
   startIds?: string[]
 }
+// Review-loop control delegated to useReview via App (effectful, like
+// closeTerminal/addTerminal — never reimplemented here).
+export type ReviewDescriptor = {
+  type: 'review'
+  op: 'accept' | 'more-rounds' | 'stop'
+  reviewerId: string
+  toast: string
+}
 export type ExecDescriptor =
   | StateDescriptor
+  | ReviewDescriptor
   | { type: 'closeTerminal'; terminalId: string }
   | { type: 'addTerminal'; featureId: string; kind: TerminalKind; name?: string; prompt?: string }
   | { type: 'sendPrompt'; terminalId: string; prompt: string }
@@ -33,10 +42,13 @@ export type ExecDescriptor =
 // terminals currently host a RUNNING agent (App tracks this from pty:proc
 // events). REQUIRED parameter — an optional one would let stale call sites
 // silently skip the liveness gate.
-export interface PlanContext { liveAgents: Record<string, AgentKind | undefined> }
+export interface PlanContext {
+  liveAgents: Record<string, AgentKind | undefined>
+  reviewStatus: Record<string, ReviewStatus | undefined>
+}
 
 export type ExecPlan =
-  | { type: 'run'; descriptor: StateDescriptor }
+  | { type: 'run'; descriptor: StateDescriptor | ReviewDescriptor }
   | { type: 'confirm'; summary: string; editablePrompt?: string; descriptor: ExecDescriptor }
   | { type: 'error'; message: string }
 
@@ -185,9 +197,41 @@ function planHigh(cmd: VoiceCommand, s: AppState, ctx: PlanContext): ExecPlan {
         descriptor: { type: 'sendPrompt', terminalId: t.id, prompt }
       }
     }
+    case 'review_accept':
+    case 'review_more_rounds':
+    case 'review_stop': {
+      const f = findFeature(s, cmd.featureId ?? s.activeFeatureId ?? undefined)
+      if (!f) return err('No feature selected')
+      const reviewer = f.terminals.find((t) => !!t.review)
+      if (!reviewer) return err(`No review running in "${f.name}"`)
+      // Accept/more-rounds are meaningful exactly when the loop paused for a
+      // decision (the GUI shows those buttons only then — FeatureHeader):
+      // mid-review, accept would tear down the reviewer and discard its
+      // in-flight critique, and moreRounds would inject a second request into
+      // the reviewer's PTY. Stop is always available, like the GUI's Stop.
+      if (cmd.action !== 'review_stop' && ctx.reviewStatus[reviewer.id] !== 'needs-decision') {
+        return err('Review is not waiting for a decision')
+      }
+      if (cmd.action === 'review_accept') {
+        return {
+          type: 'run',
+          descriptor: { type: 'review', op: 'accept', reviewerId: reviewer.id, toast: `Review accepted: ${f.name}` }
+        }
+      }
+      if (cmd.action === 'review_more_rounds') {
+        return {
+          type: 'run',
+          descriptor: { type: 'review', op: 'more-rounds', reviewerId: reviewer.id, toast: `More review rounds: ${f.name}` }
+        }
+      }
+      return {
+        type: 'confirm',
+        summary: `Stop the review in "${f.name}"`,
+        descriptor: { type: 'review', op: 'stop', reviewerId: reviewer.id, toast: `Review stopped: ${f.name}` }
+      }
+    }
     // Batch-2 actions land in follow-up commits; the stub keeps the switch exhaustive.
     case 'cycle_tab': case 'close_tabs': case 'add_feature': case 'archive_feature':
-    case 'review_accept': case 'review_more_rounds': case 'review_stop':
       return err('Not supported yet')
     case 'unknown':
       return err("Didn't understand the command")

@@ -6,6 +6,7 @@ import {
 } from '../store'
 import type { VoiceCommand } from '@shared/voice'
 import type { AgentKind } from '../agents'
+import type { ReviewStatus } from '@shared/types'
 
 function fixture() {
   let s = createInitialState()
@@ -22,13 +23,17 @@ function fixture() {
 const cmd = (c: Partial<VoiceCommand> & { action: VoiceCommand['action'] }): VoiceCommand =>
   ({ confidence: 'high', ...c })
 
-const ctx = (liveAgents: Record<string, AgentKind | undefined> = {}) => ({ liveAgents })
+const ctx = (
+  liveAgents: Record<string, AgentKind | undefined> = {},
+  reviewStatus: Record<string, ReviewStatus | undefined> = {}
+) => ({ liveAgents, reviewStatus })
 
 describe('planCommand — immediate actions', () => {
   it('switch_feature → run setActiveFeature, startIds = first visible terminal', () => {
     const { s, f1, t1 } = fixture()
     const p = planCommand(cmd({ action: 'switch_feature', featureId: f1 }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
     expect(p.descriptor.startIds).toEqual([t1])
     expect(p.descriptor.run(s).activeFeatureId).toBe(f1)
     expect(p.descriptor.toast).toContain('file-panes')
@@ -40,6 +45,7 @@ describe('planCommand — immediate actions', () => {
     s = hideTerminal(s, s.workspace.groups[0].features[1].terminals[1].id)
     const p = planCommand(cmd({ action: 'switch_feature', featureId: f1 }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
     expect(p.descriptor.startIds).toBeUndefined()
     expect(p.descriptor.run(s).activeFeatureId).toBe(f1)
   })
@@ -48,6 +54,7 @@ describe('planCommand — immediate actions', () => {
     s = hideTerminal(s, t2)
     const p = planCommand(cmd({ action: 'toggle_grid' }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
     expect(p.descriptor.toast).toContain('restored')
     const after = p.descriptor.run(s)
     expect(after.workspace.groups[0].features[1].viewMode).toBe('grid')
@@ -64,6 +71,7 @@ describe('planCommand — immediate actions', () => {
     s = hideTerminal(s, t2)
     const p = planCommand(cmd({ action: 'switch_tab', terminalId: t2 }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
     const after = p.descriptor.run(s)
     expect(after.hidden).not.toContain(t2)
     expect(after.activeTerminalId).toBe(t2)
@@ -74,12 +82,14 @@ describe('planCommand — immediate actions', () => {
     expect(planCommand(cmd({ action: 'set_grid_style' }), s, ctx()).type).toBe('error')
     const p = planCommand(cmd({ action: 'set_grid_style', gridStyle: 'cols' }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
     expect(p.descriptor.run(s).workspace.groups[0].features[1].gridStyle).toBe('cols')
   })
   it('hide_terminal defaults to the active terminal', () => {
     const { s, t2 } = fixture() // addTerminal activates the last-added → t2 active
     const p = planCommand(cmd({ action: 'hide_terminal' }), s, ctx())
     if (p.type !== 'run') throw new Error('expected run')
+    if (p.descriptor.type !== 'state') throw new Error('expected state descriptor')
     expect(p.descriptor.run(s).hidden).toContain(t2)
   })
 })
@@ -169,5 +179,44 @@ describe('planCommand — send_prompt', () => {
     if (p.type !== 'confirm') throw new Error('expected confirm')
     if (p.descriptor.type !== 'sendPrompt') throw new Error('expected sendPrompt descriptor')
     expect(p.descriptor.terminalId).toBe(t1)
+  })
+})
+
+describe('planCommand — review control', () => {
+  function reviewFixture() {
+    const base = fixture()
+    const s = addTerminal(base.s, base.f1, {
+      name: 'review: claude', kind: 'claude',
+      review: { originTerminalId: base.t1, phase: 'impl', round: 1, maxRounds: 3, reviewDir: '/tmp/r' }
+    })
+    const reviewerId = s.workspace.groups[0].features[1].terminals[2].id
+    return { ...base, s, reviewerId }
+  }
+  it('review_accept runs only at needs-decision', () => {
+    const { s, reviewerId } = reviewFixture()
+    expect(planCommand(cmd({ action: 'review_accept' }), s, ctx({}, { [reviewerId]: 'reviewing' })).type).toBe('error')
+    const p = planCommand(cmd({ action: 'review_accept' }), s, ctx({}, { [reviewerId]: 'needs-decision' }))
+    if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    expect(p.descriptor).toMatchObject({ type: 'review', op: 'accept', reviewerId })
+    expect(p.descriptor.toast).toContain('file-panes')
+  })
+  it('review_more_rounds runs only at needs-decision', () => {
+    const { s, reviewerId } = reviewFixture()
+    expect(planCommand(cmd({ action: 'review_more_rounds' }), s, ctx({}, { [reviewerId]: 'reviewing' })).type).toBe('error')
+    const p = planCommand(cmd({ action: 'review_more_rounds' }), s, ctx({}, { [reviewerId]: 'needs-decision' }))
+    if (p.type !== 'run') throw new Error('expected run, got ' + p.type)
+    expect(p.descriptor).toMatchObject({ type: 'review', op: 'more-rounds', reviewerId })
+  })
+  it('review_stop → confirm with a review descriptor', () => {
+    const { s, reviewerId } = reviewFixture()
+    const p = planCommand(cmd({ action: 'review_stop' }), s, ctx())
+    if (p.type !== 'confirm') throw new Error('expected confirm, got ' + p.type)
+    expect(p.descriptor).toMatchObject({ type: 'review', op: 'stop', reviewerId })
+    expect(p.summary).toContain('file-panes')
+  })
+  it('review actions in a feature without a reviewer → error', () => {
+    const { s, f2 } = fixture()
+    expect(planCommand(cmd({ action: 'review_accept', featureId: f2 }), s, ctx()).type).toBe('error')
+    expect(planCommand(cmd({ action: 'review_stop', featureId: f2 }), s, ctx()).type).toBe('error')
   })
 })

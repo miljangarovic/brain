@@ -105,7 +105,8 @@ export function useVoice(deps: VoiceDeps) {
     // (main's gen guard could not catch it) must not execute silently.
     const k = uiRef.current.kind
     if (k !== 'processing' && k !== 'downloading') return
-    const plan = planCommand(command, depsRef.current.state, { liveAgents: depsRef.current.liveAgents })
+    // reviewStatus: {} is a fail-closed placeholder — Task 4 wires App's real map.
+    const plan = planCommand(command, depsRef.current.state, { liveAgents: depsRef.current.liveAgents, reviewStatus: {} })
     if (plan.type === 'run') {
       runDescriptor(plan.descriptor, runDeps())
       dispatch({ type: 'executed', toast: plan.descriptor.toast })

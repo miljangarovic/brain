@@ -35,16 +35,18 @@ export function runDescriptor(d: ExecDescriptor, deps: RunDeps): void {
     else deps.apply((s) => removeTerminal(s, d.terminalId))
     return
   }
-  // addTerminal
-  if (d.kind === 'shell') {
-    deps.apply((s) => addTerminal(s, d.featureId, {
-      name: d.name ?? 'shell',
-      ...(d.prompt ? { startupCommand: d.prompt } : {})
-    }))
-    return
+  // addTerminal (review descriptors are routed by run.ts in Task 4)
+  if (d.type === 'addTerminal') {
+    if (d.kind === 'shell') {
+      deps.apply((s) => addTerminal(s, d.featureId, {
+        name: d.name ?? 'shell',
+        ...(d.prompt ? { startupCommand: d.prompt } : {})
+      }))
+      return
+    }
+    deps.launchAgent(d.featureId, d.kind, {
+      ...(d.prompt ? { prompt: d.prompt } : {}),
+      ...(d.name ? { name: d.name } : {})
+    })
   }
-  deps.launchAgent(d.featureId, d.kind, {
-    ...(d.prompt ? { prompt: d.prompt } : {}),
-    ...(d.name ? { name: d.name } : {})
-  })
 }
