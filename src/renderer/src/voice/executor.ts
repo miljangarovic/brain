@@ -13,6 +13,7 @@ import {
 } from '../store'
 import type { Feature, TerminalKind } from '@shared/types'
 import type { VoiceCommand } from '@shared/voice'
+import type { AgentKind } from '../agents'
 
 export type StateDescriptor = {
   type: 'state'
@@ -26,6 +27,13 @@ export type ExecDescriptor =
   | StateDescriptor
   | { type: 'closeTerminal'; terminalId: string }
   | { type: 'addTerminal'; featureId: string; kind: TerminalKind; name?: string; prompt?: string }
+  | { type: 'sendPrompt'; terminalId: string; prompt: string }
+
+// Live-process context the executor cannot derive from AppState: which
+// terminals currently host a RUNNING agent (App tracks this from pty:proc
+// events). REQUIRED parameter — an optional one would let stale call sites
+// silently skip the liveness gate.
+export interface PlanContext { liveAgents: Record<string, AgentKind | undefined> }
 
 export type ExecPlan =
   | { type: 'run'; descriptor: StateDescriptor }
@@ -37,8 +45,8 @@ const findFeature = (s: AppState, id: string | undefined): Feature | null =>
 
 const err = (message: string): ExecPlan => ({ type: 'error', message })
 
-export function planCommand(cmd: VoiceCommand, s: AppState): ExecPlan {
-  const plan = planHigh(cmd, s)
+export function planCommand(cmd: VoiceCommand, s: AppState, ctx: PlanContext): ExecPlan {
+  const plan = planHigh(cmd, s, ctx)
   // Low LLM confidence: never run silently — show what was understood first.
   if (cmd.confidence === 'low' && plan.type === 'run') {
     return { type: 'confirm', summary: plan.descriptor.toast, descriptor: plan.descriptor }
@@ -46,7 +54,7 @@ export function planCommand(cmd: VoiceCommand, s: AppState): ExecPlan {
   return plan
 }
 
-function planHigh(cmd: VoiceCommand, s: AppState): ExecPlan {
+function planHigh(cmd: VoiceCommand, s: AppState, ctx: PlanContext): ExecPlan {
   switch (cmd.action) {
     case 'switch_feature': {
       const f = findFeature(s, cmd.featureId)
@@ -158,8 +166,25 @@ function planHigh(cmd: VoiceCommand, s: AppState): ExecPlan {
         descriptor: { type: 'state', run: (st) => renameTerminal(st, t.id, name), toast: `Renamed: ${name}` }
       }
     }
-    // send_prompt is wired in Task 3 (needs PlanContext); reject until then.
-    case 'send_prompt':
+    case 'send_prompt': {
+      const id = cmd.terminalId ?? s.activeTerminalId
+      const t = id ? getTerminalById(s, id) : null
+      if (!t) return err('Terminal not found — try again')
+      if (t.kind !== 'claude' && t.kind !== 'codex') {
+        return err('Voice prompts can only go to claude/codex terminals')
+      }
+      if (!ctx.liveAgents[t.id]) {
+        return err(`Agent is not running in "${t.name}" — say "add a claude terminal with prompt …" to start one`)
+      }
+      if (!cmd.prompt) return err('No prompt understood')
+      const prompt = cmd.prompt
+      return {
+        type: 'confirm',
+        summary: `Send to "${t.name}"`,
+        editablePrompt: prompt,
+        descriptor: { type: 'sendPrompt', terminalId: t.id, prompt }
+      }
+    }
     case 'unknown':
       return err("Didn't understand the command")
   }

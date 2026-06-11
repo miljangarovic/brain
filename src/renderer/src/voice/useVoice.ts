@@ -16,6 +16,8 @@ export interface VoiceDeps {
   markStarted: (id: string) => void
   stopReviewLoop: (terminalId: string) => void
   launchAgent: (featureId: string, kind: AgentKind, opts?: { prompt?: string; name?: string }) => void
+  liveAgents: Record<string, AgentKind | undefined>
+  sendPrompt: (terminalId: string, prompt: string) => void
 }
 
 export function useVoice(deps: VoiceDeps) {
@@ -73,8 +75,26 @@ export function useVoice(deps: VoiceDeps) {
       const { prompt: _replaced, ...rest } = d
       d = editedPrompt.trim() ? { ...rest, prompt: editedPrompt } : rest
     }
+    if (d.type === 'sendPrompt') {
+      // Fire-time liveness RE-CHECK (deviation 2): the agent may have exited
+      // while the confirm overlay sat open — injecting then would type the
+      // prompt + Enter into the leftover SHELL and execute it as a command.
+      if (!depsRef.current.liveAgents[d.terminalId]) {
+        dispatch({ type: 'state', ev: { phase: 'error', message: 'Agent is no longer running — prompt not sent' } })
+        return
+      }
+      if (editedPrompt !== undefined) {
+        const p = editedPrompt.trim()
+        // An emptied prompt means there is nothing to send — treat as cancel.
+        if (!p) { dispatch({ type: 'dismiss' }); return }
+        d = { ...d, prompt: p }
+      }
+    }
     runDescriptor(d, runDeps())
-    const toast = d.type === 'state' ? d.toast : d.type === 'closeTerminal' ? 'Terminal closed' : 'Terminal launched'
+    const toast = d.type === 'state' ? d.toast
+      : d.type === 'closeTerminal' ? 'Terminal closed'
+      : d.type === 'sendPrompt' ? 'Prompt sent'
+      : 'Terminal launched'
     dispatch({ type: 'executed', toast })
   }, [])
 
@@ -85,7 +105,7 @@ export function useVoice(deps: VoiceDeps) {
     // (main's gen guard could not catch it) must not execute silently.
     const k = uiRef.current.kind
     if (k !== 'processing' && k !== 'downloading') return
-    const plan = planCommand(command, depsRef.current.state)
+    const plan = planCommand(command, depsRef.current.state, { liveAgents: depsRef.current.liveAgents })
     if (plan.type === 'run') {
       runDescriptor(plan.descriptor, runDeps())
       dispatch({ type: 'executed', toast: plan.descriptor.toast })
