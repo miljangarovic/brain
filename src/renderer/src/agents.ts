@@ -1,8 +1,8 @@
 // Quick-launch agent definitions. `command` is assumed to be on PATH.
-import type { TerminalKind } from '@shared/types'
+import type { AgentKind, TerminalKind } from '@shared/types'
 import { shellSingleQuote } from './shellQuote'
 
-export type AgentKind = 'claude' | 'codex'
+export type { AgentKind }
 
 export interface AgentDef {
   label: string

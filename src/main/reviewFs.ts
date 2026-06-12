@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import type { ReviewPhase } from '@shared/types'
+import type { AgentKind, ReviewPhase } from '@shared/types'
 
 export interface MdEntry { path: string; mtimeMs: number }
 
@@ -36,8 +36,8 @@ export async function suggestSpec(cwd: string): Promise<string | null> {
   return pickNewest(await scanMarkdown(cwd))
 }
 
-export function reviewDirFor(userDataDir: string, originTerminalId: string): string {
-  return join(userDataDir, 'reviews', originTerminalId)
+export function reviewDirFor(userDataDir: string, originTerminalId: string, reviewer: AgentKind): string {
+  return join(userDataDir, 'reviews', originTerminalId, reviewer)
 }
 
 export function reviewFilePath(reviewDir: string, phase: ReviewPhase, round: number): string {
@@ -45,14 +45,17 @@ export function reviewFilePath(reviewDir: string, phase: ReviewPhase, round: num
 }
 
 export async function resolveReviewPaths(
-  userDataDir: string, originTerminalId: string, phase: ReviewPhase, round: number
+  userDataDir: string, originTerminalId: string, reviewer: AgentKind, phase: ReviewPhase, round: number
 ): Promise<{ reviewDir: string; reviewFile: string; intentPath: string; specPath: string }> {
-  const reviewDir = reviewDirFor(userDataDir, originTerminalId)
+  const reviewDir = reviewDirFor(userDataDir, originTerminalId, reviewer)
+  // intent.md / spec.md are the ORIGIN's artifacts — every reviewer reads the
+  // same documents, so they live in the origin folder, not the per-agent one.
+  const originDir = join(userDataDir, 'reviews', originTerminalId)
   await fs.mkdir(reviewDir, { recursive: true })
   return {
     reviewDir,
     reviewFile: reviewFilePath(reviewDir, phase, round),
-    intentPath: join(reviewDir, 'intent.md'),
-    specPath: join(reviewDir, 'spec.md')
+    intentPath: join(originDir, 'intent.md'),
+    specPath: join(originDir, 'spec.md')
   }
 }

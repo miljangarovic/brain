@@ -9,7 +9,7 @@ import {
   addFeature, renameFeature, deleteFeature, toggleFeatureCollapsed, toggleFeatureViewMode, setFeatureGridStyle, moveFeature,
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, moveTerminal,
   setActiveTerminal, setActiveFeature, setTerminalSessionId,
-  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview, cyclePane,
+  getActiveGroup, getActiveFeature, getActiveTerminal, getTerminalById, allTerminals, terminalPath, isUnderReview, cyclePane, findReviewersFor,
   addImportedGroup, addImportedFeature,
   archiveFeature, restoreFeature, deleteArchivedFeature, addDocument, renameDocument, removeDocument,
   openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane, featureIdOfTerminal
@@ -252,20 +252,21 @@ export default function App() {
   const activeFeature = getActiveFeature(state)
 
   const activeTerminal = getActiveTerminal(state)
-  // The pipeline controls live on the feature's reviewer terminal (the one with a
-  // review link); both origin and reviewer share the feature, so derive from it.
-  const featureReviewer = activeFeature?.terminals.find((t) => !!t.review) ?? null
-  const reviewerStatus = featureReviewer ? reviewStatus[featureReviewer.id] : undefined
-  const originStatus = featureReviewer?.review ? reviewStatus[featureReviewer.review.originTerminalId] : undefined
-  const reviewControl = {
-    reviewerId: featureReviewer?.id ?? null,
-    needsDecision: reviewerStatus === 'needs-decision',
-    active: reviewerStatus === 'reviewing' || originStatus === 'applying'
-  }
+  // The pipeline controls live on the feature's reviewer terminals (the ones
+  // with a review link); origin and reviewers share the feature.
+  const featureReviewers = activeFeature?.terminals.filter((t) => !!t.review) ?? []
+  const reviewControls = featureReviewers.map((r) => ({
+    reviewerId: r.id,
+    kind: (r.kind === 'codex' ? 'codex' : 'claude') as 'claude' | 'codex',
+    needsDecision: reviewStatus[r.id] === 'needs-decision',
+    active: reviewStatus[r.id] === 'reviewing' ||
+      (r.review ? reviewStatus[r.review.originTerminalId] === 'applying' : false)
+  }))
   const startReview = (args: ReviewStartArgs) => {
     if (!reviewReq) return
     markStarted(reviewReq.id) // the loop relays into the origin's PTY — it must be running
-    void review.startReview({ originTerminalId: reviewReq.id, ...args })
+    const { reviewers, ...rest } = args
+    for (const reviewer of reviewers) void review.startReview({ originTerminalId: reviewReq.id, reviewer, ...rest })
     setReviewReq(null)
   }
 
@@ -503,6 +504,7 @@ export default function App() {
         onCloseFile={(id) => apply((s) => closeFile(s, id))}
         onRenameFilePane={(id, name) => apply((s) => renameFilePane(s, id, name))}
         onMoveFile={(id, toIndex) => apply((s) => moveFile(s, id, toIndex))}
+        onShowFileInFolder={(p) => window.brain.showItemInFolder(p)}
         onRenameDocument={(fid, did, name) => apply((s) => renameDocument(s, fid, did, name))}
         onRemoveDocument={(fid, did) => apply((s) => removeDocument(s, fid, did))}
         docExists={docExists}
@@ -531,7 +533,7 @@ export default function App() {
             onAdd={(kind) => (kind === 'shell'
               ? addShellTerminal(activeFeature.id)
               : launchAgent(activeFeature.id, kind))}
-            review={reviewControl}
+            reviews={reviewControls}
             onMoreRounds={(rid) => void review.moreRounds(rid)}
             onAcceptPhase={(rid) => review.acceptPhase(rid)}
             onStopLoop={(rid) => review.stopLoop(rid)}
@@ -668,6 +670,7 @@ export default function App() {
           <ReviewDialog
             originName={origin.name}
             defaultReviewer={defaultReviewer}
+            activeKinds={findReviewersFor(state, reviewReq.id).map((r) => (r.kind === 'codex' ? 'codex' : 'claude') as 'claude' | 'codex')}
             cwd={group?.cwd ?? ''}
             onStart={startReview}
             onCancel={() => setReviewReq(null)}

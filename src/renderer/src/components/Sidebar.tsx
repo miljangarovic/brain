@@ -135,6 +135,7 @@ export function Sidebar(props: {
   onCloseFile: (paneId: string) => void
   onRenameFilePane: (paneId: string, name: string) => void
   onMoveFile: (paneId: string, toIndex: number) => void
+  onShowFileInFolder: (path: string) => void
   onOpenDocumentExternally: (path: string) => void
   onOpenDocument: (featureId: string, path: string) => void
   onRenameDocument: (featureId: string, docId: string, name: string) => void
@@ -156,7 +157,7 @@ export function Sidebar(props: {
     onRenameGroup, onRenameFeature, onRenameTerminal, onDeleteGroup, onDeleteFeature, onDeleteTerminal, onArchiveFeature, onOpenArchive, onAddDocument, onOpenInFiles,
     onExportGroup, onExportFeature, onImport, onVoice,
     reviewStatus, onReviewTerminal, pendingRenameTerminalId, onPendingRenameConsumed,
-    onSelectFile, onCloseFile, onRenameFilePane, onMoveFile, onOpenDocumentExternally,
+    onSelectFile, onCloseFile, onRenameFilePane, onMoveFile, onShowFileInFolder, onOpenDocumentExternally,
     onOpenDocument, onRenameDocument, onRemoveDocument, docExists, pendingRenameDocId, onPendingRenameDocConsumed,
     attention, attentionItems, attentionMuted, onAttentionSelect, onAttentionClear, onAttentionClearAll, onToggleAttentionMute
   } = props
@@ -165,6 +166,7 @@ export function Sidebar(props: {
   const [termMenu, setTermMenu] = useState<{ x: number; y: number; terminalId: string } | null>(null)
   const [featMenu, setFeatMenu] = useState<{ x: number; y: number; featureId: string } | null>(null)
   const [docMenu, setDocMenu] = useState<{ x: number; y: number; featureId: string; docId: string; path: string } | null>(null)
+  const [fileMenu, setFileMenu] = useState<{ x: number; y: number; path: string } | null>(null)
 
   // Drag-and-drop reorder for projects, features, and terminals — each within its
   // own container only. The whole row is draggable. The active drag lives in a ref
@@ -469,6 +471,7 @@ export function Sidebar(props: {
                               return (
                                 <div key={p.id} data-file-id={p.id}
                                   onClick={() => onSelectFile(p.id)}
+                                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setFileMenu({ x: e.clientX, y: e.clientY, path: p.path }) }}
                                   draggable={!isEditing('file', p.id)}
                                   onDragStart={(e) => { e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; dragRef.current = { kind: 'file', id: p.id, featureId: f.id }; setDrag({ kind: 'file', id: p.id, featureId: f.id }) }}
                                   onDragEnd={clearDrag}
@@ -604,7 +607,14 @@ export function Sidebar(props: {
       {docMenu && (
         <ContextMenu x={docMenu.x} y={docMenu.y} onClose={() => setDocMenu(null)} items={[
           { label: 'Open externally', onSelect: () => onOpenDocumentExternally(docMenu.path) },
+          { label: 'Open in Files', onSelect: () => onShowFileInFolder(docMenu.path) },
           { label: 'Remove', onSelect: () => onRemoveDocument(docMenu.featureId, docMenu.docId) }
+        ]} />
+      )}
+
+      {fileMenu && (
+        <ContextMenu x={fileMenu.x} y={fileMenu.y} onClose={() => setFileMenu(null)} items={[
+          { label: 'Open in Files', onSelect: () => onShowFileInFolder(fileMenu.path) }
         ]} />
       )}
 

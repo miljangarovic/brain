@@ -1,5 +1,8 @@
 export type TerminalKind = 'shell' | 'claude' | 'codex'
 
+// The two launchable agent CLIs — the TerminalKind subset that can review.
+export type AgentKind = 'claude' | 'codex'
+
 export type ReviewPhase = 'intent' | 'spec' | 'impl'
 
 export interface ReviewLink {

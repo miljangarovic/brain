@@ -5,7 +5,7 @@ import {
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
-  patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById,
+  patchReviewLink, findReviewersFor, featureIdOfTerminal, getTerminalById,
   addImportedGroup, addImportedFeature, archiveFeature, restoreFeature, deleteArchivedFeature, setTerminalSessionId,
   addDocument, renameDocument, removeDocument,
   openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane,
@@ -469,15 +469,15 @@ describe('review store', () => {
     expect(t.review?.round).toBe(1)
   })
 
-  it('findReviewerFor locates the reviewer of an origin', () => {
+  it('findReviewersFor returns every reviewer of an origin, in tree order', () => {
     let s = addGroup(createInitialState(), 'g', '/p')
     const fid = s.workspace.groups[0].features[0].id
     s = addTerminal(s, fid, { name: 'A', kind: 'claude' })
     const aId = getActiveTerminal(s)!.id
-    s = addTerminal(s, fid, { name: 'review: codex', kind: 'codex', review: link(aId) })
-    const reviewer = findReviewerFor(s, aId)
-    expect(reviewer?.name).toBe('review: codex')
-    expect(findReviewerFor(s, 'nope')).toBeNull()
+    s = addTerminal(s, fid, { name: 'claude review: A', kind: 'claude', review: link(aId) })
+    s = addTerminal(s, fid, { name: 'codex review: A', kind: 'codex', review: link(aId) })
+    expect(findReviewersFor(s, aId).map((t) => t.name)).toEqual(['claude review: A', 'codex review: A'])
+    expect(findReviewersFor(s, 'nope')).toEqual([])
   })
 
   it('patchReviewLink merges fields on a reviewer terminal', () => {
@@ -486,7 +486,7 @@ describe('review store', () => {
     s = addTerminal(s, fid, { name: 'review: codex', kind: 'codex', review: link('o', 1) })
     const bId = getActiveTerminal(s)!.id
     s = patchReviewLink(s, bId, { phase: 'impl', round: 2 })
-    const r = findReviewerFor(s, 'o')?.review
+    const r = findReviewersFor(s, 'o')[0]?.review
     expect(r?.phase).toBe('impl')
     expect(r?.round).toBe(2)
     expect(r?.maxRounds).toBe(5) // untouched fields preserved
