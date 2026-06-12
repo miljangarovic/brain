@@ -44,6 +44,11 @@ export function useReview(
   // Current statuses, readable from the reconcile effect without re-running it.
   const statusRef = useRef(reviewStatus)
   statusRef.current = reviewStatus
+  // Reviewers finalized/stopped this tick — `state` lags one render behind
+  // apply(), so a second verdict in the same tick would still "see" the first
+  // reviewer and miss the last-one-out transition. Terminal ids are UUIDs and
+  // never recycled, so the set needs no cleanup.
+  const removed = useRef(new Set<string>())
 
   const armReviewWatch = useCallback((reviewerId: string, reviewFile: string, phase: ReviewPhase, round: number) => {
     const watchId = watchIdFor(reviewerId, phase, round)
@@ -66,18 +71,28 @@ export function useReview(
     armReviewWatch(reviewerId, reviewFile, phase, round)
   }, [setStatus, armReviewWatch])
 
-  // A phase passed review: remove the (now finished) reviewer terminal — App's PTY
-  // reaper kills its PTY — clean up its watches/arming, and mark the origin green
-  // ('approved'), which holds until the origin's next request.
+  // A reviewer approved: remove its terminal — App's PTY reaper kills its PTY —
+  // and clean up its watches and any queued critique. The origin goes green
+  // only when the LAST reviewer leaves: ALL must approve (intent decision).
   const finalizeApproved = useCallback((reviewerId: string, originId: string) => {
-    awaiting.current.delete(originId)
     for (const [watchId, w] of [...watching.current]) {
       if (w.reviewerId === reviewerId) { window.brain.unwatchFile(watchId); watching.current.delete(watchId) }
     }
+    const cycle = awaiting.current.get(originId)
+    if (cycle) {
+      cycle.applied = cycle.applied.filter((rid) => rid !== reviewerId)
+      cycle.queue = cycle.queue.filter((q) => q.reviewerId !== reviewerId)
+    }
     apply((s) => removeTerminal(s, reviewerId))
     setStatus(reviewerId, undefined)
-    setStatus(originId, 'approved')
-  }, [apply, setStatus])
+    removed.current.add(reviewerId)
+    const others = findReviewersFor(state, originId)
+      .filter((r) => r.id !== reviewerId && !removed.current.has(r.id))
+    if (others.length === 0) {
+      awaiting.current.delete(originId)
+      setStatus(originId, 'approved')
+    }
+  }, [state, apply, setStatus])
 
   // 1. Start a brand-new review: spawn the reviewer terminal bound to the origin.
   const startReview = useCallback(async (a: StartReviewArgs) => {
@@ -253,18 +268,30 @@ export function useReview(
     finalizeApproved(reviewer.id, reviewer.review.originTerminalId)
   }, [state, finalizeApproved])
 
-  // 5. Stop the loop entirely (manual escape): remove the reviewer, clear the origin (no green).
+  // 5. Stop ONE reviewer's loop (manual escape): remove it; clear the origin
+  // (no green) only when it was the last reviewer.
   const stopLoop = useCallback((reviewerId: string) => {
     const reviewer = getTerminalById(state, reviewerId)
     const link = reviewer?.review
     if (!reviewer || !link) return
-    awaiting.current.delete(link.originTerminalId)
     for (const [watchId, w] of [...watching.current]) {
       if (w.reviewerId === reviewer.id) { window.brain.unwatchFile(watchId); watching.current.delete(watchId) }
     }
+    const originId = link.originTerminalId
+    const cycle = awaiting.current.get(originId)
+    if (cycle) {
+      cycle.applied = cycle.applied.filter((rid) => rid !== reviewerId)
+      cycle.queue = cycle.queue.filter((q) => q.reviewerId !== reviewerId)
+    }
     apply((s) => removeTerminal(s, reviewer.id))
     setStatus(reviewer.id, undefined)
-    setStatus(link.originTerminalId, undefined)
+    removed.current.add(reviewerId)
+    const others = findReviewersFor(state, originId)
+      .filter((r) => r.id !== reviewerId && !removed.current.has(r.id))
+    if (others.length === 0) {
+      awaiting.current.delete(originId)
+      setStatus(originId, undefined)
+    }
   }, [state, apply, setStatus])
 
   return { startReview, handleFsChanged, handleBusy, moreRounds, acceptPhase, stopLoop }

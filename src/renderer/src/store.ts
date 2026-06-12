@@ -556,9 +556,6 @@ export const allTerminals = (s: AppState): Terminal[] =>
 export const getTerminalById = (s: AppState, id: string): Terminal | null =>
   allTerminals(s).find((t) => t.id === id) ?? null
 
-export const findReviewerFor = (s: AppState, originId: string): Terminal | null =>
-  allTerminals(s).find((t) => t.review?.originTerminalId === originId) ?? null
-
 export const findReviewersFor = (s: AppState, originId: string): Terminal[] =>
   allTerminals(s).filter((t) => t.review?.originTerminalId === originId)
 

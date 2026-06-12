@@ -290,4 +290,48 @@ describe('useReview parallel reviewers', () => {
     await act(async () => {})
     expect(promptWrites()).toHaveLength(1) // first verdict relays, the second queues
   })
+
+  it('does not mark the origin approved while another reviewer is still active', async () => {
+    const { result, apply, setStatus } = setup({ state: mkDualState() })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: APPROVED\nlooks good')
+    await act(() => result.current.handleFsChanged('review:revA:impl:1'))
+    expect(apply).toHaveBeenCalled() // revA terminal removed
+    expect(setStatus).toHaveBeenCalledWith('revA', undefined)
+    expect(setStatus).not.toHaveBeenCalledWith('origin', 'approved') // revB still reviewing
+  })
+
+  it("stopping one of two reviewers leaves the origin under the other's review", async () => {
+    const { result, setStatus } = setup({ state: mkDualState() })
+    await act(async () => {})
+    await act(async () => { result.current.stopLoop('revA') })
+    expect(setStatus).toHaveBeenCalledWith('revA', undefined)
+    expect(setStatus).not.toHaveBeenCalledWith('origin', undefined)
+  })
+
+  it('two APPROVED verdicts in the same tick still green the origin (last one out)', async () => {
+    // `state` lags one render behind apply(); without the removed-set both
+    // finalize calls would see BOTH reviewers and neither would green the
+    // origin. The reconcile-after-reload path hits this for real: it fires
+    // handleFsChanged for every link in one pass.
+    const { result, setStatus } = setup({ state: mkDualState() })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: APPROVED\nok')
+    await act(async () => {
+      void result.current.handleFsChanged('review:revA:impl:1')
+      void result.current.handleFsChanged('review:revB:impl:1')
+    })
+    expect(setStatus).toHaveBeenCalledWith('origin', 'approved')
+  })
+
+  it('stopping both reviewers in the same tick clears the origin', async () => {
+    const { result, setStatus } = setup({ state: mkDualState() })
+    await act(async () => {})
+    await act(async () => {
+      result.current.stopLoop('revA')
+      result.current.stopLoop('revB')
+    })
+    const originCalls = setStatus.mock.calls.filter((c) => c[0] === 'origin')
+    expect(originCalls.at(-1)).toEqual(['origin', undefined])
+  })
 })
