@@ -25,8 +25,12 @@ export interface StartReviewArgs {
 // One origin's in-flight apply cycle: critiques already relayed this cycle
 // (their reviewers advance together when the origin settles) and critiques
 // queued behind the one being applied — two at once would interleave.
+// 'advancing' marks the advance-all pass at the cycle's end: the entry must
+// stay in `awaiting` through its IPC awaits (so a mid-await render commit
+// can't let the reconcile effect re-arm an already-applied reviewer's old
+// watch), while PTY busy/idle noise is ignored.
 interface ApplyCycle {
-  arm: 'pending' | 'working'
+  arm: 'pending' | 'working' | 'advancing'
   applied: string[]                               // reviewerIds relayed this cycle
   queue: { reviewerId: string; relay: string }[]  // critiques waiting their turn
 }
@@ -136,7 +140,9 @@ export function useReview(
       })
     }
     setStatus(reviewerId, 'reviewing')
-    setStatus(a.originTerminalId, 'under-review')
+    // Don't stomp 'applying': the origin may be mid apply-cycle for another
+    // reviewer when a second one is spawned.
+    if (!awaiting.current.has(a.originTerminalId)) setStatus(a.originTerminalId, 'under-review')
     armReviewWatch(reviewerId, paths.reviewFile, a.phase, round)
   }, [state, apply, setStatus, armReviewWatch])
 
@@ -165,11 +171,19 @@ export function useReview(
       return
     }
     // NEEDS-WORK → relay to the origin; if the origin is already applying
-    // another reviewer's critique, queue this one for the next idle.
+    // another reviewer's critique, queue this one for the next idle. Dedupe by
+    // reviewer id: two fs events for one verdict can both pass the watching.get
+    // check before either read resolves, and one critique applied twice would
+    // burn a round against unchanged work.
     const relay = relayToOriginPrompt({ phase: link.phase, reviewFile: w.reviewFile, intentPath: link.intentPath, specPath: link.specPath })
     setStatus(reviewer.id, undefined)
     const cycle = awaiting.current.get(link.originTerminalId)
-    if (cycle) { cycle.queue.push({ reviewerId: reviewer.id, relay }); return }
+    if (cycle) {
+      if (!cycle.applied.includes(reviewer.id) && !cycle.queue.some((q) => q.reviewerId === reviewer.id)) {
+        cycle.queue.push({ reviewerId: reviewer.id, relay })
+      }
+      return
+    }
     submitToPty(link.originTerminalId, relay)
     setStatus(link.originTerminalId, 'applying')
     awaiting.current.set(link.originTerminalId, { arm: 'pending', applied: [reviewer.id], queue: [] })
@@ -180,6 +194,7 @@ export function useReview(
   const handleBusy = useCallback(async (id: string, busy: boolean) => {
     const cycle = awaiting.current.get(id)
     if (!cycle) return
+    if (cycle.arm === 'advancing') return             // mid advance-all — ignore PTY noise
     if (busy) { cycle.arm = 'working'; return }       // origin started producing output
     if (cycle.arm !== 'working') return               // ignore idle before any work began
     // The busy tracker calls 1.5s of output silence "idle", but an origin stopped
@@ -194,9 +209,17 @@ export function useReview(
       submitToPty(id, next.relay)
       return
     }
-    awaiting.current.delete(id)
+    // Advance-all. The cycle entry stays in `awaiting` for the whole pass: a
+    // render can commit during the per-reviewer IPC awaits, and the reconcile
+    // effect must keep seeing this origin as claimed — otherwise it re-arms an
+    // already-applied reviewer's OLD watch and re-relays its stale critique.
+    // `applied` is snapshotted and cleared so a verdict landing mid-advance
+    // queues as fresh work instead of being deduped against the finished pass.
+    cycle.arm = 'advancing'
+    const advanced = cycle.applied
+    cycle.applied = []
     let anyIterating = false
-    for (const reviewerId of cycle.applied) {
+    for (const reviewerId of advanced) {
       const reviewer = getTerminalById(state, reviewerId)
       const link = reviewer?.review
       if (!reviewer || !link) continue
@@ -208,13 +231,22 @@ export function useReview(
       apply((s) => patchReviewLink(s, reviewer.id, { round: decision.round, reviewDir: paths.reviewDir }))
       requestReview(link, reviewer.id, link.phase, decision.round, paths.reviewFile)
     }
+    // A critique that landed mid-advance queued into this cycle — start the
+    // next apply pass with it; otherwise the cycle is complete.
+    const late = cycle.queue.shift()
+    if (late) {
+      cycle.applied.push(late.reviewerId)
+      cycle.arm = 'pending'
+      submitToPty(id, late.relay)
+      setStatus(id, 'applying')
+      return
+    }
+    awaiting.current.delete(id)
     // A reviewer whose verdict hasn't landed yet is NOT in this cycle — its
     // armed watch marks it still reviewing, so the origin keeps its badge.
-    if (!anyIterating) {
-      const stillReviewing = findReviewersFor(state, id).some((r) =>
-        [...watching.current.values()].some((w) => w.reviewerId === r.id))
-      setStatus(id, stillReviewing ? 'under-review' : undefined)
-    }
+    const stillReviewing = findReviewersFor(state, id).some((r) =>
+      [...watching.current.values()].some((w) => w.reviewerId === r.id))
+    setStatus(id, anyIterating || stillReviewing ? 'under-review' : undefined)
   }, [state, apply, setStatus, requestReview])
 
   // Reconcile watches with the workspace. The loop's coordination state

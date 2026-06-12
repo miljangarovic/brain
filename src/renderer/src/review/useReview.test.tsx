@@ -77,6 +77,8 @@ const mkDualState = (): AppState => ({
 
 // PTY writes that are prompts (not the delayed CR submit keystroke).
 const promptWrites = () => api.writePty.mock.calls.filter((c) => c[1] !== '\r')
+// Prompts relayed into the ORIGIN's PTY (excludes round-N requests sent to reviewers).
+const originPrompts = () => api.writePty.mock.calls.filter((c) => c[0] === 'origin' && c[1] !== '\r')
 
 function setup(opts: { state?: AppState; reviewStatus?: Record<string, ReviewStatus | undefined> } = {}) {
   const apply = vi.fn()
@@ -322,6 +324,59 @@ describe('useReview parallel reviewers', () => {
       void result.current.handleFsChanged('review:revB:impl:1')
     })
     expect(setStatus).toHaveBeenCalledWith('origin', 'approved')
+  })
+
+  it('does not re-relay an applied critique when a render commits mid advance-all', async () => {
+    // React can commit the round-patch render (and run the reconcile effect)
+    // while advance-all is awaiting resolveReviewDir for the NEXT reviewer.
+    // The cycle must stay claimed in `awaiting` for that whole window, or the
+    // reconcile re-arms the old-round watch and re-relays the stale critique.
+    const { result, rerender } = setup({ state: mkDualState() })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(() => result.current.handleFsChanged('review:revA:impl:1'))
+    await act(() => result.current.handleFsChanged('review:revB:impl:1'))
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))   // relays B's critique
+    await act(() => result.current.handleBusy('origin', true))
+    const before = originPrompts().length
+    const pending = result.current.handleBusy('origin', false)    // advance-all begins
+    rerender({ state: mkDualState(), reviewStatus: {} })          // render commits mid-await
+    await act(async () => { await pending })
+    expect(originPrompts().length).toBe(before)                   // no stale re-relay
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'claude', 'impl', 2)
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'codex', 'impl', 2)
+  })
+
+  it('starting a second reviewer does not stomp the origin\'s applying badge', async () => {
+    const s = mkDualState()
+    s.workspace.groups[0].features[0].terminals.pop() // only revA (claude) present
+    const { result, setStatus } = setup({ state: s })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(() => result.current.handleFsChanged('review:revA:impl:1')) // origin now applying
+    await act(() => result.current.startReview({ originTerminalId: 'origin', reviewer: 'codex', phase: 'impl', maxRounds: 3 }))
+    const originCalls = setStatus.mock.calls.filter((c) => c[0] === 'origin')
+    expect(originCalls.at(-1)).toEqual(['origin', 'applying']) // not overwritten to under-review
+  })
+
+  it('a duplicate fs event for the same verdict does not double-queue the critique', async () => {
+    // Two events can both pass the watching.get check before either read
+    // resolves; the relay/queue layer must dedupe by reviewer id.
+    const { result } = setup({ state: mkDualState() })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(async () => {
+      void result.current.handleFsChanged('review:revA:impl:1')
+      void result.current.handleFsChanged('review:revA:impl:1')
+    })
+    expect(originPrompts()).toHaveLength(1)
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    expect(originPrompts()).toHaveLength(1) // duplicate did NOT relay a second time
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'claude', 'impl', 2)
   })
 
   it('refuses a second reviewer of the same kind on one origin', async () => {

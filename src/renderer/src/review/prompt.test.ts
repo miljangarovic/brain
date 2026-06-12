@@ -34,6 +34,13 @@ describe('reviewerStartupPrompt', () => {
     expect(p).toContain('/a/spec.md')
     expect(p).toContain('/r/intent.md')
   })
+  it('impl: falls back to reviewing committed work when the tree is clean', () => {
+    // An origin that commits per-task leaves a clean tree — without the
+    // fallback a literal reviewer reports "empty diff" and blocks on nothing.
+    const p = reviewerStartupPrompt({ phase: 'impl', round: 1, reviewFile: '/r/review-impl-1.md', specPath: '/a/spec.md', intentPath: '/r/intent.md' })
+    expect(p.toLowerCase()).toContain('clean')
+    expect(p).toContain('git log')
+  })
   it('round > 1 adds a re-review preamble', () => {
     const p = reviewerStartupPrompt({ phase: 'spec', round: 2, reviewFile: '/r/review-spec-2.md', specPath: '/a/spec.md', intentPath: '/r/intent.md' })
     expect(p.toLowerCase()).toContain('revised')
