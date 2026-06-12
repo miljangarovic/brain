@@ -5,7 +5,7 @@ import {
   addTerminal, renameTerminal, removeTerminal, hideTerminal, showTerminal, isHidden, moveTerminal,
   setActiveGroup, setActiveFeature, setActiveTerminal,
   getActiveGroup, getActiveFeature, getActiveTerminal, allTerminals,
-  patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById,
+  patchReviewLink, findReviewerFor, findReviewersFor, featureIdOfTerminal, getTerminalById,
   addImportedGroup, addImportedFeature, archiveFeature, restoreFeature, deleteArchivedFeature, setTerminalSessionId,
   addDocument, renameDocument, removeDocument,
   openFile, closeFile, moveFile, renameFilePane, setFilePaneMdView, findFilePane,
@@ -478,6 +478,17 @@ describe('review store', () => {
     const reviewer = findReviewerFor(s, aId)
     expect(reviewer?.name).toBe('review: codex')
     expect(findReviewerFor(s, 'nope')).toBeNull()
+  })
+
+  it('findReviewersFor returns every reviewer of an origin, in tree order', () => {
+    let s = addGroup(createInitialState(), 'g', '/p')
+    const fid = s.workspace.groups[0].features[0].id
+    s = addTerminal(s, fid, { name: 'A', kind: 'claude' })
+    const aId = getActiveTerminal(s)!.id
+    s = addTerminal(s, fid, { name: 'claude review: A', kind: 'claude', review: link(aId) })
+    s = addTerminal(s, fid, { name: 'codex review: A', kind: 'codex', review: link(aId) })
+    expect(findReviewersFor(s, aId).map((t) => t.name)).toEqual(['claude review: A', 'codex review: A'])
+    expect(findReviewersFor(s, 'nope')).toEqual([])
   })
 
   it('patchReviewLink merges fields on a reviewer terminal', () => {
