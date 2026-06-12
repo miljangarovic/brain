@@ -40,7 +40,7 @@ function bodyLines(a: ReviewerPromptArgs): string[] {
   }
   return [
     'You are a reviewer — a second AI agent. Do NOT commit; only WRITE your critique to the review file.',
-    'Run `git status` and `git diff` and review the uncommitted changes in this repository.',
+    'Run `git status` and `git diff` and review the uncommitted changes in this repository. If the working tree is clean, the work was already committed — review the latest feature commits instead (`git log` to find the feature range, then diff it, e.g. the last merge or the branch against its base).',
     `The intent is at: ${a.intentPath ?? '(intent not yet written)'}; the spec is at: ${a.specPath ?? '(spec not yet written)'}.`,
     'Judge: does the implementation follow the spec? Bugs, edge cases, correctness, simplicity.'
   ]
