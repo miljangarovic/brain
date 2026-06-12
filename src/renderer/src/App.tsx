@@ -503,6 +503,7 @@ export default function App() {
         onCloseFile={(id) => apply((s) => closeFile(s, id))}
         onRenameFilePane={(id, name) => apply((s) => renameFilePane(s, id, name))}
         onMoveFile={(id, toIndex) => apply((s) => moveFile(s, id, toIndex))}
+        onShowFileInFolder={(p) => window.brain.showItemInFolder(p)}
         onRenameDocument={(fid, did, name) => apply((s) => renameDocument(s, fid, did, name))}
         onRemoveDocument={(fid, did) => apply((s) => removeDocument(s, fid, did))}
         docExists={docExists}

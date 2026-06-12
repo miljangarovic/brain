@@ -54,6 +54,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onCloseFile: noop,
     onRenameFilePane: noop,
     onMoveFile: noop,
+    onShowFileInFolder: noop,
     onOpenDocumentExternally: noop,
     onOpenDocument: noop,
     onRenameDocument: noop,
@@ -647,6 +648,14 @@ describe('Sidebar (3-level)', () => {
       const row = container.querySelector('[data-file-id="fp1"]') as HTMLElement
       expect(row.className).toContain('bg-accent-sel')
     })
+
+    it('right-click offers Open in Files (reveals the containing folder)', async () => {
+      const onShowFileInFolder = vi.fn()
+      renderSidebar({ onShowFileInFolder })
+      fireEvent.contextMenu(screen.getByText('notes.md'))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Open in Files' }))
+      expect(onShowFileInFolder).toHaveBeenCalledWith('/p/notes.md')
+    })
   })
 
   describe('document row context menu', () => {
@@ -659,6 +668,14 @@ describe('Sidebar (3-level)', () => {
       fireEvent.contextMenu(screen.getByText('spec'))
       await userEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
       expect(onRemoveDocument).toHaveBeenCalledWith('f1', 'd1')
+    })
+
+    it('right-click offers Open in Files (reveals the containing folder)', async () => {
+      const onShowFileInFolder = vi.fn()
+      renderSidebar({ onShowFileInFolder })
+      fireEvent.contextMenu(screen.getByText('spec'))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Open in Files' }))
+      expect(onShowFileInFolder).toHaveBeenCalledWith('/docs/spec.md')
     })
   })
 })
