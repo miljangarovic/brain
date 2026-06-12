@@ -554,7 +554,7 @@ export default function App() {
         />
 
         <div
-          className={`relative flex-1 min-h-0 bg-surface ${gridMode ? 'grid gap-2 p-2 bg-panel' : ''}`}
+          className={`relative flex-1 min-h-0 bg-panel ${gridMode ? 'grid gap-2 p-2' : ''}`}
           style={gridMode ? { gridAutoFlow: gridFlow, gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0,1fr))` } : undefined}
         >
           {paneCount === 0 && (

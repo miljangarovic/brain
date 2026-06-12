@@ -138,33 +138,36 @@ export function FilePaneView({
         ...(gridRowSpan && gridRowSpan > 1 ? { gridRow: `span ${gridRowSpan}` } : {}),
         ...(gridColSpan && gridColSpan > 1 ? { gridColumn: `span ${gridColSpan}` } : {})
       }
-    : { display: visibleInTabs ? 'block' : 'none' }
+    // Tabs panes stack absolutely and only the active one is shown — `flex`,
+    // not `block`: the card lays out header/body as a column.
+    : visibleInTabs
+      ? { display: 'flex', ...(active ? { boxShadow: ACTIVE_PANE_SHADOW } : {}) }
+      : { display: 'none' }
+  const card = `flex flex-col min-h-0 min-w-0 overflow-hidden rounded-lg bg-surface border transition-colors duration-150 ${
+    active ? 'border-accent' : 'border-divider'}`
 
   return (
     <div
       onMouseDown={gridded ? onActivate : undefined}
       className={gridded
-        ? `relative flex flex-col min-h-0 min-w-0 overflow-hidden rounded-lg bg-surface border transition-colors duration-150 ${
-            active ? 'border-accent' : 'border-divider hover:border-fg-muted'}`
-        : 'absolute inset-0'}
+        ? `relative ${card} ${!active ? 'hover:border-fg-muted' : ''}`
+        : `absolute inset-2 ${card}`}
       style={gridStyle}
     >
-      {gridded && (
-        <div className={`flex items-center gap-2 h-7 shrink-0 px-2.5 border-b border-line text-xs select-none transition-colors ${
-          active ? 'bg-elevated text-fg-bright' : 'bg-panel text-fg-muted'}`}>
-          <FileCodeIcon className="shrink-0 text-fg-muted" />
-          <span className="truncate font-medium tracking-wide" style={{ fontFamily: MONO_FONT }}>{pane.name}</span>
-          <button
-            aria-label={`Close ${pane.name}`}
-            title="Close file"
-            onClick={(e) => { e.stopPropagation(); onClose() }}
-            className="ml-auto text-fg-muted hover:text-fg transition-colors"
-          >
-            ×
-          </button>
-        </div>
-      )}
-      <div className={gridded ? 'relative flex-1 min-h-0' : 'absolute inset-0'}>
+      <div className={`flex items-center gap-2 h-7 shrink-0 px-2.5 border-b border-line text-xs select-none transition-colors ${
+        active ? 'bg-elevated text-fg-bright' : 'bg-panel text-fg-muted'}`}>
+        <FileCodeIcon className="shrink-0 text-fg-muted" />
+        <span className="truncate font-medium tracking-wide" style={{ fontFamily: MONO_FONT }}>{pane.name}</span>
+        <button
+          aria-label={`Close ${pane.name}`}
+          title="Close file"
+          onClick={(e) => { e.stopPropagation(); onClose() }}
+          className="ml-auto text-fg-muted hover:text-fg transition-colors"
+        >
+          ×
+        </button>
+      </div>
+      <div className="relative flex-1 min-h-0">
         {saveError && (
           <div className="absolute inset-x-0 top-0 z-10 truncate bg-rose-500/90 px-3 py-1 text-xs text-white">
             Save failed: {saveError} — {pane.path}
