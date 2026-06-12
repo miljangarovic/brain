@@ -5,7 +5,7 @@ import { IPC } from '@shared/ipc'
 import { PtyManager } from './ptyManager'
 import { createBusyTracker } from './busyTracker'
 import { createDebouncedSaver } from './persistence'
-import type { Workspace, ReviewPhase } from '@shared/types'
+import type { Workspace, ReviewPhase, AgentKind } from '@shared/types'
 import { AGENT_IDLE_MS, type PtyCreateOptions } from '@shared/pty'
 import { suggestSpec, resolveReviewPaths } from './reviewFs'
 import { pathsExist } from './pathsExist'
@@ -106,8 +106,8 @@ export function registerIpc(opts: {
 
   ipcMain.handle(IPC.reviewSuggestSpec, (_e, cwd: string) => suggestSpec(cwd || os.homedir()))
 
-  ipcMain.handle(IPC.reviewResolveDir, (_e, p: { originTerminalId: string; phase: ReviewPhase; round: number }) =>
-    resolveReviewPaths(userDataDir, p.originTerminalId, p.phase, p.round))
+  ipcMain.handle(IPC.reviewResolveDir, (_e, p: { originTerminalId: string; reviewer?: AgentKind; phase: ReviewPhase; round: number }) =>
+    resolveReviewPaths(userDataDir, p.originTerminalId, p.reviewer === 'codex' ? 'codex' : 'claude', p.phase, p.round))
 
   ipcMain.handle(IPC.reviewResolveTranscript, (_e, p: { cwd: string; kind?: string }) =>
     resolveTranscript({ cwd: p.cwd || os.homedir(), kind: p.kind }))

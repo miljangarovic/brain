@@ -9,7 +9,7 @@ const api = {
   unwatchFile: vi.fn(),
   readTextFile: vi.fn(async (): Promise<string | null> => null),
   writePty: vi.fn(),
-  resolveReviewDir: vi.fn(async (_origin: string, phase: string, round: number) => ({
+  resolveReviewDir: vi.fn(async (_origin: string, _reviewer: string, phase: string, round: number) => ({
     reviewDir: '/rd',
     reviewFile: `/rd/review-${phase}-${round}.md`,
     intentPath: '/rd/intent.md',
@@ -176,6 +176,6 @@ describe('useReview apply-hold on a blocked origin', () => {
     registerTail('origin', () => 'All changes applied.')
     await act(() => result.current.handleBusy('origin', true))
     await act(() => result.current.handleBusy('origin', false))
-    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'impl', 3) // now it advances
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'codex', 'impl', 3) // now it advances
   })
 })

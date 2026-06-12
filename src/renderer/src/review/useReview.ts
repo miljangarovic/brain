@@ -74,7 +74,7 @@ export function useReview(
     if (!featureId) return
     const origin = getTerminalById(state, a.originTerminalId)
     const round = 1
-    const paths = await window.brain.resolveReviewDir(a.originTerminalId, a.phase, round)
+    const paths = await window.brain.resolveReviewDir(a.originTerminalId, a.reviewer, a.phase, round)
     const transcriptPath = await window.brain.resolveTranscript(origin?.cwd ?? '', origin?.kind)
     const link: ReviewLink = {
       originTerminalId: a.originTerminalId,
@@ -164,7 +164,8 @@ export function useReview(
       setStatus(id, undefined)
       return
     }
-    const paths = await window.brain.resolveReviewDir(id, link.phase, decision.round)
+    const kind: AgentKind = reviewer.kind === 'codex' ? 'codex' : 'claude'
+    const paths = await window.brain.resolveReviewDir(id, kind, link.phase, decision.round)
     apply((s) => patchReviewLink(s, reviewer.id, { round: decision.round }))
     requestReview(link, reviewer.id, link.phase, decision.round, paths.reviewFile)
   }, [state, apply, setStatus, requestReview])
@@ -210,7 +211,8 @@ export function useReview(
     if (!reviewer || !link) return
     const round = link.round + 1
     const maxRounds = link.maxRounds + 3
-    const paths = await window.brain.resolveReviewDir(link.originTerminalId, link.phase, round)
+    const kind: AgentKind = reviewer.kind === 'codex' ? 'codex' : 'claude'
+    const paths = await window.brain.resolveReviewDir(link.originTerminalId, kind, link.phase, round)
     apply((s) => patchReviewLink(s, reviewer.id, { round, maxRounds }))
     requestReview({ ...link, maxRounds }, reviewer.id, link.phase, round, paths.reviewFile)
   }, [state, apply, requestReview])
