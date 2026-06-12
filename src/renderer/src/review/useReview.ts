@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import type { AppState } from '../store'
-import { addTerminal, removeTerminal, patchReviewLink, findReviewerFor, featureIdOfTerminal, getTerminalById, allTerminals, setTerminalSessionId } from '../store'
+import { addTerminal, removeTerminal, patchReviewLink, findReviewersFor, featureIdOfTerminal, getTerminalById, allTerminals, setTerminalSessionId } from '../store'
 import type { ReviewPhase, ReviewStatus, ReviewLink } from '@shared/types'
 import { createId } from '@shared/id'
 import { agentLaunchCommand, type AgentKind } from '../agents'
@@ -22,6 +22,15 @@ export interface StartReviewArgs {
   intent?: string
 }
 
+// One origin's in-flight apply cycle: critiques already relayed this cycle
+// (their reviewers advance together when the origin settles) and critiques
+// queued behind the one being applied — two at once would interleave.
+interface ApplyCycle {
+  arm: 'pending' | 'working'
+  applied: string[]                               // reviewerIds relayed this cycle
+  queue: { reviewerId: string; relay: string }[]  // critiques waiting their turn
+}
+
 export function useReview(
   state: AppState,
   apply: (fn: (s: AppState) => AppState) => void,
@@ -30,8 +39,8 @@ export function useReview(
 ) {
   // watchId → the reviewer + file we're waiting on (its critique write).
   const watching = useRef(new Map<string, { reviewerId: string; reviewFile: string }>())
-  // originId → arming phase for the "origin finished applying" busy→idle signal.
-  const awaiting = useRef(new Map<string, 'pending' | 'working'>())
+  // originId → in-flight apply cycle for the "origin finished applying" signal.
+  const awaiting = useRef(new Map<string, ApplyCycle>())
   // Current statuses, readable from the reconcile effect without re-running it.
   const statusRef = useRef(reviewStatus)
   statusRef.current = reviewStatus
@@ -51,7 +60,9 @@ export function useReview(
     })
     submitToPty(reviewerId, prompt)
     setStatus(reviewerId, 'reviewing')
-    setStatus(link.originTerminalId, 'under-review')
+    // Don't stomp 'applying': a late NEEDS-WORK can open a new apply cycle on
+    // the origin while advance-all is still awaiting path resolution.
+    if (!awaiting.current.has(link.originTerminalId)) setStatus(link.originTerminalId, 'under-review')
     armReviewWatch(reviewerId, reviewFile, phase, round)
   }, [setStatus, armReviewWatch])
 
@@ -135,39 +146,57 @@ export function useReview(
       finalizeApproved(reviewer.id, link.originTerminalId) // reviewer closes; origin goes green
       return
     }
-    // NEEDS-WORK → auto-relay to the origin and wait for it to finish applying.
+    // NEEDS-WORK → relay to the origin; if the origin is already applying
+    // another reviewer's critique, queue this one for the next idle.
     const relay = relayToOriginPrompt({ phase: link.phase, reviewFile: w.reviewFile, intentPath: link.intentPath, specPath: link.specPath })
-    submitToPty(link.originTerminalId, relay)
     setStatus(reviewer.id, undefined)
+    const cycle = awaiting.current.get(link.originTerminalId)
+    if (cycle) { cycle.queue.push({ reviewerId: reviewer.id, relay }); return }
+    submitToPty(link.originTerminalId, relay)
     setStatus(link.originTerminalId, 'applying')
-    awaiting.current.set(link.originTerminalId, 'pending')
+    awaiting.current.set(link.originTerminalId, { arm: 'pending', applied: [reviewer.id], queue: [] })
   }, [state, setStatus, finalizeApproved])
 
-  // 3. Origin busy→idle while applying → next round (or stop at the cap).
+  // 3. Origin busy→idle while applying → relay the next queued critique, or —
+  // when the queue is dry — advance EVERY reviewer applied this cycle.
   const handleBusy = useCallback(async (id: string, busy: boolean) => {
-    const arm = awaiting.current.get(id)
-    if (!arm) return
-    if (busy) { awaiting.current.set(id, 'working'); return }  // origin started producing output
-    if (arm !== 'working') return                             // ignore idle before any work began
+    const cycle = awaiting.current.get(id)
+    if (!cycle) return
+    if (busy) { cycle.arm = 'working'; return }       // origin started producing output
+    if (cycle.arm !== 'working') return               // ignore idle before any work began
     // The busy tracker calls 1.5s of output silence "idle", but an origin stopped
     // on a permission prompt is silent too — re-reviewing now would burn a round
     // against unchanged work. Hold: answering the prompt makes the origin busy
     // again, and its next real idle advances the loop.
     if (classifyIdle(readTail(id)) === 'waiting-input') return
-    awaiting.current.delete(id)
-    const reviewer = findReviewerFor(state, id)
-    const link = reviewer?.review
-    if (!reviewer || !link) return
-    const decision = afterApply(link.round, link.maxRounds)
-    if (decision.type === 'stop') {
-      setStatus(reviewer.id, 'needs-decision')
-      setStatus(id, undefined)
+    const next = cycle.queue.shift()
+    if (next) {
+      cycle.applied.push(next.reviewerId)
+      cycle.arm = 'pending'
+      submitToPty(id, next.relay)
       return
     }
-    const kind: AgentKind = reviewer.kind === 'codex' ? 'codex' : 'claude'
-    const paths = await window.brain.resolveReviewDir(id, kind, link.phase, decision.round)
-    apply((s) => patchReviewLink(s, reviewer.id, { round: decision.round, reviewDir: paths.reviewDir }))
-    requestReview(link, reviewer.id, link.phase, decision.round, paths.reviewFile)
+    awaiting.current.delete(id)
+    let anyIterating = false
+    for (const reviewerId of cycle.applied) {
+      const reviewer = getTerminalById(state, reviewerId)
+      const link = reviewer?.review
+      if (!reviewer || !link) continue
+      const decision = afterApply(link.round, link.maxRounds)
+      if (decision.type === 'stop') { setStatus(reviewer.id, 'needs-decision'); continue }
+      anyIterating = true
+      const kind: AgentKind = reviewer.kind === 'codex' ? 'codex' : 'claude'
+      const paths = await window.brain.resolveReviewDir(id, kind, link.phase, decision.round)
+      apply((s) => patchReviewLink(s, reviewer.id, { round: decision.round, reviewDir: paths.reviewDir }))
+      requestReview(link, reviewer.id, link.phase, decision.round, paths.reviewFile)
+    }
+    // A reviewer whose verdict hasn't landed yet is NOT in this cycle — its
+    // armed watch marks it still reviewing, so the origin keeps its badge.
+    if (!anyIterating) {
+      const stillReviewing = findReviewersFor(state, id).some((r) =>
+        [...watching.current.values()].some((w) => w.reviewerId === r.id))
+      setStatus(id, stillReviewing ? 'under-review' : undefined)
+    }
   }, [state, apply, setStatus, requestReview])
 
   // Reconcile watches with the workspace. The loop's coordination state

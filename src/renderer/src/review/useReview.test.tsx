@@ -55,6 +55,29 @@ const mkState = (withReviewer = true): AppState => ({
 const WATCH_ID = 'review:rev:impl:2'
 const REVIEW_FILE = '/rd/review-impl-2.md'
 
+// Two reviewers (claude + codex) bound to the same origin, both at impl round 1.
+const mkDualState = (): AppState => ({
+  workspace: {
+    groups: [{
+      id: 'g', name: 'G', cwd: '/p', collapsed: false,
+      features: [{
+        id: 'f', name: 'F', collapsed: false,
+        terminals: [
+          { id: 'origin', name: 'claude', cwd: '/p', kind: 'claude' },
+          { id: 'revA', name: 'claude review: claude', cwd: '/p', kind: 'claude' as const,
+            review: { originTerminalId: 'origin', phase: 'impl' as const, round: 1, maxRounds: 3, reviewDir: '/rd/claude' } },
+          { id: 'revB', name: 'codex review: claude', cwd: '/p', kind: 'codex' as const,
+            review: { originTerminalId: 'origin', phase: 'impl' as const, round: 1, maxRounds: 3, reviewDir: '/rd/codex' } }
+        ]
+      }]
+    }]
+  },
+  activeGroupId: 'g', activeFeatureId: 'f', activeTerminalId: 'origin', hidden: []
+})
+
+// PTY writes that are prompts (not the delayed CR submit keystroke).
+const promptWrites = () => api.writePty.mock.calls.filter((c) => c[1] !== '\r')
+
 function setup(opts: { state?: AppState; reviewStatus?: Record<string, ReviewStatus | undefined> } = {}) {
   const apply = vi.fn()
   const setStatus = vi.fn()
@@ -197,5 +220,74 @@ describe('useReview apply-hold on a blocked origin', () => {
     const reviewer = next.workspace.groups[0].features[0].terminals.find((t: { review?: unknown }) => t.review)
     expect(reviewer?.review).toMatchObject({ round: 3, reviewDir: '/rd2/codex' })
     expect(api.watchFile).toHaveBeenCalledWith('review:rev:impl:3', '/rd2/codex/review-impl-3.md')
+  })
+})
+
+describe('useReview parallel reviewers', () => {
+  afterEach(() => unregisterTail('origin'))
+
+  it('queues the second critique and advances BOTH reviewers when the origin settles', async () => {
+    const { result } = setup({ state: mkDualState() })
+    await act(async () => {})  // reconcile arms both watches
+    expect(api.watchFile).toHaveBeenCalledWith('review:revA:impl:1', '/rd/claude/review-impl-1.md')
+    expect(api.watchFile).toHaveBeenCalledWith('review:revB:impl:1', '/rd/codex/review-impl-1.md')
+
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(() => result.current.handleFsChanged('review:revA:impl:1'))
+    expect(promptWrites()).toHaveLength(1)              // A's critique relayed
+    await act(() => result.current.handleFsChanged('review:revB:impl:1'))
+    expect(promptWrites()).toHaveLength(1)              // B queued, not relayed yet
+
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    expect(promptWrites()).toHaveLength(2)              // B's critique relayed now
+    expect(api.resolveReviewDir).not.toHaveBeenCalled() // nobody advances mid-cycle
+
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'claude', 'impl', 2)
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'codex', 'impl', 2)
+  })
+
+  it('a reviewer at its cap stops for a decision while the other iterates; origin stays under-review', async () => {
+    const s = mkDualState()
+    s.workspace.groups[0].features[0].terminals[1].review!.round = 3 // revA at maxRounds
+    const { result, setStatus } = setup({ state: s })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(() => result.current.handleFsChanged('review:revA:impl:3'))
+    await act(() => result.current.handleFsChanged('review:revB:impl:1'))
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))   // relays B's critique
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))   // cycle complete
+    expect(setStatus).toHaveBeenCalledWith('revA', 'needs-decision')
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'codex', 'impl', 2)
+    const originCalls = setStatus.mock.calls.filter((c) => c[0] === 'origin')
+    expect(originCalls.at(-1)).toEqual(['origin', 'under-review']) // NOT cleared
+  })
+
+  it('keeps the origin under-review when the only applied reviewer stops while the other is still reviewing', async () => {
+    const s = mkDualState()
+    s.workspace.groups[0].features[0].terminals[1].review!.round = 3 // revA at maxRounds
+    const { result, setStatus } = setup({ state: s })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(() => result.current.handleFsChanged('review:revA:impl:3')) // revB stays silent
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    expect(setStatus).toHaveBeenCalledWith('revA', 'needs-decision')
+    const originCalls = setStatus.mock.calls.filter((c) => c[0] === 'origin')
+    expect(originCalls.at(-1)).toEqual(['origin', 'under-review']) // revB still reviewing
+  })
+
+  it('reconstructs the apply cycle after a reload with both verdicts already on disk', async () => {
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    setup({ state: mkDualState() })
+    await act(async () => {})
+    expect(promptWrites()).toHaveLength(1) // first verdict relays, the second queues
   })
 })
