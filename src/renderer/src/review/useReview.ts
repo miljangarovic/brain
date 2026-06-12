@@ -166,7 +166,7 @@ export function useReview(
     }
     const kind: AgentKind = reviewer.kind === 'codex' ? 'codex' : 'claude'
     const paths = await window.brain.resolveReviewDir(id, kind, link.phase, decision.round)
-    apply((s) => patchReviewLink(s, reviewer.id, { round: decision.round }))
+    apply((s) => patchReviewLink(s, reviewer.id, { round: decision.round, reviewDir: paths.reviewDir }))
     requestReview(link, reviewer.id, link.phase, decision.round, paths.reviewFile)
   }, [state, apply, setStatus, requestReview])
 
@@ -213,7 +213,7 @@ export function useReview(
     const maxRounds = link.maxRounds + 3
     const kind: AgentKind = reviewer.kind === 'codex' ? 'codex' : 'claude'
     const paths = await window.brain.resolveReviewDir(link.originTerminalId, kind, link.phase, round)
-    apply((s) => patchReviewLink(s, reviewer.id, { round, maxRounds }))
+    apply((s) => patchReviewLink(s, reviewer.id, { round, maxRounds, reviewDir: paths.reviewDir }))
     requestReview({ ...link, maxRounds }, reviewer.id, link.phase, round, paths.reviewFile)
   }, [state, apply, requestReview])
 

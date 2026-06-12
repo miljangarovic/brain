@@ -178,4 +178,24 @@ describe('useReview apply-hold on a blocked origin', () => {
     await act(() => result.current.handleBusy('origin', false))
     expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'codex', 'impl', 3) // now it advances
   })
+
+  it('re-points the link reviewDir at the freshly resolved dir when advancing', async () => {
+    api.resolveReviewDir.mockResolvedValueOnce({
+      reviewDir: '/rd2/codex',
+      reviewFile: '/rd2/codex/review-impl-3.md',
+      intentPath: '/rd2/intent.md',
+      specPath: '/rd2/spec.md'
+    })
+    const { result, apply } = setup()
+    await act(async () => {})
+    await reachApplying(result)
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    const updater = apply.mock.calls.at(-1)![0]
+    const next = updater(mkState())
+    const reviewer = next.workspace.groups[0].features[0].terminals.find((t: { review?: unknown }) => t.review)
+    expect(reviewer?.review).toMatchObject({ round: 3, reviewDir: '/rd2/codex' })
+    expect(api.watchFile).toHaveBeenCalledWith('review:rev:impl:3', '/rd2/codex/review-impl-3.md')
+  })
 })
