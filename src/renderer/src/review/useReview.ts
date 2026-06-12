@@ -98,6 +98,9 @@ export function useReview(
   const startReview = useCallback(async (a: StartReviewArgs) => {
     const featureId = featureIdOfTerminal(state, a.originTerminalId)
     if (!featureId) return
+    // One reviewer per agent kind per origin (intent decision) — the dialog
+    // disables duplicates, but guard here too for non-dialog callers.
+    if (findReviewersFor(state, a.originTerminalId).some((t) => t.kind === a.reviewer)) return
     const origin = getTerminalById(state, a.originTerminalId)
     const round = 1
     const paths = await window.brain.resolveReviewDir(a.originTerminalId, a.reviewer, a.phase, round)

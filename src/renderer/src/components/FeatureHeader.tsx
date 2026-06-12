@@ -3,7 +3,8 @@ import { GridIcon, LayoutBigLeftIcon, LayoutBigRightIcon, LayoutBigTopIcon, Layo
 import { AddMenuButton, type AddKind } from './AddMenuButton'
 
 export interface ReviewControl {
-  reviewerId: string | null
+  reviewerId: string
+  kind: 'claude' | 'codex'
   needsDecision: boolean // maxRounds reached
   active: boolean        // loop running (reviewing or applying)
 }
@@ -20,28 +21,28 @@ const GRID_STYLES: { style: GridStyle; label: string; Icon: typeof LayoutBigLeft
 
 export function FeatureHeader({
   featureName, viewMode, onToggleView, onAdd,
-  review, onMoreRounds, onAcceptPhase, onStopLoop,
+  reviews, onMoreRounds, onAcceptPhase, onStopLoop,
   gridStyle, onSetGridStyle
 }: {
   featureName: string
   viewMode: 'tabs' | 'grid'
   onToggleView: () => void
   onAdd: (kind: AddKind) => void
-  review: ReviewControl
+  reviews: ReviewControl[]
   onMoreRounds: (reviewerId: string) => void
   onAcceptPhase: (reviewerId: string) => void
   onStopLoop: (reviewerId: string) => void
   gridStyle: GridStyle
   onSetGridStyle: (style: GridStyle) => void
 }) {
-  const rid = review.reviewerId
+  const visible = reviews.filter((r) => r.needsDecision || r.active)
   // Prominent, filled review controls — they drive the loop, so they must read at a
   // glance: accent for "go", rose for "stop". Muted ghost for the low-stakes accept.
   const goBtn = 'px-3 py-1 text-xs font-semibold rounded-md bg-accent text-surface hover:bg-accent-strong transition shadow-sm shadow-black/25'
   const stopBtn = 'px-3 py-1 text-xs font-semibold rounded-md bg-rose-500/90 text-white hover:bg-rose-500 transition shadow-sm shadow-rose-900/30'
   const ghostBtn = 'px-2.5 py-1 text-xs rounded-md text-fg-muted hover:text-fg hover:bg-hover transition'
   const iconBtn = (on: boolean) => `px-1.5 py-1 rounded-md transition-colors ${on ? 'text-accent bg-hover' : 'text-fg-muted hover:text-accent hover:bg-hover'}`
-  const showControls = !!rid && (review.needsDecision || review.active)
+  const showControls = visible.length > 0
   return (
     <div className="flex items-center gap-2.5 h-9 px-3 bg-panel border-b border-line">
       <span className="shrink-0 truncate max-w-[16rem] text-sm font-medium text-fg-bright">{featureName}</span>
@@ -75,16 +76,22 @@ export function FeatureHeader({
           </>
         )}
         {showControls && <span aria-hidden className="mx-0.5 h-4 w-px bg-line" />}
-        {rid && review.needsDecision && (
-          <>
-            <button onClick={() => onMoreRounds(rid)} title="Run more review rounds" className={goBtn}>Continue</button>
-            <button onClick={() => onAcceptPhase(rid)} title="Accept as approved (reviewer closes)" className={ghostBtn}>Accept</button>
-            <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Stop loop</button>
-          </>
-        )}
-        {rid && review.active && !review.needsDecision && (
-          <button onClick={() => onStopLoop(rid)} title="Stop the review loop" className={stopBtn}>Stop loop</button>
-        )}
+        {visible.map((r) => (
+          <span key={r.reviewerId} className="flex items-center gap-1.5">
+            {visible.length > 1 && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-fg-muted">{r.kind}</span>
+            )}
+            {r.needsDecision ? (
+              <>
+                <button onClick={() => onMoreRounds(r.reviewerId)} title="Run more review rounds" className={goBtn}>Continue</button>
+                <button onClick={() => onAcceptPhase(r.reviewerId)} title="Accept as approved (reviewer closes)" className={ghostBtn}>Accept</button>
+                <button onClick={() => onStopLoop(r.reviewerId)} title="Stop the review loop" className={stopBtn}>Stop loop</button>
+              </>
+            ) : (
+              <button onClick={() => onStopLoop(r.reviewerId)} title="Stop the review loop" className={stopBtn}>Stop loop</button>
+            )}
+          </span>
+        ))}
         <AddMenuButton onAdd={onAdd} className="px-1.5 py-1 rounded-md text-sm text-fg-muted hover:text-accent hover:bg-hover transition-colors" />
       </div>
     </div>

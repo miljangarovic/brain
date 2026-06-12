@@ -324,6 +324,14 @@ describe('useReview parallel reviewers', () => {
     expect(setStatus).toHaveBeenCalledWith('origin', 'approved')
   })
 
+  it('refuses a second reviewer of the same kind on one origin', async () => {
+    const { result, apply } = setup({ state: mkDualState() }) // both kinds already reviewing this origin
+    await act(async () => {})
+    apply.mockClear()
+    await act(() => result.current.startReview({ originTerminalId: 'origin', reviewer: 'codex', phase: 'impl', maxRounds: 3 }))
+    expect(apply).not.toHaveBeenCalled() // no terminal added
+  })
+
   it('stopping both reviewers in the same tick clears the origin', async () => {
     const { result, setStatus } = setup({ state: mkDualState() })
     await act(async () => {})
