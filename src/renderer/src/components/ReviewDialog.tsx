@@ -5,7 +5,7 @@ import { PHASE_ORDER, PHASE_LABEL } from '../review/phases'
 import { useBackdropDismiss } from './useBackdropDismiss'
 
 export interface ReviewStartArgs {
-  reviewer: AgentKind
+  reviewers: AgentKind[]
   phase: ReviewPhase
   maxRounds: number
   specPath?: string
@@ -13,15 +13,18 @@ export interface ReviewStartArgs {
 }
 
 export function ReviewDialog({
-  originName, defaultReviewer, cwd, onStart, onCancel
+  originName, defaultReviewer, activeKinds, cwd, onStart, onCancel
 }: {
   originName: string
   defaultReviewer: AgentKind
+  activeKinds: AgentKind[]   // kinds already reviewing this origin — locked out
   cwd: string
   onStart: (args: ReviewStartArgs) => void
   onCancel: () => void
 }) {
-  const [reviewer, setReviewer] = useState<AgentKind>(defaultReviewer)
+  const [reviewers, setReviewers] = useState<AgentKind[]>(
+    () => (activeKinds.includes(defaultReviewer) ? [] : [defaultReviewer])
+  )
   const [phase, setPhase] = useState<ReviewPhase>('spec')
   const [maxRounds, setMaxRounds] = useState('3')
   const [specPath, setSpecPath] = useState('')
@@ -46,9 +49,13 @@ export function ReviewDialog({
     if (p) setSpecPath(p)
   }
 
+  const toggleReviewer = (k: AgentKind) =>
+    setReviewers((rs) => (rs.includes(k) ? rs.filter((x) => x !== k) : [...rs, k]))
+
   const submit = () => {
+    if (reviewers.length === 0) return
     onStart({
-      reviewer, phase, maxRounds: Math.max(1, parseInt(maxRounds, 10) || 1),
+      reviewers, phase, maxRounds: Math.max(1, parseInt(maxRounds, 10) || 1),
       specPath: phase === 'intent' ? undefined : (specPath.trim() || undefined),
       intent: intent.trim()
     })
@@ -69,8 +76,15 @@ export function ReviewDialog({
         <div className="mb-3">
           <span className="text-sm text-fg">Reviewer</span>
           <div className="mt-1 flex gap-2">
-            <button type="button" className={seg(reviewer === 'claude')} onClick={() => setReviewer('claude')}>Claude</button>
-            <button type="button" className={seg(reviewer === 'codex')} onClick={() => setReviewer('codex')}>Codex</button>
+            {(['claude', 'codex'] as AgentKind[]).map((k) => (
+              <button key={k} type="button" disabled={activeKinds.includes(k)}
+                aria-pressed={reviewers.includes(k)}
+                title={activeKinds.includes(k) ? `${k} is already reviewing this terminal` : undefined}
+                className={`${seg(reviewers.includes(k))} disabled:opacity-40 disabled:cursor-not-allowed`}
+                onClick={() => toggleReviewer(k)}>
+                {k === 'claude' ? 'Claude' : 'Codex'}
+              </button>
+            ))}
           </div>
         </div>
 

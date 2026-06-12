@@ -9,7 +9,7 @@ const api = {
   unwatchFile: vi.fn(),
   readTextFile: vi.fn(async (): Promise<string | null> => null),
   writePty: vi.fn(),
-  resolveReviewDir: vi.fn(async (_origin: string, phase: string, round: number) => ({
+  resolveReviewDir: vi.fn(async (_origin: string, _reviewer: string, phase: string, round: number) => ({
     reviewDir: '/rd',
     reviewFile: `/rd/review-${phase}-${round}.md`,
     intentPath: '/rd/intent.md',
@@ -54,6 +54,29 @@ const mkState = (withReviewer = true): AppState => ({
 
 const WATCH_ID = 'review:rev:impl:2'
 const REVIEW_FILE = '/rd/review-impl-2.md'
+
+// Two reviewers (claude + codex) bound to the same origin, both at impl round 1.
+const mkDualState = (): AppState => ({
+  workspace: {
+    groups: [{
+      id: 'g', name: 'G', cwd: '/p', collapsed: false,
+      features: [{
+        id: 'f', name: 'F', collapsed: false,
+        terminals: [
+          { id: 'origin', name: 'claude', cwd: '/p', kind: 'claude' },
+          { id: 'revA', name: 'claude review: claude', cwd: '/p', kind: 'claude' as const,
+            review: { originTerminalId: 'origin', phase: 'impl' as const, round: 1, maxRounds: 3, reviewDir: '/rd/claude' } },
+          { id: 'revB', name: 'codex review: claude', cwd: '/p', kind: 'codex' as const,
+            review: { originTerminalId: 'origin', phase: 'impl' as const, round: 1, maxRounds: 3, reviewDir: '/rd/codex' } }
+        ]
+      }]
+    }]
+  },
+  activeGroupId: 'g', activeFeatureId: 'f', activeTerminalId: 'origin', hidden: []
+})
+
+// PTY writes that are prompts (not the delayed CR submit keystroke).
+const promptWrites = () => api.writePty.mock.calls.filter((c) => c[1] !== '\r')
 
 function setup(opts: { state?: AppState; reviewStatus?: Record<string, ReviewStatus | undefined> } = {}) {
   const apply = vi.fn()
@@ -117,7 +140,7 @@ describe('useReview verdict gating', () => {
 })
 
 describe('useReview reviewer naming', () => {
-  it('names the reviewer terminal after the origin terminal, not the reviewer agent', async () => {
+  it('names the reviewer with its agent kind and the origin terminal name', async () => {
     const state = mkState(false)
     state.workspace.groups[0].features[0].terminals[0].name = 'auth-api'
     const { result, apply } = setup({ state })
@@ -126,7 +149,7 @@ describe('useReview reviewer naming', () => {
     const updater = apply.mock.calls.at(-1)![0]
     const next = updater(mkState(false))
     const reviewer = next.workspace.groups[0].features[0].terminals.find((t: { review?: unknown }) => t.review)
-    expect(reviewer?.name).toBe('review: auth-api')
+    expect(reviewer?.name).toBe('codex review: auth-api')
   })
 })
 
@@ -176,6 +199,147 @@ describe('useReview apply-hold on a blocked origin', () => {
     registerTail('origin', () => 'All changes applied.')
     await act(() => result.current.handleBusy('origin', true))
     await act(() => result.current.handleBusy('origin', false))
-    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'impl', 3) // now it advances
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'codex', 'impl', 3) // now it advances
+  })
+
+  it('re-points the link reviewDir at the freshly resolved dir when advancing', async () => {
+    api.resolveReviewDir.mockResolvedValueOnce({
+      reviewDir: '/rd2/codex',
+      reviewFile: '/rd2/codex/review-impl-3.md',
+      intentPath: '/rd2/intent.md',
+      specPath: '/rd2/spec.md'
+    })
+    const { result, apply } = setup()
+    await act(async () => {})
+    await reachApplying(result)
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    const updater = apply.mock.calls.at(-1)![0]
+    const next = updater(mkState())
+    const reviewer = next.workspace.groups[0].features[0].terminals.find((t: { review?: unknown }) => t.review)
+    expect(reviewer?.review).toMatchObject({ round: 3, reviewDir: '/rd2/codex' })
+    expect(api.watchFile).toHaveBeenCalledWith('review:rev:impl:3', '/rd2/codex/review-impl-3.md')
+  })
+})
+
+describe('useReview parallel reviewers', () => {
+  afterEach(() => unregisterTail('origin'))
+
+  it('queues the second critique and advances BOTH reviewers when the origin settles', async () => {
+    const { result } = setup({ state: mkDualState() })
+    await act(async () => {})  // reconcile arms both watches
+    expect(api.watchFile).toHaveBeenCalledWith('review:revA:impl:1', '/rd/claude/review-impl-1.md')
+    expect(api.watchFile).toHaveBeenCalledWith('review:revB:impl:1', '/rd/codex/review-impl-1.md')
+
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(() => result.current.handleFsChanged('review:revA:impl:1'))
+    expect(promptWrites()).toHaveLength(1)              // A's critique relayed
+    await act(() => result.current.handleFsChanged('review:revB:impl:1'))
+    expect(promptWrites()).toHaveLength(1)              // B queued, not relayed yet
+
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    expect(promptWrites()).toHaveLength(2)              // B's critique relayed now
+    expect(api.resolveReviewDir).not.toHaveBeenCalled() // nobody advances mid-cycle
+
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'claude', 'impl', 2)
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'codex', 'impl', 2)
+  })
+
+  it('a reviewer at its cap stops for a decision while the other iterates; origin stays under-review', async () => {
+    const s = mkDualState()
+    s.workspace.groups[0].features[0].terminals[1].review!.round = 3 // revA at maxRounds
+    const { result, setStatus } = setup({ state: s })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(() => result.current.handleFsChanged('review:revA:impl:3'))
+    await act(() => result.current.handleFsChanged('review:revB:impl:1'))
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))   // relays B's critique
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))   // cycle complete
+    expect(setStatus).toHaveBeenCalledWith('revA', 'needs-decision')
+    expect(api.resolveReviewDir).toHaveBeenCalledWith('origin', 'codex', 'impl', 2)
+    const originCalls = setStatus.mock.calls.filter((c) => c[0] === 'origin')
+    expect(originCalls.at(-1)).toEqual(['origin', 'under-review']) // NOT cleared
+  })
+
+  it('keeps the origin under-review when the only applied reviewer stops while the other is still reviewing', async () => {
+    const s = mkDualState()
+    s.workspace.groups[0].features[0].terminals[1].review!.round = 3 // revA at maxRounds
+    const { result, setStatus } = setup({ state: s })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    await act(() => result.current.handleFsChanged('review:revA:impl:3')) // revB stays silent
+    registerTail('origin', () => 'All changes applied.')
+    await act(() => result.current.handleBusy('origin', true))
+    await act(() => result.current.handleBusy('origin', false))
+    expect(setStatus).toHaveBeenCalledWith('revA', 'needs-decision')
+    const originCalls = setStatus.mock.calls.filter((c) => c[0] === 'origin')
+    expect(originCalls.at(-1)).toEqual(['origin', 'under-review']) // revB still reviewing
+  })
+
+  it('reconstructs the apply cycle after a reload with both verdicts already on disk', async () => {
+    api.readTextFile.mockResolvedValue('VERDICT: NEEDS-WORK\n- fix x')
+    setup({ state: mkDualState() })
+    await act(async () => {})
+    expect(promptWrites()).toHaveLength(1) // first verdict relays, the second queues
+  })
+
+  it('does not mark the origin approved while another reviewer is still active', async () => {
+    const { result, apply, setStatus } = setup({ state: mkDualState() })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: APPROVED\nlooks good')
+    await act(() => result.current.handleFsChanged('review:revA:impl:1'))
+    expect(apply).toHaveBeenCalled() // revA terminal removed
+    expect(setStatus).toHaveBeenCalledWith('revA', undefined)
+    expect(setStatus).not.toHaveBeenCalledWith('origin', 'approved') // revB still reviewing
+  })
+
+  it("stopping one of two reviewers leaves the origin under the other's review", async () => {
+    const { result, setStatus } = setup({ state: mkDualState() })
+    await act(async () => {})
+    await act(async () => { result.current.stopLoop('revA') })
+    expect(setStatus).toHaveBeenCalledWith('revA', undefined)
+    expect(setStatus).not.toHaveBeenCalledWith('origin', undefined)
+  })
+
+  it('two APPROVED verdicts in the same tick still green the origin (last one out)', async () => {
+    // `state` lags one render behind apply(); without the removed-set both
+    // finalize calls would see BOTH reviewers and neither would green the
+    // origin. The reconcile-after-reload path hits this for real: it fires
+    // handleFsChanged for every link in one pass.
+    const { result, setStatus } = setup({ state: mkDualState() })
+    await act(async () => {})
+    api.readTextFile.mockResolvedValue('VERDICT: APPROVED\nok')
+    await act(async () => {
+      void result.current.handleFsChanged('review:revA:impl:1')
+      void result.current.handleFsChanged('review:revB:impl:1')
+    })
+    expect(setStatus).toHaveBeenCalledWith('origin', 'approved')
+  })
+
+  it('refuses a second reviewer of the same kind on one origin', async () => {
+    const { result, apply } = setup({ state: mkDualState() }) // both kinds already reviewing this origin
+    await act(async () => {})
+    apply.mockClear()
+    await act(() => result.current.startReview({ originTerminalId: 'origin', reviewer: 'codex', phase: 'impl', maxRounds: 3 }))
+    expect(apply).not.toHaveBeenCalled() // no terminal added
+  })
+
+  it('stopping both reviewers in the same tick clears the origin', async () => {
+    const { result, setStatus } = setup({ state: mkDualState() })
+    await act(async () => {})
+    await act(async () => {
+      result.current.stopLoop('revA')
+      result.current.stopLoop('revB')
+    })
+    const originCalls = setStatus.mock.calls.filter((c) => c[0] === 'origin')
+    expect(originCalls.at(-1)).toEqual(['origin', undefined])
   })
 })

@@ -10,7 +10,7 @@ beforeEach(() => {
   }
 })
 
-const baseProps = { originName: 'claude', defaultReviewer: 'codex' as const, cwd: '/p' }
+const baseProps = { originName: 'claude', defaultReviewer: 'codex' as const, activeKinds: [] as ('claude' | 'codex')[], cwd: '/p' }
 
 describe('ReviewDialog', () => {
   it('defaults to the spec phase with maxRounds 3 and a visible spec field', async () => {
@@ -26,7 +26,7 @@ describe('ReviewDialog', () => {
     fireEvent.click(screen.getByLabelText('Intent'))
     fireEvent.change(screen.getByLabelText('Max rounds'), { target: { value: '4' } })
     fireEvent.click(screen.getByRole('button', { name: 'Start review' }))
-    expect(onStart).toHaveBeenCalledWith({ reviewer: 'codex', phase: 'intent', maxRounds: 4, specPath: undefined, intent: '' })
+    expect(onStart).toHaveBeenCalledWith({ reviewers: ['codex'], phase: 'intent', maxRounds: 4, specPath: undefined, intent: '' })
   })
 
   it('spec phase prefills the spec file and passes it on start', async () => {
@@ -34,7 +34,24 @@ describe('ReviewDialog', () => {
     render(<ReviewDialog {...baseProps} onStart={onStart} onCancel={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText('Spec file')).toHaveValue('/p/docs/spec.md'))
     fireEvent.click(screen.getByRole('button', { name: 'Start review' }))
-    expect(onStart).toHaveBeenCalledWith({ reviewer: 'codex', phase: 'spec', maxRounds: 3, specPath: '/p/docs/spec.md', intent: '' })
+    expect(onStart).toHaveBeenCalledWith({ reviewers: ['codex'], phase: 'spec', maxRounds: 3, specPath: '/p/docs/spec.md', intent: '' })
+  })
+
+  it('selects multiple reviewers and passes them all on start', () => {
+    const onStart = vi.fn()
+    render(<ReviewDialog {...baseProps} onStart={onStart} onCancel={vi.fn()} />)
+    fireEvent.click(screen.getByLabelText('Intent'))
+    fireEvent.click(screen.getByRole('button', { name: 'Claude' })) // codex (default) + claude
+    fireEvent.click(screen.getByRole('button', { name: 'Start review' }))
+    expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ reviewers: ['codex', 'claude'] }))
+  })
+
+  it('disables a kind that is already reviewing this origin and blocks empty selection', () => {
+    const onStart = vi.fn()
+    render(<ReviewDialog {...baseProps} activeKinds={['codex']} onStart={onStart} onCancel={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'Codex' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Start review' })) // nothing selected
+    expect(onStart).not.toHaveBeenCalled()
   })
 
   it('closes on Escape', () => {

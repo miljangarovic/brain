@@ -1,6 +1,6 @@
 import type { Workspace } from './types'
 import type { PtyCreateOptions } from './pty'
-import type { ReviewPhase } from './types'
+import type { AgentKind, ReviewPhase } from './types'
 import type { ExportProgress, ExportRunResult, ExportScopeInput, ImportRunResult } from './exportTypes'
 import type { FileLoadResult } from './files'
 import type { VoiceResult, VoiceStateEvent, VoiceUiConfig, WorkspaceSnapshot } from './voice'
@@ -25,7 +25,7 @@ export interface BrainApi {
   onPtyBusy(cb: (id: string, busy: boolean) => void): () => void
   pickFile(opts?: { defaultPath?: string }): Promise<string | null>
   suggestSpec(cwd: string): Promise<string | null>
-  resolveReviewDir(originTerminalId: string, phase: ReviewPhase, round: number): Promise<{ reviewDir: string; reviewFile: string; intentPath: string; specPath: string }>
+  resolveReviewDir(originTerminalId: string, reviewer: AgentKind, phase: ReviewPhase, round: number): Promise<{ reviewDir: string; reviewFile: string; intentPath: string; specPath: string }>
   resolveTranscript(cwd: string, kind?: string): Promise<string | null>
   readTextFile(path: string): Promise<string | null>
   watchFile(watchId: string, path: string): void

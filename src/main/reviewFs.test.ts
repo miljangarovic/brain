@@ -18,11 +18,12 @@ describe('pickNewest', () => {
 })
 
 describe('reviewDirFor / reviewFilePath', () => {
-  it('keys the dir by origin id under reviews/', () => {
-    expect(reviewDirFor('/data', 'abc')).toBe(join('/data', 'reviews', 'abc'))
+  it('keys the dir by origin id AND reviewer kind under reviews/', () => {
+    expect(reviewDirFor('/data', 'abc', 'claude')).toBe(join('/data', 'reviews', 'abc', 'claude'))
+    expect(reviewDirFor('/data', 'abc', 'codex')).toBe(join('/data', 'reviews', 'abc', 'codex'))
   })
   it('names review files review-<phase>-<round>.md', () => {
-    expect(reviewFilePath('/data/reviews/abc', 'spec', 2)).toBe(join('/data/reviews/abc', 'review-spec-2.md'))
+    expect(reviewFilePath('/data/reviews/abc/codex', 'spec', 2)).toBe(join('/data/reviews/abc/codex', 'review-spec-2.md'))
   })
 })
 
@@ -56,11 +57,11 @@ describe('suggestSpec', () => {
 })
 
 describe('resolveReviewPaths', () => {
-  it('mkdir -p the review dir and returns review/intent/spec paths', async () => {
+  it('mkdir -p the per-agent dir; intent/spec stay SHARED in the origin folder', async () => {
     const base = await mktmp()
-    const { reviewDir, reviewFile, intentPath, specPath } = await resolveReviewPaths(base, 'tid', 'intent', 1)
-    expect(reviewDir).toBe(join(base, 'reviews', 'tid'))
-    expect(reviewFile).toBe(join(base, 'reviews', 'tid', 'review-intent-1.md'))
+    const { reviewDir, reviewFile, intentPath, specPath } = await resolveReviewPaths(base, 'tid', 'codex', 'intent', 1)
+    expect(reviewDir).toBe(join(base, 'reviews', 'tid', 'codex'))
+    expect(reviewFile).toBe(join(base, 'reviews', 'tid', 'codex', 'review-intent-1.md'))
     expect(intentPath).toBe(join(base, 'reviews', 'tid', 'intent.md'))
     expect(specPath).toBe(join(base, 'reviews', 'tid', 'spec.md'))
     const stat = await fs.stat(reviewDir)
