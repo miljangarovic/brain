@@ -117,7 +117,7 @@ describe('useReview verdict gating', () => {
 })
 
 describe('useReview reviewer naming', () => {
-  it('names the reviewer terminal after the origin terminal, not the reviewer agent', async () => {
+  it('names the reviewer with its agent kind and the origin terminal name', async () => {
     const state = mkState(false)
     state.workspace.groups[0].features[0].terminals[0].name = 'auth-api'
     const { result, apply } = setup({ state })
@@ -126,7 +126,7 @@ describe('useReview reviewer naming', () => {
     const updater = apply.mock.calls.at(-1)![0]
     const next = updater(mkState(false))
     const reviewer = next.workspace.groups[0].features[0].terminals.find((t: { review?: unknown }) => t.review)
-    expect(reviewer?.name).toBe('review: auth-api')
+    expect(reviewer?.name).toBe('codex review: auth-api')
   })
 })
 
