@@ -1,8 +1,10 @@
-// A single terminal as it appears in the main area. In grid mode it's a titled
-// "pane" card (header strip with icon + name + active emphasis); in tabs mode
-// it's a bare fill that's shown only when active. The skeleton (outer div →
-// body div → TerminalView) is identical in both modes so React preserves the
-// live TerminalView/xterm when the user toggles between grid and tabs.
+// A single terminal as it appears in the main area: a titled "pane" card
+// (header strip with icon + name + active emphasis) in BOTH modes — in grid
+// mode as a grid cell, in tabs mode as a single framed card shown only when
+// active. One layout path also means one measurement path for xterm (the bare
+// absolute fill that tabs mode used to be had its own scroll quirks). The
+// skeleton (outer div → body div → TerminalView) is identical in both modes so
+// React preserves the live TerminalView/xterm when the user toggles grid/tabs.
 import type { Terminal, ReviewStatus } from '@shared/types'
 import { TerminalKindIcon, SpinnerIcon } from './icons'
 import { ReviewStatusDot } from './ReviewStatusDot'
@@ -53,40 +55,43 @@ export function TerminalPane({
         ...(gridRowSpan && gridRowSpan > 1 ? { gridRow: `span ${gridRowSpan}` } : {}),
         ...(gridColSpan && gridColSpan > 1 ? { gridColumn: `span ${gridColSpan}` } : {})
       }
-    : { display: visibleInTabs ? 'block' : 'none' }
+    // Tabs panes stack absolutely and only the active one is shown — `flex`,
+    // not `block`: the card lays out header/body as a column.
+    : visibleInTabs
+      ? { display: 'flex', ...(active ? { boxShadow: ACTIVE_PANE_SHADOW } : {}) }
+      : { display: 'none' }
+  const card = `flex flex-col min-h-0 min-w-0 overflow-hidden rounded-lg bg-surface border transition-colors duration-150 ${
+    active ? 'border-accent' : 'border-divider'}`
   return (
     <div
       onMouseDown={gridded ? onActivate : undefined}
       onDragOver={dnd?.onDragOver}
       onDrop={dnd?.onDrop}
       className={gridded
-        ? `relative flex flex-col min-h-0 min-w-0 overflow-hidden rounded-lg bg-surface border transition-colors duration-150 ${
-            active ? 'border-accent' : 'border-divider hover:border-fg-muted'} ${dnd?.dragging ? 'opacity-40' : ''}`
-        : 'absolute inset-0'}
+        ? `relative ${card} ${!active ? 'hover:border-fg-muted' : ''} ${dnd?.dragging ? 'opacity-40' : ''}`
+        : `absolute inset-2 ${card}`}
       style={gridStyle}
     >
-      {gridded && (
-        <div
-          draggable={!!dnd}
-          onDragStart={dnd?.onHandleDragStart}
-          onDragEnd={dnd?.onDragEnd}
-          className={`flex items-center gap-2 h-7 shrink-0 px-2.5 border-b border-line text-xs select-none transition-colors ${
-          dnd ? 'cursor-grab active:cursor-grabbing' : ''} ${
-          active ? 'bg-elevated text-fg-bright' : 'bg-panel text-fg-muted'}`}>
-          {/* While the review dot is already spinning, keep the kind icon here —
-              two spinners in one header read as noise. */}
-          {busy && statusDot(reviewStatus) !== 'spinner'
-            ? <SpinnerIcon className="shrink-0 text-accent" />
-            : <TerminalKindIcon kind={liveAgent ?? terminal.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
-          <span className="truncate font-medium tracking-wide" style={{ fontFamily: MONO_FONT }}>{terminal.name}</span>
-          <ReviewStatusDot status={reviewStatus} />
-          <span
-            className={`ml-auto h-1.5 w-1.5 rounded-full transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}
-            style={{ background: 'var(--od-accent)', boxShadow: '0 0 6px var(--od-accent)' }}
-          />
-        </div>
-      )}
-      <div className={gridded ? 'relative flex-1 min-h-0' : 'absolute inset-0'}>
+      <div
+        draggable={!!dnd}
+        onDragStart={dnd?.onHandleDragStart}
+        onDragEnd={dnd?.onDragEnd}
+        className={`flex items-center gap-2 h-7 shrink-0 px-2.5 border-b border-line text-xs select-none transition-colors ${
+        dnd ? 'cursor-grab active:cursor-grabbing' : ''} ${
+        active ? 'bg-elevated text-fg-bright' : 'bg-panel text-fg-muted'}`}>
+        {/* While the review dot is already spinning, keep the kind icon here —
+            two spinners in one header read as noise. */}
+        {busy && statusDot(reviewStatus) !== 'spinner'
+          ? <SpinnerIcon className="shrink-0 text-accent" />
+          : <TerminalKindIcon kind={liveAgent ?? terminal.kind ?? 'shell'} className="shrink-0 text-fg-muted" />}
+        <span className="truncate font-medium tracking-wide" style={{ fontFamily: MONO_FONT }}>{terminal.name}</span>
+        <ReviewStatusDot status={reviewStatus} />
+        <span
+          className={`ml-auto h-1.5 w-1.5 rounded-full transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}
+          style={{ background: 'var(--od-accent)', boxShadow: '0 0 6px var(--od-accent)' }}
+        />
+      </div>
+      <div className="relative flex-1 min-h-0">
         {started ? (
           <TerminalView terminal={terminal} active={active} resume={resume} onOpenFile={onOpenFile} onSessionFallback={onSessionFallback} />
         ) : (
@@ -99,7 +104,6 @@ export function TerminalPane({
             className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface text-fg-muted hover:text-fg transition-colors"
           >
             <TerminalKindIcon kind={liveAgent ?? terminal.kind ?? 'shell'} className="opacity-60" />
-            {!gridded && <span className="text-sm font-medium" style={{ fontFamily: MONO_FONT }}>{terminal.name}</span>}
             <span className="text-xs">
               Click to start{resume && (terminal.kind === 'claude' || terminal.kind === 'codex') ? ' — resumes its session' : ''}
             </span>

@@ -50,10 +50,27 @@ describe('TerminalPane', () => {
     expect(onActivate).toHaveBeenCalled()
   })
 
-  it('renders no header in tabs mode — just the terminal', () => {
-    render(<TerminalPane {...base} gridded={false} visibleInTabs />)
-    expect(screen.queryByText('api')).not.toBeInTheDocument()
+  it('renders the same framed header in tabs mode (name + kind icon)', () => {
+    render(<TerminalPane {...base} gridded={false} visibleInTabs active />)
+    expect(screen.getByText('api')).toBeInTheDocument()
+    expect(screen.getByTestId('icon-claude')).toBeInTheDocument()
     expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
+  })
+
+  it('tabs mode is a framed card, not a bare absolute fill', () => {
+    const { container } = render(<TerminalPane {...base} gridded={false} visibleInTabs active />)
+    const pane = container.firstChild as HTMLElement
+    expect(pane.className).toContain('rounded-lg')
+    expect(pane.className).toContain('overflow-hidden')
+    const body = screen.getByTestId('terminal-view').parentElement as HTMLElement
+    expect(body.className).toContain('flex-1')
+    expect(body.className).not.toContain('absolute')
+  })
+
+  it('an inactive tabs pane stays mounted but hidden', () => {
+    const { container } = render(<TerminalPane {...base} gridded={false} visibleInTabs={false} />)
+    expect((container.firstChild as HTMLElement).style.display).toBe('none')
+    expect(screen.getByTestId('terminal-view')).toBeInTheDocument() // alive, just not shown
   })
 
   it('makes the header a drag handle and reorders via drag/drop when dnd is set', () => {
@@ -90,6 +107,7 @@ describe('TerminalPane', () => {
     render(<TerminalPane {...base} visibleInTabs started={false} />)
     expect(screen.queryByTestId('terminal-view')).not.toBeInTheDocument()
     expect(screen.getByText(/click to start/i)).toBeInTheDocument()
+    expect(screen.getAllByText('api')).toHaveLength(1) // header only — placeholder must not repeat it
   })
 
   it('clicking the placeholder starts the terminal', () => {

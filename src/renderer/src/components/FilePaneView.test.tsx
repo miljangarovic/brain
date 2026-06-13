@@ -121,6 +121,28 @@ describe('FilePaneView', () => {
     expect(screen.getByLabelText('editor')).toHaveValue('v2')
   })
 
+  it('renders the framed header in tabs mode too (name + close button)', async () => {
+    setBrain({ kind: 'text', content: 'x' })
+    const onClose = vi.fn()
+    renderPane({ pane: { id: 'p2', path: '/p/a.ts', name: 'a.ts' }, onClose })
+    await screen.findByLabelText('editor')
+    expect(screen.getByText('a.ts')).toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText('Close a.ts'))
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('tabs mode is a framed card, not a bare absolute fill', async () => {
+    setBrain({ kind: 'text', content: 'x' })
+    const { container } = renderPane({ pane: { id: 'p2', path: '/p/a.ts', name: 'a.ts' } })
+    await screen.findByLabelText('editor')
+    const paneEl = container.firstChild as HTMLElement
+    expect(paneEl.className).toContain('rounded-lg')
+    expect(paneEl.className).toContain('overflow-hidden')
+    const body = screen.getByLabelText('editor').parentElement as HTMLElement
+    expect(body.className).toContain('flex-1')
+    expect(body.className).not.toContain('absolute')
+  })
+
   it('image / binary / too-large / missing render their fallbacks', async () => {
     setBrain({ kind: 'image', dataUrl: 'data:image/png;base64,AAAA' })
     const r1 = renderPane({ pane: { id: 'p3', path: '/p/x.png', name: 'x.png' } })
